@@ -1,0 +1,204 @@
+{# templates/appointments/queue_display.html #}
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Digital Queue System | {{ clinic_name|default:"ClinicHub" }}{% endblock %}
+
+{% block extra_head %}
+  <meta name="robots" content="noindex,nofollow">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/appointments/queue_display.css' %}">
+  <link rel="stylesheet" href="{% static 'css/appointments/queue_announce.css' %}">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+{% endblock %}
+
+{% block content %}
+<div class="queue-system" role="main" aria-label="Digital queue for {{ clinic_name|default:'Clinic' }}">
+  <noscript>
+    <div class="no-js-warning" role="alert">
+      <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
+      JavaScript is required for real-time functionality.
+    </div>
+  </noscript>
+
+  <!-- NOW SERVING (PHI-FREE) -->
+  <section class="now-serving-banner" aria-label="Now serving">
+    <div class="banner-content">
+      <i class="fas fa-bullhorn" aria-hidden="true"></i>
+      <div class="banner-text">
+        <span class="banner-label">NOW SERVING:</span>
+        <span class="current-ticket-display" id="now-serving-display" aria-live="polite">
+          No active tickets
+        </span>
+      </div>
+      <i class="fas fa-bullhorn" aria-hidden="true"></i>
+    </div>
+  </section>
+
+  <!-- STATUS BAR -->
+  <section class="status-bar" role="region" aria-label="System status">
+    <div class="clinic-info">
+      <div class="clinic-logo" aria-hidden="true">
+        <i class="fas fa-hospital"></i>
+      </div>
+      <div>
+        <h1 class="clinic-name">{{ clinic_name|default:"ClinicHub" }}</h1>
+        <p class="system-name">ClinicHub</p>
+      </div>
+    </div>
+    <div class="system-status" aria-live="polite">
+      <div class="status-item">
+        <span>Status:</span>
+        <span class="status-indicator operational" aria-label="Operational">
+          <span class="pulse" aria-hidden="true"></span> Operational
+        </span>
+      </div>
+      <div class="status-item">
+        <span>Time:</span>
+        <time id="current-time" aria-live="off">--:--:--</time>
+      </div>
+      <div class="status-item">
+        <span>Active Providers:</span>
+        <span id="doctor-count" aria-live="polite">0</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ANNOUNCEMENT CONTROLS (Speech, PHI-FREE) -->
+  <section class="announce-bar" role="region" aria-label="Audio announcements">
+    <div class="controls">
+      <button id="toggle-announce" class="btn" type="button">🔊 Enable Announcements</button>
+
+      <label for="voice-select" class="visually-hidden">Global voice</label>
+      <select id="voice-select" class="select" aria-label="Global voice override">
+        <option value="">Auto Voice</option>
+      </select>
+
+      <label for="voice-select-ar" class="visually-hidden">Arabic voice</label>
+      <select id="voice-select-ar" class="select" aria-label="Arabic voice (optional)"></select>
+
+      <label for="voice-select-en" class="visually-hidden">English voice</label>
+      <select id="voice-select-en" class="select" aria-label="English voice (optional)"></select>
+
+      <label class="slider-wrap" for="rate">
+        Rate <input id="rate" type="range" min="0.7" max="1.3" step="0.05" value="1" aria-label="Speech rate">
+      </label>
+
+      <label class="slider-wrap" for="volume">
+        Volume <input id="volume" type="range" min="0.2" max="1" step="0.05" value="1" aria-label="Speech volume">
+      </label>
+
+      <button id="test-announce" class="btn" type="button" aria-label="Test announcement">▶ Test</button>
+      <span class="hint">First click required to enable audio (browser policy).</span>
+    </div>
+    <div id="announce-unsupported" class="announce-unsupported" hidden role="alert">
+      <i class="fas fa-info-circle" aria-hidden="true"></i>
+      Your browser does not support speech synthesis. Announcements are disabled.
+    </div>
+  </section>
+
+  <!-- MAIN QUEUE AREA -->
+  <main class="queue-container" role="region" aria-label="Provider queues">
+    <header class="queue-header">
+      <h2>
+        <i class="fas fa-user-md" aria-hidden="true"></i>
+        Provider Queue Status
+      </h2>
+      <div class="last-update">
+        <i class="fas fa-sync-alt" aria-hidden="true"></i>
+        Updated: <time id="update-time" aria-live="off">--:--</time>
+      </div>
+    </header>
+
+    <!-- Filters -->
+    <div class="filters" role="region" aria-label="Filters">
+      <div class="search-container">
+        <label for="search-input" class="visually-hidden">Search providers</label>
+        <div class="search-box">
+          <i class="fas fa-search" aria-hidden="true"></i>
+          <input
+            type="text"
+            id="search-input"
+            placeholder="Search providers…"
+            aria-label="Search providers"
+            autocomplete="off"
+          >
+        </div>
+      </div>
+
+      <div class="department-filter" role="tablist" aria-label="Filter by department">
+        <button class="filter-btn active" data-department="all" role="tab" aria-selected="true">
+          All Departments
+        </button>
+        <!-- More department tabs will be injected dynamically -->
+      </div>
+    </div>
+
+    <!-- Queue Grid -->
+    <div class="queue-grid-container">
+      <div id="empty-state" class="empty-state" aria-live="polite">
+        <i class="fas fa-user-md" aria-hidden="true"></i>
+        <h3>No Active Appointments</h3>
+        <p>All providers are currently available.</p>
+      </div>
+      <div id="queue-grid" class="queue-grid" aria-live="polite"></div>
+    </div>
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="system-footer" role="contentinfo">
+    <p>ClinicHub Queue System v3.1 &copy; {% now "Y" %}</p>
+    <p class="timestamp" id="refresh-timestamp">Last refresh: --:--</p>
+  </footer>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  // Public, PHI-FREE config (no CSRF needed for GET)
+  window.APP_CONFIG = Object.freeze({
+    QUEUE_API: "{% url 'appointments:queue_public_api' %}", // ✅ Public API with no PHI
+    REFRESH_INTERVAL: 10000,        // ms
+    NOW_SERVING_INTERVAL: 8000,     // ms
+    ANNOUNCE_SEQUENCE: ["ar", "en"] // Arabic then English
+  });
+
+  // Optional: basic clock (client-side)
+  (function tick(){
+    var el = document.getElementById('current-time');
+    if (el) {
+      var d = new Date();
+      el.textContent = d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+    }
+    setTimeout(tick, 1000);
+  })();
+</script>
+
+<!-- Defer scripts to avoid blocking rendering -->
+<script src="{% static 'js/appointments/queue_display.js' %}" defer></script>
+<script src="{% static 'js/appointments/queue_announce.js' %}" defer></script>
+
+<script>
+  // Safety: show unsupported notice if SpeechSynthesis is missing
+  (function(){
+    if (!('speechSynthesis' in window)) {
+      var el = document.getElementById('announce-unsupported');
+      if (el) el.hidden = false;
+      var btn = document.getElementById('toggle-announce');
+      if (btn) btn.disabled = true;
+      var test = document.getElementById('test-announce');
+      if (test) test.disabled = true;
+    }
+  })();
+
+  // Optional: global handler so queue_display.js can report fetch errors gracefully
+  window.onQueueFetchError = function(errMsg) {
+    var empty = document.getElementById('empty-state');
+    if (empty) {
+      empty.querySelector('h3').textContent = "Unable to load queue";
+      empty.querySelector('p').textContent = errMsg || "Please check your network connection.";
+      empty.style.display = 'block';
+    }
+  };
+</script>
+{% endblock %}

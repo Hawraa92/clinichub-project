@@ -1,0 +1,318 @@
+/* ===============================
+   Appointment List Styles (Refactored)
+   =============================== */
+
+/* ---------- CSS Variables ---------- */
+:root {
+  /* Colors */
+  --color-bg-gradient-start: #ecf4fc;
+  --color-bg-gradient-mid: #d0e9fa;
+  --color-bg-gradient-end: #eef3fd;
+  --color-text: #21344b;
+  --color-primary: #3e60aa;
+  --color-primary-accent: #4173b8;
+  --color-primary-soft: #9fd8fa;
+  --color-border: #b3d1f7cc;
+  --color-border-soft: #d4e9fc8c;
+  --color-surface-glass: rgba(255,255,255,0.63);
+  --color-surface-alt: rgba(246,251,255,0.68);
+  --color-table-head: rgba(201,221,255,0.59);
+
+  /* Status */
+  --status-pending-bg: #ffe9b3;
+  --status-pending-text: #8c5a00;
+  --status-completed-bg: #c6f5dd;
+  --status-completed-text: #1f6c40;
+  --status-cancelled-bg: #f7c4c4;
+  --status-cancelled-text: #802a2a;
+
+  /* Spacing scale */
+  --space-1: .25rem;
+  --space-2: .5rem;
+  --space-3: .75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+
+  /* Radius */
+  --radius-pill: 999px;
+
+  /* Shadows */
+  --shadow-soft: 0 2px 8px rgba(0,0,0,.08);
+  --shadow-elevated: 0 12px 32px -6px rgba(62,96,170,.22);
+
+  /* Font */
+  --font-base: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+
+  /* Transition */
+  --transition: .18s cubic-bezier(.4,.2,.3,1);
+}
+
+html, body {
+  font-family: var(--font-base);
+  background: linear-gradient(
+    127deg,
+    var(--color-bg-gradient-start) 0%,
+    var(--color-bg-gradient-mid) 65%,
+    var(--color-bg-gradient-end) 100%
+  );
+  color: var(--color-text);
+  margin: 0;
+  padding: 0;
+}
+
+/* ---------- Layout Wrapper ---------- */
+.glass-bg-appt {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  padding: var(--space-6) var(--space-2) var(--space-4);
+  position: relative;
+}
+
+/* Wave decoration */
+.glass-bg-wave {
+  position: absolute;
+  inset: 0;
+  height: 220px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ---------- Card ---------- */
+.glass-appt-card {
+  width: 100%;
+  max-width: 1080px;
+  background: var(--color-surface-glass);
+  backdrop-filter: blur(14px) saturate(135%);
+  border: 1.5px solid var(--color-border);
+  border-radius: 2rem;
+  box-shadow: var(--shadow-elevated);
+  position: relative;
+  z-index: 5;
+  overflow: hidden;
+}
+
+/* Reduce motion adjustments */
+@media (prefers-reduced-motion: reduce) {
+  .shine-anim::before,
+  .shine-btn::after {
+    animation: none !important;
+    opacity: 0;
+  }
+}
+
+/* ---------- Header ---------- */
+.glass-appt-header {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: 2rem 2rem 1rem;
+  background: linear-gradient(120deg,#c9ddff55,#d4e9fc22);
+  border-bottom: 1px solid var(--color-border-soft);
+}
+.glass-appt-header h3 {
+  margin: 0;
+  font-size: clamp(1.3rem,2vw,1.6rem);
+  color: var(--color-primary);
+  letter-spacing: 1px;
+  font-weight: 700;
+}
+.glass-appt-subtitle {
+  font-size: .95rem;
+  color: var(--color-primary-accent);
+  opacity: .8;
+  margin-top: .25rem;
+}
+
+/* ---------- New Button ---------- */
+.glass-btn-new {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .75rem 1.6rem;
+  font-weight: 600;
+  font-size: .95rem;
+  border-radius: 1rem;
+  text-decoration: none;
+  color: var(--color-primary);
+  background: linear-gradient(95deg,#c5e6ff,#9fd8fa 70%);
+  border: 1px solid #9fd8fa;
+  box-shadow: var(--shadow-soft);
+  transition: var(--transition);
+}
+.glass-btn-new:hover,
+.glass-btn-new:focus {
+  background: linear-gradient(95deg,#9fd8fa,#c5e6ff 60%);
+  color: #234a7a;
+}
+
+/* ---------- Search ---------- */
+.g-search-form {
+  display: flex;
+  justify-content: flex-end;
+  padding: 1rem 2rem 0;
+  gap: var(--space-1);
+}
+.g-search-input {
+  border: 1px solid var(--color-border);
+  padding: .65rem 1rem;
+  border-radius: .75rem 0 0 .75rem;
+  font-size: .9rem;
+  width: 260px;
+  max-width: 80%;
+  outline: none;
+}
+.g-search-btn {
+  padding: .65rem 1rem;
+  border: 1px solid var(--color-primary-soft);
+  background: var(--color-primary-soft);
+  color: #234a7a;
+  border-radius: 0 .75rem .75rem 0;
+  cursor: pointer;
+  font-weight: 600;
+  transition: var(--transition);
+}
+.g-search-btn:hover {
+  background: #79c6ee;
+}
+.g-clear-search {
+  padding: .65rem 0.75rem;
+  font-size: 1.2rem;
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+/* ---------- Table ---------- */
+.glass-appt-table-wrap {
+  padding: 2rem 2rem 1.5rem;
+  overflow-x: auto;
+}
+.glass-appt-table {
+  width: 100%;
+  border-spacing: 0;
+  background: var(--color-surface-alt);
+  border: 1px solid #c2ecf770;
+  border-radius: 1.25rem;
+  overflow: hidden;
+}
+.glass-appt-table thead th {
+  background: var(--color-table-head);
+  padding: .85rem;
+  font-size: .9rem;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--color-primary);
+  text-align: center;
+}
+.glass-appt-table tbody td {
+  padding: .9rem .6rem;
+  text-align: center;
+  font-size: .9rem;
+  background: rgba(255,255,255,.68);
+  border-bottom: 1px solid #e1e1e1;
+  color: #245577;
+}
+.glass-appt-table tbody tr:nth-child(even) td {
+  background: rgba(201,233,255,.25);
+}
+.glass-appt-table tbody tr:hover td {
+  background: rgba(168,219,255,.23);
+}
+
+/* Responsive (stack) */
+@media (max-width: 640px) {
+  .glass-appt-table thead { display: none; }
+  .glass-appt-table,
+  .glass-appt-table tbody,
+  .glass-appt-table tr,
+  .glass-appt-table td { display: block; width: 100%; }
+  .glass-appt-table tr {
+    margin-bottom: 1rem;
+    border: 1px solid #c2ecf7;
+    border-radius: .75rem;
+    overflow: hidden;
+  }
+  .glass-appt-table tbody td {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    text-align: left;
+    padding: .55rem .85rem;
+    font-size: .85rem;
+  }
+  .glass-appt-table tbody td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    opacity: .7;
+    width: 40%;
+  }
+}
+
+/* ---------- Badges ---------- */
+.g-badge-queue {
+  background: linear-gradient(93deg,#9fd8fa 40%, #b3e9ff 90%);
+  color: #3266c2;
+  font-weight: 700;
+  padding: .35rem .9rem;
+  border-radius: var(--radius-pill);
+  font-size: .8rem;
+}
+.g-badge-muted {
+  background: rgba(0,0,0,.08);
+  color: #555;
+  padding: .25rem .6rem;
+  border-radius: var(--radius-pill);
+  font-size: .75rem;
+}
+.g-status {
+  display: inline-block;
+  font-weight: 600;
+  padding: .3rem .8rem;
+  border-radius: var(--radius-pill);
+  font-size: .7rem;
+  letter-spacing: .5px;
+}
+.g-status-pending {
+  background: var(--status-pending-bg);
+  color: var(--status-pending-text);
+}
+.g-status-completed {
+  background: var(--status-completed-bg);
+  color: var(--status-completed-text);
+}
+.g-status-cancelled {
+  background: var(--status-cancelled-bg);
+  color: var(--status-cancelled-text);
+}
+
+/* ---------- Pagination ---------- */
+.g-pagination {
+  display: flex;
+  justify-content: center;
+  gap: .6rem;
+  padding: 1.8rem 0 .5rem;
+}
+.g-pagination a,
+.g-pagination span {
+  background: rgba(201,221,255,.35);
+  padding: .55rem 1.1rem;
+  border: 1px solid var(--color-primary-soft);
+  border-radius: var(--radius-pill);
+  font-size: .75rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  text-decoration: none;
+  transition: var(--transition);
+}
+.g-pagination a:hover {
+  background: var(--color-primary-soft);
+  color: #234a7a;
+}
+
+/* ---------- Utilities ---------- */
+.text-center { text-align: center; }
+.muted { opacity: .55; }
+.actions-col { white-space: nowrap; }
+.g-actions .btn { margin: 0 .15rem; }

@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% load static %}
+{% load group_filters %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{% static 'css/patient/edit_patient.css' %}">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+{% endblock %}
+
+{% block content %}
+
+  {# Django flash messages #}
+  {% if messages %}
+    <div class="container mt-3">
+      {% for msg in messages %}
+        <div class="alert alert-{{ msg.tags }} alert-dismissible fade show" role="alert">
+          {{ msg }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <div class="edit-patient-container">
+    <div class="patient-form-card">
+      <!-- Header -->
+      <div class="form-header">
+        <div class="header-icon pastel-bg">
+          <i class="fas fa-user-edit"></i>
+        </div>
+        <h1 class="gradient-text">Edit Patient Record</h1>
+        <p class="subtitle">Update the medical information for your patient</p>
+      </div>
+
+      {# السماح للطبيب والسكرتير معًا #}
+      {% if request.user.role == "doctor" or request.user|has_group:"Doctors" or request.user.role == "secretary" or request.user|has_group:"Secretaries" %}
+
+        <form method="post" class="needs-validation" id="edit-patient-form" novalidate>
+          {% csrf_token %}
+
+          {% if form.non_field_errors %}
+            <div class="alert">
+              <i class="fas fa-exclamation-circle"></i>
+              {% for e in form.non_field_errors %}{{ e }}{% endfor %}
+            </div>
+          {% endif %}
+
+          <div class="form-grid">
+            {% for field in form %}
+              <div class="form-group">
+                <label for="{{ field.id_for_label }}">
+                  {{ field.label }}{% if field.field.required %}<span class="required">*</span>{% endif %}
+                </label>
+
+                <div class="input-container">
+                  {% if field.name == 'date_of_birth' %}
+                    <div class="input-with-icon">
+                      {{ field }}
+                      <button type="button" class="date-today-btn" title="Set to today">Today</button>
+                    </div>
+                  {% else %}
+                    {{ field }}
+                  {% endif %}
+
+                  {% if field.help_text %}
+                    <span class="input-info" data-tooltip="{{ field.help_text }}">
+                      <i class="fas fa-info-circle"></i>
+                    </span>
+                  {% endif %}
+                </div>
+
+                {% for error in field.errors %}
+                  <div class="error-message">
+                    <i class="fas fa-exclamation-triangle"></i> {{ error }}
+                  </div>
+                {% endfor %}
+              </div>
+            {% endfor %}
+          </div>
+
+          <div class="form-actions">
+            <a href="{% url 'patient:detail' patient.pk %}" class="btn-cancel">Cancel</a>
+
+            {# رابط رجوع مناسب حسب الدور #}
+            {% if request.user.role == "secretary" or request.user|has_group:"Secretaries" %}
+              <a href="{% url 'appointments:secretary_dashboard' %}" class="btn-cancel">Back</a>
+            {% else %}
+              <a href="{% url 'patient:list' %}" class="btn-cancel">Back</a>
+            {% endif %}
+
+            <button type="submit" class="btn-save" id="btn-save">
+              <i class="fas fa-save"></i> Save Changes
+            </button>
+          </div>
+        </form>
+
+      {% else %}
+        <div class="access-denied">
+          <div class="access-icon pastel-bg">
+            <i class="fas fa-ban"></i>
+          </div>
+          <h3>Access Restricted</h3>
+          <p>You don't have permission to edit patient records.</p>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    // زر اليوم لتاريخ الميلاد
+    const dob = document.getElementById('id_date_of_birth');
+    const todayBtn = document.querySelector('.date-today-btn');
+    if (dob && todayBtn) {
+      todayBtn.addEventListener('click', function () {
+        const t = new Date();
+        const y = t.getFullYear();
+        const m = String(t.getMonth() + 1).padStart(2, '0');
+        const d = String(t.getDate()).padStart(2, '0');
+        dob.value = `${y}-${m}-${d}`;
+      });
+    }
+
+    // منع الإرسال المزدوج
+    const form = document.getElementById('edit-patient-form');
+    const saveBtn = document.getElementById('btn-save');
+    if (form && saveBtn) {
+      let submitted = false;
+      form.addEventListener('submit', function (e) {
+        if (submitted) { e.preventDefault(); return; }
+        submitted = true;
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+      });
+    }
+  });
+</script>
+{% endblock %}

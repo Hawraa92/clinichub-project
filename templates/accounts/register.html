@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{% static 'css/accounts/register.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="register-container">
+  <div class="register-card">
+    <!-- Left Illustration / Branding -->
+    <div class="left-panel">
+      <img src="{% static 'images/image3.png' %}"
+           alt="Medical Illustration"
+           class="illustration">
+      <div class="brand-container">
+        <h1 class="brand-name">ClinicHub</h1>
+        <p class="brand-tagline">Your health, our priority</p>
+      </div>
+    </div>
+
+    <!-- Right Form -->
+    <div class="right-panel">
+      <div class="form-header">
+        <h2 class="greeting">Create Patient Account</h2>
+        <p class="subheading">Join our medical community today</p>
+      </div>
+
+      {% if messages %}
+        <div class="messages-container">
+          {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      <form method="post" novalidate class="auth-form">
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+          <div class="alert alert-error">
+            {% for err in form.non_field_errors %}
+              {{ err }}
+            {% endfor %}
+          </div>
+        {% endif %}
+
+        <!-- two‐column grid -->
+        <div class="form-grid">
+          {% for field in form %}
+            {% if forloop.counter0 < 2 %}
+              <div class="form-group">
+                <div class="input-container">
+                  {{ field }}
+                  <label for="{{ field.id_for_label }}" class="input-label">
+                    {{ field.label }}
+                  </label>
+                  <span class="input-border"></span>
+                </div>
+                {% if field.help_text %}
+                  <small class="help-text">{{ field.help_text }}</small>
+                {% endif %}
+                {% for err in field.errors %}
+                  <div class="field-error">
+                    <span class="error-icon">!</span>{{ err }}
+                  </div>
+                {% endfor %}
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+
+        <!-- second row: passwords -->
+        <div class="form-grid">
+          {% for field in form %}
+            {% if forloop.counter0 >= 2 %}
+            <div class="form-group">
+              <div class="input-container">
+                {{ field }}
+                <label for="{{ field.id_for_label }}" class="input-label">
+                  {{ field.label }}
+                </label>
+                <span class="input-border"></span>
+                {% if 'password' in field.name %}
+                  <button type="button" class="toggle-password">Show</button>
+                {% endif %}
+              </div>
+              {% for err in field.errors %}
+                <div class="field-error">
+                  <span class="error-icon">!</span>{{ err }}
+                </div>
+              {% endfor %}
+            </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+
+        <button type="submit" class="btn-submit">
+          Register
+          <svg class="arrow-icon" viewBox="0 0 24 24">
+            <path d="M4,11V13H16L10.5,18.5L11.92,19.92L19.84,12L11.92,4.08L10.5,5.5L16,11H4Z"/>
+          </svg>
+        </button>
+      </form>
+
+      <div class="auth-footer">
+        <p>Already have an account? <a href="{% url 'accounts:patient_login' %}" class="auth-link">Sign in now</a></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- small JS for password toggle -->
+<script>
+  document.querySelectorAll('.toggle-password').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const input = btn.closest('.input-container').querySelector('input');
+      const type  = input.getAttribute('type') === 'password' ? 'text' : 'password';
+      input.setAttribute('type', type);
+      btn.textContent = type === 'password' ? 'Show' : 'Hide';
+    });
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,83 @@
+{# templates/appointments/book_patient.html #}
+{% extends "base.html" %}
+{% load tz %}
+
+{% block title %}Book Appointment{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+  <div class="row justify-content-center">
+    <div class="col-lg-8">
+      <div class="card shadow-sm border-0">
+        <div class="card-header bg-white">
+          <h3 class="m-0">Book Appointment</h3>
+        </div>
+
+        <div class="card-body">
+          <!-- Doctor & patient info (read-only) -->
+          <div class="d-flex flex-wrap gap-3 mb-4">
+            <div class="p-2 bg-light rounded-3 flex-grow-1">
+              <div class="text-muted small">Doctor</div>
+              <div class="fw-semibold">
+                Dr. {{ doctor.user.get_full_name|default:doctor.user.username }}
+                {% if doctor.specialty %}<span class="text-muted"> — {{ doctor.specialty }}</span>{% endif %}
+              </div>
+            </div>
+            <div class="p-2 bg-light rounded-3 flex-grow-1">
+              <div class="text-muted small">Patient</div>
+              <div class="fw-semibold">
+                {{ patient.full_name|default:request.user.get_full_name|default:request.user.username }}
+              </div>
+            </div>
+          </div>
+
+          {% if form.non_field_errors %}
+            <div class="alert alert-danger">
+              {% for e in form.non_field_errors %}<div>{{ e }}</div>{% endfor %}
+            </div>
+          {% endif %}
+
+          <form method="post" novalidate>
+            {% csrf_token %}
+            <div class="mb-3">
+              <label class="form-label">Preferred Time</label>
+              {{ form.scheduled_time }}
+              <div class="form-text">Choose a future time (local timezone).</div>
+              {% if form.scheduled_time.errors %}
+                <div class="invalid-feedback d-block">
+                  {% for e in form.scheduled_time.errors %}{{ e }}{% endfor %}
+                </div>
+              {% endif %}
+            </div>
+
+            <div class="d-flex gap-2">
+              <button class="btn btn-success px-4" type="submit">Submit Request</button>
+              <a class="btn btn-outline-secondary" href="{% url 'appointments:my_appointments' %}">My Appointments</a>
+              <a class="btn btn-outline-primary ms-auto" href="{% url 'doctor:available_doctors' %}">Back to Doctors</a>
+            </div>
+          </form>
+        </div>
+
+        <div class="card-footer bg-white text-muted small">
+          After submitting, your request will appear as <strong>Pending</strong> until the secretary approves it.
+          The queue number is generated upon approval.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function(){
+  // Set the minimum allowed value for the datetime-local input to "now"
+  const input = document.querySelector('input[type="datetime-local"]');
+  if (!input) return;
+  const d = new Date();
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+  input.min = local.toISOString().slice(0, 16); // YYYY-MM-DDTHH:MM
+  input.step = 900; // 15 minutes
+})();
+</script>
+{% endblock %}

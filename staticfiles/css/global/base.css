@@ -1,0 +1,98 @@
+/* --------------------------------------------------
+   ClinicHub Global Base Styles
+   -------------------------------------------------- */
+
+:root {
+  --app-nav-height: 4.5rem;
+  --app-body-offset: calc(var(--app-nav-height) + 1rem);
+  --primary: #2a7b8b;
+  --primary-dark: #1d5c69;
+  --secondary: #3aafa9;
+  --light: #f8f9fa;
+  --dark: #212529;
+  --accent: #e9f2f1;
+  --success: #28a745;
+  --info: #17a2b8;
+  --warning: #ffc107;
+  --danger: #dc3545;
+  --transition: all 0.3s ease;
+}
+
+/* Account for fixed-top navbar */
+body {
+  padding-top: var(--app-body-offset);
+  background-color: #f8fafc;
+  font-family: 'Roboto', sans-serif;
+  color: #333;
+}
+
+/* Typography */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Poppins', sans-serif;
+  font-weight: 600;
+}
+
+/* Skip link */
+.skiplink {
+  position: absolute;
+  top: -40px;
+  left: 1rem;
+  padding: 0.5rem 1rem;
+  background: var(--primary);
+  color: #fff;
+  text-decoration: none;
+  border-radius: .25rem;
+  z-index: 2000;
+  transition: var(--transition);
+}
+.skiplink:focus {
+  top: .5rem;
+}
+
+/* Toast positioning */
+.toast-container {
+  top: 1rem;
+  right: 1rem;
+  z-index: 1055;
+}
+
+/* RTL adjustments */
+html[dir="rtl"] .toast-container {
+  right: auto;
+  left: 1rem;
+}
+
+/* Main content area */
+.main-content {
+  min-height: 50vh;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  padding: 2rem;
+  margin-bottom: 2rem;
+}
+
+/* Avatar styling */
+.avatar-sm {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatar-sm img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-initials {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+}

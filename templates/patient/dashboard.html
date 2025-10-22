@@ -1,0 +1,269 @@
+{# templates/patient/dashboard.html #}
+{% extends "base.html" %}
+{% load static humanize tz %}
+
+{% block title %}Patient Dashboard{% endblock %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{% static 'css/patient/dashboard.css' %}">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-container" data-view="patient-dashboard">
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar" aria-label="Main Navigation">
+    <div class="brand-container">
+      <div class="clinic-logo" aria-hidden="true">
+        <i class="bi bi-heart-pulse"></i>
+      </div>
+      <div class="brand-text">
+        <h3 class="brand-title">MediCare Portal</h3>
+        <p class="brand-subtitle">Patient Dashboard</p>
+      </div>
+    </div>
+
+    <nav class="nav-menu" role="navigation">
+      <a href="{% url 'patient:dashboard' %}"
+         class="nav-item{% if request.resolver_match.view_name == 'patient:dashboard' %} active{% endif %}"
+         aria-current="{% if request.resolver_match.view_name == 'patient:dashboard' %}page{% endif %}">
+        <i class="bi bi-house-door" aria-hidden="true"></i>
+        <span>Dashboard</span>
+      </a>
+
+      <a href="{% url 'appointments:my_appointments' %}" class="nav-item">
+        <i class="bi bi-calendar-event" aria-hidden="true"></i>
+        <span>My Appointments</span>
+      </a>
+
+      <a href="{% url 'doctor:available_doctors' %}"
+         class="nav-item{% if request.resolver_match.view_name == 'doctor:available_doctors' %} active{% endif %}">
+        <i class="bi bi-people" aria-hidden="true"></i>
+        <span>Available Doctors</span>
+      </a>
+    </nav>
+
+    <div class="logout-container">
+      <a href="{% url 'accounts:logout' %}" class="nav-item">
+        <i class="bi bi-box-arrow-right" aria-hidden="true"></i>
+        <span>Logout</span>
+      </a>
+    </div>
+  </aside>
+
+  <!-- Mobile backdrop -->
+  <div class="sidebar-backdrop" data-close-sidebar></div>
+
+  <!-- Main Content -->
+  <main class="main-content" id="main" tabindex="-1">
+    <!-- Top Bar -->
+    <div class="top-bar">
+      <button class="sidebar-toggle" type="button" aria-label="Toggle navigation" aria-controls="sidebar" aria-expanded="false">
+        <i class="bi bi-list"></i>
+      </button>
+
+      <div class="topbar-left">
+        <div class="datetime-display" aria-live="polite">
+          <span id="digital-date"></span>
+          <span id="digital-clock"></span>
+        </div>
+      </div>
+      <div class="user-info">
+        <span>Welcome, {{ request.user.first_name|default:request.user.username }}</span>
+        <div class="user-avatar" title="{{ request.user.get_full_name|default:request.user.username }}">
+          <i class="bi bi-person-circle" aria-hidden="true"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dashboard Grid -->
+    <div class="dashboard-grid">
+      <!-- Welcome Card -->
+      <section class="welcome-card card" aria-labelledby="welcomeHeading">
+        <div class="card-header">
+          <h2 id="welcomeHeading">Welcome, {{ request.user.first_name|default:request.user.username }}!</h2>
+        </div>
+        <div class="card-body">
+          <p class="card-text">Manage your bookings and find available doctors quickly.</p>
+          <div class="quick-actions" aria-label="Quick actions">
+            <a href="{% url 'appointments:my_appointments' %}" class="action-btn">
+              <i class="bi bi-calendar-week" aria-hidden="true"></i>
+              <span>View Appointments</span>
+            </a>
+            <a href="{% url 'doctor:available_doctors' %}" class="action-btn">
+              <i class="bi bi-people" aria-hidden="true"></i>
+              <span>Available Doctors</span>
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <!-- Health Summary Card -->
+      <section class="health-summary card" aria-labelledby="healthSummaryHeading">
+        <div class="card-header">
+          <h2 id="healthSummaryHeading">
+            <i class="bi bi-graph-up" aria-hidden="true"></i>
+            Health Summary
+          </h2>
+        </div>
+        <div class="card-body">
+          <div class="health-metrics">
+            <div class="metric-item" role="group" aria-label="Heart Rate">
+              <div class="metric-value">72 bpm</div>
+              <div class="metric-label">Heart Rate</div>
+              <div class="metric-status normal">Normal</div>
+            </div>
+            <div class="metric-item" role="group" aria-label="Blood Pressure">
+              <div class="metric-value" dir="ltr">118/78</div>
+              <div class="metric-label">Blood Pressure</div>
+              <div class="metric-status normal">Normal</div>
+            </div>
+            <div class="metric-item" role="group" aria-label="Glucose">
+              <div class="metric-value" dir="ltr">98 mg/dL</div>
+              <div class="metric-label">Glucose</div>
+              <div class="metric-status normal">Normal</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Upcoming Appointments -->
+      <section id="my-appointments" class="appointments-card card" aria-labelledby="myApptsHeading">
+        <div class="card-header d-flex align-items-center justify-content-between">
+          <h2 id="myApptsHeading" class="m-0">
+            <i class="bi bi-list-task" aria-hidden="true"></i>
+            My Upcoming Appointments
+          </h2>
+          <div class="header-actions">
+            <a class="btn btn-outline-secondary me-2" href="{% url 'appointments:my_appointments' %}">
+              <i class="bi bi-journal-text me-1" aria-hidden="true"></i> See All
+            </a>
+            <a class="btn btn-primary" href="{% url 'doctor:available_doctors' %}">
+              <i class="bi bi-plus-circle me-1" aria-hidden="true"></i> Book New
+            </a>
+          </div>
+        </div>
+
+        <div class="card-body">
+          <div class="appointments-list">
+            {% if upcoming_appointments %}
+              {% for appt in upcoming_appointments %}
+                <article class="appointment-item" role="article" aria-label="Appointment">
+                  <div class="appt-time" aria-label="Appointment date and time">
+                    <div class="appt-date">
+                      {{ appt.scheduled_time|localtime|date:"D, M d" }}
+                    </div>
+                    <div class="appt-hour">
+                      {{ appt.scheduled_time|localtime|time:"H:i" }}
+                    </div>
+                    <div class="appt-rel text-muted small">
+                      {{ appt.scheduled_time|localtime|naturaltime }}
+                    </div>
+                  </div>
+
+                  <div class="appt-info">
+                    <div class="appt-icon" aria-hidden="true">
+                      <i class="bi bi-person-badge"></i>
+                    </div>
+                    <div class="appt-details">
+                      <div class="appt-doctor">
+                        Dr. {{ appt.doctor.user.get_full_name|default:appt.doctor.user.username }}
+                      </div>
+                      <div class="appt-specialty">
+                        {{ appt.doctor.specialization|default:appt.doctor.specialty|default:"General" }}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="appt-meta">
+                    {% if appt.queue_number %}
+                      <span class="badge">#{{ appt.queue_number }}</span>
+                    {% endif %}
+                    <span class="status-pill status-{{ appt.status|default:appt.get_status_display|slugify }}">
+                      {{ appt.get_status_display|default:appt.status|title }}
+                    </span>
+                  </div>
+                </article>
+              {% endfor %}
+            {% else %}
+              <div class="no-appointments">
+                <i class="bi bi-calendar-x" aria-hidden="true"></i>
+                <p>No upcoming appointments</p>
+                <a class="btn btn-outline-primary mt-2" href="{% url 'doctor:available_doctors' %}">
+                  <i class="bi bi-people me-1" aria-hidden="true"></i> Find a Doctor
+                </a>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      </section>
+
+      <!-- Health Information -->
+      <section class="health-info card" aria-labelledby="healthInfoHeading">
+        <div class="card-header">
+          <h2 id="healthInfoHeading">
+            <i class="bi bi-info-circle" aria-hidden="true"></i>
+            General Health Information
+          </h2>
+        </div>
+        <div class="card-body">
+          <div class="info-grid">
+            <!-- Blood Pressure -->
+            <article class="info-tile" aria-labelledby="bpTitle">
+              <div class="tile-icon"><i class="bi bi-heart"></i></div>
+              <div class="tile-content">
+                <h3 id="bpTitle">Blood Pressure (Adults)</h3>
+                <ul class="tile-list">
+                  <li><strong>Normal:</strong> below <span dir="ltr">120/80</span> mmHg</li>
+                  <li><strong>Elevated:</strong> systolic <span dir="ltr">120–129</span> and diastolic &lt; 80</li>
+                  <li><strong>High (Stage 1):</strong> systolic <span dir="ltr">130–139</span> or diastolic <span dir="ltr">80–89</span></li>
+                </ul>
+                <p class="note">Ranges are general guidance and may vary by person. If you feel unwell, seek medical care.</p>
+              </div>
+            </article>
+
+            <!-- Blood Glucose -->
+            <article class="info-tile" aria-labelledby="bgTitle">
+              <div class="tile-icon"><i class="bi bi-droplet-half"></i></div>
+              <div class="tile-content">
+                <h3 id="bgTitle">Fasting Blood Glucose</h3>
+                <ul class="tile-list">
+                  <li><strong>Typical:</strong> ~ <span dir="ltr">70–99</span> mg/dL</li>
+                  <li><strong>Prediabetes:</strong> <span dir="ltr">100–125</span> mg/dL</li>
+                  <li><strong>Diabetes (possible):</strong> ≥ <span dir="ltr">126</span> mg/dL (confirm with a clinician)</li>
+                </ul>
+                <p class="note">Targets can differ in pregnancy or with medical conditions—follow your doctor’s advice.</p>
+              </div>
+            </article>
+
+            <!-- Heart Rate -->
+            <article class="info-tile" aria-labelledby="hrTitle">
+              <div class="tile-icon"><i class="bi bi-activity"></i></div>
+              <div class="tile-content">
+                <h3 id="hrTitle">Resting Heart Rate</h3>
+                <p>Common adult range: <strong>60–100 bpm</strong>. Athletes can be lower.</p>
+                <p class="note">If you have symptoms like dizziness, chest pain, or shortness of breath, get care urgently.</p>
+              </div>
+            </article>
+
+            <!-- Temperature -->
+            <article class="info-tile" aria-labelledby="tempTitle">
+              <div class="tile-icon"><i class="bi bi-thermometer-half"></i></div>
+              <div class="tile-content">
+                <h3 id="tempTitle">Body Temperature</h3>
+                <p>Average oral temperature is about <strong>37°C (98.6°F)</strong>, can vary during the day.</p>
+                <p class="note">Fever is generally ≥ <strong>38°C (100.4°F)</strong>—consider medical advice based on symptoms.</p>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+  <script src="{% static 'js/patient/dashboard.js' %}"></script>
+{% endblock %}

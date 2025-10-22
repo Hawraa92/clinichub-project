@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/patient/patient_list.css' %}">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+{% endblock %}
+
+{% block content %}
+<div class="patients-container">
+    <h1><i class="fas fa-users"></i> Registered Patients</h1>
+
+    <div class="search-bar">
+        <input type="text" id="searchInput" placeholder="Search by name or phone..." onkeyup="filterPatients()">
+    </div>
+
+    <table id="patientsTable">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Full Name</th>
+                <th>Mobile</th>            {# <— أضف هذا العمود #}
+                <th>Age</th>
+                <th>Registered On</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for patient in patients %}
+            <tr>
+                <td>{{ patient.id }}</td>
+                <td>{{ patient.full_name }}</td>
+                <td>{{ patient.mobile|default:"—" }}</td>  {# <— إظهار الهاتف #}
+                <td>{{ patient.display_age|default:"—" }}</td>
+                <td>{{ patient.created_at|date:"Y-m-d" }}</td>
+                <td>
+                    <a href="{% url 'patient:edit' patient.id %}" class="btn-edit">
+                        <i class="fas fa-pen-to-square"></i> Edit
+                    </a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="6" style="text-align:center;">No patients found.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/patient/patient_list.js' %}"></script>
+{% endblock %}

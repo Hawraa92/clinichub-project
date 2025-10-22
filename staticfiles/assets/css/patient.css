@@ -1,0 +1,36 @@
+/* ========== Patient Module Styling ========== */
+
+body {
+    background-color: #f8f9fa;
+}
+
+.card {
+    border-radius: 1rem;
+}
+
+h2 {
+    font-weight: 600;
+    color: #0d6efd;
+}
+
+.table th, .table td {
+    vertical-align: middle;
+}
+
+.btn {
+    border-radius: 0.5rem;
+}
+
+.badge {
+    font-size: 0.95rem;
+    padding: 0.4em 0.7em;
+}
+
+.form-label {
+    font-weight: 500;
+}
+
+.form-control, .form-select {
+    border-radius: 0.5rem;
+    box-shadow: none;
+}

@@ -1,0 +1,73 @@
+/* access_denied.css */
+.access-denied {
+    text-align: center;
+    padding: 4rem 2rem;
+    background: #fff8f8;
+    border-radius: 15px;
+    border: 1px solid rgba(251, 224, 224, 0.8);
+    position: relative;
+    overflow: hidden;
+    max-width: 600px;
+    margin: 2rem auto;
+  }
+  
+  .access-denied::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 5px;
+    background: linear-gradient(to right, #ff416c, #ff4b2b);
+  }
+  
+  .access-denied i {
+    font-size: 5rem;
+    color: #e74a3b;
+    margin-bottom: 1.5rem;
+    text-shadow: 0 5px 15px rgba(231, 74, 59, 0.3);
+    animation: shake 0.8s cubic-bezier(.36,.07,.19,.97) both;
+  }
+  
+  @keyframes shake {
+    0%, 100% {transform: translateX(0);}
+    20%, 60% {transform: translateX(-10px);}
+    40%, 80% {transform: translateX(10px);}
+  }
+  
+  .access-denied h3 {
+    color: #e74a3b;
+    font-size: 2rem;
+    margin-bottom: 0.8rem;
+    font-family: 'Poppins', sans-serif;
+  }
+  
+  .access-denied p {
+    color: #5a5c69;
+    font-size: 1.1rem;
+    margin: 0 auto 2rem;
+    max-width: 500px;
+    line-height: 1.7;
+  }
+  
+  .access-btn {
+    padding: 0.9rem 2rem;
+    border-radius: 50px;
+    font-weight: 600;
+    background: linear-gradient(to right, #4e73df, #224abe);
+    color: white;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+    box-shadow: 0 4px 15px rgba(78, 115, 223, 0.3);
+    transition: all 0.3s ease;
+    border: none;
+    cursor: pointer;
+    font-family: 'Poppins', sans-serif;
+  }
+  
+  .access-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(78, 115, 223, 0.4);
+  }

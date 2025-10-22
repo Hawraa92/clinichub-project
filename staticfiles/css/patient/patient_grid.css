@@ -1,0 +1,143 @@
+/* patient_grid.css */
+.patient-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1.8rem;
+    margin-bottom: 2.5rem;
+  }
+  
+  .detail-group {
+    background: #f8f9fc;
+    border-radius: 15px;
+    padding: 1.8rem;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.03);
+    border: 1px solid rgba(234, 236, 244, 0.5);
+    transition: all 0.4s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .detail-group::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 5px;
+    height: 100%;
+    background: linear-gradient(to bottom, #6a11cb, #2575fc);
+    transition: width 0.3s ease;
+  }
+  
+  .detail-group:hover {
+    transform: translateY(-7px);
+    box-shadow: 0 12px 25px rgba(0, 0, 0, 0.08);
+  }
+  
+  .detail-group:hover::before {
+    width: 8px;
+  }
+  
+  .group-title {
+    color: #4e73df;
+    font-size: 1.25rem;
+    margin-top: 0;
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 2px solid rgba(227, 230, 240, 0.5);
+    font-weight: 600;
+    font-family: 'Poppins', sans-serif;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  
+  .group-title i {
+    font-size: 1.1rem;
+    opacity: 0.7;
+  }
+  
+  .detail-item {
+    margin-bottom: 1.2rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    position: relative;
+    padding-left: 1.8rem;
+  }
+  
+  .detail-item::before {
+    content: "•";
+    position: absolute;
+    left: 0;
+    top: 0;
+    color: #4e73df;
+    font-size: 1.8rem;
+    line-height: 1;
+  }
+  
+  .detail-label {
+    font-weight: 600;
+    color: #4a4c55;
+    min-width: 200px;
+    margin-right: 15px;
+    font-family: 'Poppins', sans-serif;
+    font-size: 0.95rem;
+  }
+  
+  .detail-value {
+    color: #5a5c69;
+    flex: 1;
+    font-size: 0.95rem;
+    line-height: 1.6;
+  }
+  
+  .full-width {
+    grid-column: 1 / -1;
+  }
+  
+  .clinical-notes {
+    background: white;
+    padding: 1.5rem;
+    border-radius: 12px;
+    border-left: 4px solid #4e73df;
+    margin: 0;
+    font-size: 0.95rem;
+    line-height: 1.7;
+    box-shadow: inset 0 2px 5px rgba(0,0,0,0.03);
+  }
+  
+  /* Health metric indicators */
+  .health-metric {
+    display: flex;
+    align-items: center;
+  }
+  
+  .metric-value {
+    font-weight: 700;
+    margin-left: 8px;
+    padding: 0.2rem 0.6rem;
+    border-radius: 5px;
+    font-size: 0.9rem;
+  }
+  
+  .normal { background: rgba(28, 200, 138, 0.15); color: #1cc88a; }
+  .warning { background: rgba(246, 194, 62, 0.15); color: #f6c23e; }
+  .critical { background: rgba(231, 74, 59, 0.15); color: #e74a3b; }
+  
+  /* Responsive */
+  @media (max-width: 768px) {
+    .patient-grid {
+      grid-template-columns: 1fr;
+    }
+    
+    .detail-item {
+      flex-direction: column;
+      gap: 0.3rem;
+      padding-left: 1.5rem;
+    }
+    
+    .detail-label {
+      min-width: 100%;
+      margin-bottom: 0.2rem;
+    }
+  }

@@ -1,0 +1,16 @@
+/* =================== Base Layout =================== */
+.prescription-page {
+    max-width: 1000px;
+    margin: 30px auto;
+    padding: 0 15px;
+    font-family: 'Segoe UI', sans-serif;
+  }
+  
+  .prescription-page h2,
+  .prescription-page h3 {
+    text-align: center;
+    margin-bottom: 20px;
+    color: #003366;
+    font-weight: 600;
+  }
+  

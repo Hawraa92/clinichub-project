@@ -1,0 +1,199 @@
+/* patient_card.css */
+.patient-detail-container {
+    padding: 2rem;
+    background: linear-gradient(135deg, #f5f7fa 0%, #e4e7f4 100%);
+    min-height: 100vh;
+  }
+  
+  .glassmorphism {
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+    overflow: hidden;
+  }
+  
+  .patient-card {
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  
+  .card-header {
+    background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+    padding: 1.5rem 2rem;
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .card-header::before {
+    content: "";
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 70%);
+    transform: rotate(30deg);
+  }
+  
+  .header-content {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    z-index: 1;
+  }
+  
+  .icon-container {
+    width: 80px;
+    height: 80px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+  }
+  
+  .icon-container i {
+    font-size: 2.8rem;
+    color: white;
+  }
+  
+  .header-text {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .card-title {
+    font-weight: 600;
+    margin-bottom: 0.2rem;
+    font-size: 2rem;
+    font-family: 'Poppins', sans-serif;
+    letter-spacing: -0.5px;
+  }
+  
+  .patient-id {
+    opacity: 0.85;
+    font-size: 1rem;
+    margin: 0;
+    background: rgba(0,0,0,0.1);
+    padding: 0.3rem 0.8rem;
+    border-radius: 20px;
+    display: inline-block;
+    font-weight: 500;
+  }
+  
+  .status-indicator {
+    z-index: 1;
+  }
+  
+  .status-badge {
+    padding: 0.5rem 1.5rem;
+    border-radius: 50px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  }
+  
+  .critical {
+    background: linear-gradient(to right, #ff416c, #ff4b2b);
+  }
+  
+  .stable {
+    background: linear-gradient(to right, #11998e, #38ef7d);
+  }
+  
+  .pending {
+    background: linear-gradient(to right, #5a5c69, #858796);
+  }
+  
+  .card-body {
+    padding: 2.5rem;
+  }
+  
+  .card-footer {
+    padding: 1.5rem 2rem;
+    background: #f8f9fc;
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    border-top: 1px solid rgba(0,0,0,0.05);
+  }
+  
+  .btn {
+    padding: 0.9rem 1.8rem;
+    border-radius: 50px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    transition: all 0.3s ease;
+    border: none;
+    cursor: pointer;
+    font-family: 'Poppins', sans-serif;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    transform: translateY(0);
+    letter-spacing: 0.5px;
+  }
+  
+  .btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+  }
+  
+  .btn:active {
+    transform: translateY(-1px);
+  }
+  
+  .btn-edit {
+    background: linear-gradient(to right, #f6c23e, #f8b400);
+    color: #2c2920;
+  }
+  
+  .btn-back {
+    background: linear-gradient(to right, #858796, #5a5c69);
+    color: white;
+  }
+  
+  .btn-report {
+    background: linear-gradient(to right, #4e73df, #224abe);
+    color: white;
+  }
+  
+  .pulse {
+    animation: pulse-animation 2s infinite;
+  }
+  
+  @keyframes pulse-animation {
+    0% { box-shadow: 0 0 0 0px rgba(255, 255, 255, 0.4); }
+    100% { box-shadow: 0 0 0 20px rgba(255, 255, 255, 0); }
+  }
+  
+  @media (max-width: 768px) {
+    .card-header {
+      flex-direction: column;
+      text-align: center;
+      gap: 1.5rem;
+    }
+    
+    .header-content {
+      flex-direction: column;
+    }
+    
+    .card-footer {
+      flex-direction: column;
+    }
+    
+    .btn {
+      width: 100%;
+      justify-content: center;
+    }
+  }

@@ -1,0 +1,31 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Appointment Request Received | ClinicHub</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="{% static 'css/appointments/book_success.css' %}">
+  <meta name="robots" content="noindex">
+</head>
+<body class="success-page">
+  <main class="success-container" role="main">
+    <h1>
+      <span class="emoji" aria-hidden="true">🎉</span>
+      {% if booking and booking.full_name %}
+        Thank you, {{ booking.full_name }}!
+      {% else %}
+        Thank you for booking your appointment!
+      {% endif %}
+    </h1>
+    <p class="lead">
+      We have received your appointment request. Our team will contact you shortly to confirm the details.
+    </p>
+    <div class="actions">
+      <a href="{% url 'home:index' %}" class="back-btn">Go back to Home</a>
+      <a href="{% url 'appointments:public_book' %}" class="again-btn">Book Another</a>
+    </div>
+    <p class="note">If you entered a correct phone number, you will receive a confirmation soon.</p>
+  </main>
+</body>
+</html>

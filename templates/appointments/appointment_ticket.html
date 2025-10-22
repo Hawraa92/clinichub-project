@@ -1,0 +1,278 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{% static 'css/appointments/appointment_ticket.css' %}">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" referrerpolicy="no-referrer" />
+{% endblock %}
+
+{% block content %}
+<div class="ticket-root" dir="{% if LANGUAGE_CODE|default:'en'|slice:':2' == 'ar' %}rtl{% else %}ltr{% endif %}">
+
+  <!-- Watermark -->
+  <div class="ticket-watermark" aria-hidden="true">ClinicHub</div>
+
+  <article class="ticket-card fallback-border" role="document" aria-label="Appointment Ticket">
+
+    <!-- HEADER -->
+    <header class="ticket-header">
+      <div class="brand">
+        <div class="brand-logo">ClinicHub</div>
+        <div class="brand-meta">Digital Healthcare Platform</div>
+      </div>
+
+      <div class="ticket-meta-top">
+        <h1 class="ticket-title">
+          <span class="title-text">Appointment Ticket</span>
+          <span class="status-badge status-{{ appointment_status|default:'pending' }}">
+            {{ appointment_status_display|default:"Pending" }}
+          </span>
+        </h1>
+
+        <!-- نعرض الكود نصيًا ليسهل النسخ اليدوي كنسخة احتياط -->
+        <div class="ticket-code" aria-label="Ticket Code">
+          <code id="codeText">{{ ticket_code|default_if_none:"" }}</code>
+        </div>
+      </div>
+
+      <div class="doctor-block">
+        <div class="doctor-icon" aria-hidden="true">
+          <i class="fas fa-user-md"></i>
+        </div>
+        <div class="doctor-info">
+          <div class="doctor-name">
+            Dr. {{ doctor_name }}
+            {% if doctor_spec %}
+              <span class="spec-badge">{{ doctor_spec }}</span>
+            {% endif %}
+          </div>
+          <div class="doctor-subline">
+            {{ appointment.scheduled_time|date:"d M Y" }} • {{ appointment.scheduled_time|date:"h:i A" }}
+          </div>
+        </div>
+      </div>
+
+      <hr class="divider">
+    </header>
+
+    <!-- BODY -->
+    <section class="ticket-body">
+      <div class="info-grid">
+        <div class="info-item highlight">
+          <span class="info-label">Patient</span>
+          <span class="info-value">{{ appointment.patient.full_name|default:"—" }}</span>
+        </div>
+
+        {% if appointment.patient.age %}
+        <div class="info-item">
+          <span class="info-label">Age</span>
+          <span class="info-value">{{ appointment.patient.age }} <span class="unit">yrs</span></span>
+        </div>
+        {% endif %}
+
+        <div class="info-item">
+          <span class="info-label">Queue No.</span>
+          <span class="info-value">
+            {% if appointment.queue_number %}
+              P-{{ appointment.queue_number|stringformat:"03d" }}
+            {% else %} — {% endif %}
+          </span>
+        </div>
+
+        <div class="info-item">
+          <span class="info-label">Created</span>
+          <span class="info-value">
+            {{ appointment.created_at|date:"Y-m-d" }}
+            <span class="muted">• {{ appointment.created_at|date:"H:i" }}</span>
+          </span>
+        </div>
+
+        <div class="info-item">
+          <span class="info-label">Date & Time</span>
+          <span class="info-value">
+            {{ appointment.scheduled_time|date:"d M Y" }}
+            <span class="muted">• {{ appointment.scheduled_time|date:"h:i A" }}</span>
+          </span>
+        </div>
+
+        <div class="info-item">
+          <span class="info-label">Status</span>
+          <span class="info-value">
+            <span class="status-chip status-{{ appointment_status|default:'pending' }}">
+              {{ appointment_status_display|default:"Pending" }}
+            </span>
+          </span>
+        </div>
+
+        <div class="info-item">
+          <span class="info-label">Issued By</span>
+          <span class="info-value">{{ secretary_name|default:"—" }}</span>
+        </div>
+      </div>
+
+      <!-- QR SECTION -->
+      <div class="qr-wrapper" aria-labelledby="qr-title">
+        <h2 id="qr-title" class="sr-only">QR Code</h2>
+        <div class="qr-box">
+          {% if qr_code %}
+            <img
+              src="data:image/png;base64,{{ qr_code }}"
+              alt="QR code linking to appointment details"
+              aria-describedby="qr-title"
+              loading="lazy"
+              decoding="async">
+          {% elif qr_svg_uri %}
+            <img
+              src="{{ qr_svg_uri }}"
+              alt="QR code linking to appointment details"
+              aria-describedby="qr-title"
+              loading="lazy"
+              decoding="async">
+          {% else %}
+            <div class="qr-missing" role="alert" aria-live="polite">
+              QR Not Generated
+            </div>
+          {% endif %}
+        </div>
+        <p class="qr-caption">Scan to verify / عرض التفاصيل</p>
+
+        {% if verify_url %}
+          <p class="verify-fallback">
+            <span class="verify-label">Verify URL:</span>
+            <span id="verifyLink" class="verify-link">{{ verify_url }}</span>
+          </p>
+        {% endif %}
+      </div>
+    </section>
+
+    <hr class="divider soft">
+
+    <!-- ACTIONS -->
+    <section class="ticket-actions" aria-label="Actions">
+      {% if whatsapp_share_url %}
+      <a class="btn btn-whatsapp"
+         href="{{ whatsapp_share_url }}"
+         target="_blank"
+         rel="noopener"
+         aria-label="Share via WhatsApp">
+        <i class="fab fa-whatsapp"></i><span>Share</span>
+      </a>
+      {% endif %}
+
+      <button class="btn btn-print" type="button" onclick="window.print()" aria-label="Print ticket">
+        <i class="fas fa-print"></i><span>Print</span>
+      </button>
+
+      {# نمرر 3 مصادر جاهزة للنسخ حتى لا تكون القيمة فارغة أبدًا #}
+      <button id="copyBtn"
+              class="btn btn-copy"
+              type="button"
+              data-primary="{{ ticket_code|default_if_none:'' }}"
+              data-alt="{{ verify_url|default_if_none:'' }}"
+              data-fallback="APPT-{{ appointment.id }}{% if appointment.queue_number %}-P-{{ appointment.queue_number|stringformat:'03d' }}{% endif %}"
+              aria-label="Copy ticket code">
+        <i class="fas fa-copy"></i><span>Copy Code</span>
+      </button>
+    </section>
+
+    <!-- FOOTER -->
+    <footer class="ticket-footer">
+      <p class="confidential">Confidential • For patient use only • سرّي</p>
+      <p class="hash-line">
+        Signature Hash:
+        <span class="hash-frag">
+          {{ ticket_code|default_if_none:''|slugify }}-{{ appointment.id }}-{{ appointment.scheduled_time|date:"His" }}
+        </span>
+      </p>
+      <p class="meta-print">Printed: {% now "Y-m-d H:i" %}</p>
+    </footer>
+
+  </article>
+</div>
+
+<noscript>
+  <div style="text-align:center;font-size:.65rem;color:#a33;margin-top:1rem">
+    JavaScript disabled: copy & share buttons may not work.
+  </div>
+</noscript>
+
+<!-- سكربت النسخ (Inline). إن كانت لديك سياسة CSP تمنع inline، انقليه لملف static/js/ticket_copy.js واستدعيه بـ defer -->
+<script>
+(function () {
+  // دالة نسخ قوية مع بديل execCommand
+  function copyText(text) {
+    text = (text || "").trim();
+    if (!text) return Promise.reject(new Error("Empty"));
+
+    // Clipboard API (تعمل عادةً على https و localhost/127.0.0.1)
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+      return navigator.clipboard.writeText(text).catch(function () {
+        return legacyCopy(text);
+      });
+    }
+    return legacyCopy(text);
+  }
+
+  function legacyCopy(text) {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    ta.style.top = "0";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+    document.body.removeChild(ta);
+    return ok ? Promise.resolve() : Promise.reject(new Error("execCommand failed"));
+  }
+
+  function pickValue(btn) {
+    // أولوية: data-primary → data-alt → data-fallback → DOM (#codeText, #verifyLink)
+    var v = (btn.getAttribute("data-primary") || "").trim();
+    if (v) return v;
+    v = (btn.getAttribute("data-alt") || "").trim();
+    if (v) return v;
+    v = (btn.getAttribute("data-fallback") || "").trim();
+    if (v) return v;
+    var codeEl = document.getElementById("codeText");
+    if (codeEl && codeEl.textContent.trim()) return codeEl.textContent.trim();
+    var urlEl = document.getElementById("verifyLink");
+    if (urlEl && urlEl.textContent.trim()) return urlEl.textContent.trim();
+    return "";
+  }
+
+  var btn = document.getElementById("copyBtn");
+  if (!btn) return;
+
+  btn.addEventListener("click", function (e) {
+    e.preventDefault();
+    var value = pickValue(btn);
+
+    copyText(value).then(function () {
+      var prevHTML = btn.innerHTML;
+      btn.innerHTML = '<i class="fas fa-check"></i><span>Copied!</span>';
+      btn.disabled = true;
+      setTimeout(function () { btn.innerHTML = prevHTML; btn.disabled = false; }, 1400);
+    }).catch(function () {
+      // ما نستخدم alert إلا كحل أخير؛ إذا فشل، أعطي المستخدم تحديدًا تلقائيًا ليسهل Ctrl+C
+      var fallback = value || (document.getElementById("codeText")?.textContent || document.getElementById("verifyLink")?.textContent || "");
+      if (fallback) {
+        var ta = document.createElement("textarea");
+        ta.value = fallback;
+        ta.style.position = "fixed";
+        ta.style.left = "10px";
+        ta.style.top = "10px";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+      }
+      alert("Failed to copy. Select the code and press Ctrl+C.");
+    });
+  });
+})();
+</script>
+{% endblock %}

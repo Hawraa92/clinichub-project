@@ -1,0 +1,56 @@
+/* ================= Auth Forms Styling ================= */
+
+.auth-card {
+  width: 100%;
+  max-width: 500px;
+  border-radius: 1rem;
+  background: #ffffff;
+  border: 1px solid #dee2e6;
+}
+
+.auth-card h2 {
+  font-weight: 600;
+}
+
+.auth-card .form-label {
+  font-weight: 500;
+}
+
+.auth-card .form-control {
+  border-radius: 0.5rem;
+  box-shadow: none;
+  padding: 0.75rem;
+}
+
+.auth-card .btn {
+  padding: 0.75rem;
+  font-weight: 500;
+  border-radius: 0.5rem;
+}
+
+.auth-card .btn-primary {
+  background-color: #0d6efd;
+  border-color: #0d6efd;
+}
+
+.auth-card .btn-primary:hover {
+  background-color: #0b5ed7;
+}
+
+.auth-card .btn-success {
+  background-color: #198754;
+  border-color: #198754;
+}
+
+.auth-card .btn-success:hover {
+  background-color: #157347;
+}
+
+.auth-card a {
+  color: #0d6efd;
+  text-decoration: none;
+}
+
+.auth-card a:hover {
+  text-decoration: underline;
+}

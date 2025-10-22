@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% load static i18n %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{% static 'css/doctor/doctor_dashboard.css' %}">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="brand-container">
+      <div class="doctor-avatar" aria-label="{% trans 'Doctor avatar' %}">
+        <i class="bi bi-person-circle" aria-hidden="true"></i>
+      </div>
+      <div class="brand-text">
+        <h3>Dr.&nbsp;{{ doctor.full_name|default:request.user.username }}</h3>
+        <p>{{ doctor.specialty|default:_("General") }}</p>
+      </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="nav-menu">
+      <!-- Dashboard -->
+      <a href="{% url 'doctor:dashboard' %}"
+         class="nav-item{% if request.resolver_match.view_name == 'doctor:dashboard' %} active{% endif %}"
+         aria-current="{% if request.resolver_match.view_name == 'doctor:dashboard' %}page{% endif %}">
+        <i class="bi bi-house-door" aria-hidden="true"></i>
+        <span>{% trans "Dashboard" %}</span>
+      </a>
+
+      <!-- Patients -->
+      <a href="{% url 'doctor:patients_list' %}"
+         class="nav-item{% if request.resolver_match.view_name == 'doctor:patients_list' %} active{% endif %}"
+         aria-current="{% if request.resolver_match.view_name == 'doctor:patients_list' %}page{% endif %}">
+        <i class="bi bi-people" aria-hidden="true"></i>
+        <span>{% trans "Patients" %}</span>
+      </a>
+
+      <!-- Prescriptions -->
+      <a href="{% url 'prescription:list' %}"
+         class="nav-item{% if request.resolver_match.view_name == 'prescription:list' %} active{% endif %}"
+         aria-current="{% if request.resolver_match.view_name == 'prescription:list' %}page{% endif %}">
+        <i class="bi bi-file-medical" aria-hidden="true"></i>
+        <span>{% trans "Prescriptions" %}</span>
+      </a>
+
+      <!-- Archive -->
+      <a href="{% url 'medical_archive:archive_list' %}"
+         class="nav-item{% if request.resolver_match.view_name == 'medical_archive:archive_list' %} active{% endif %}"
+         aria-current="{% if request.resolver_match.view_name == 'medical_archive:archive_list' %}page{% endif %}">
+        <i class="bi bi-archive" aria-hidden="true"></i>
+        <span>{% trans "Archive" %}</span>
+      </a>
+
+      <!-- NEW ⇢ Doctor Reports (لوحة تقارير الطبيب) -->
+      <a href="{% url 'doctor:doctor_reports' %}"
+         class="nav-item{% if request.resolver_match.view_name in 'doctor:doctor_reports doctor:reports_export' %} active{% endif %}"
+         aria-current="{% if request.resolver_match.view_name in 'doctor:doctor_reports doctor:reports_export' %}page{% endif %}">
+        <i class="bi bi-clipboard-data" aria-hidden="true"></i>
+        <span>{% trans "Doctor Reports" %}</span>
+      </a>
+
+      <!-- Patient Reports (البحث حسب مريض) -->
+      <a href="{% url 'doctor:report_search' %}"
+         class="nav-item{% if request.resolver_match.view_name == 'doctor:report_search' %} active{% endif %}"
+         aria-current="{% if request.resolver_match.view_name == 'doctor:report_search' %}page{% endif %}">
+        <i class="bi bi-file-earmark-text" aria-hidden="true"></i>
+        <span>{% trans "Patient Reports" %}</span>
+      </a>
+    </nav>
+
+    <div class="logout-container">
+      <a href="{% url 'accounts:logout' %}" class="nav-item">
+        <i class="bi bi-box-arrow-right" aria-hidden="true"></i>
+        <span>{% trans "Logout" %}</span>
+      </a>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <!-- Header -->
+    <header class="dashboard-header">
+      <div class="welcome-section">
+        <h1>{% blocktrans %}Welcome back, Dr. {{ doctor.full_name|default:request.user.username }}!{% endblocktrans %}</h1>
+        <p class="inspiration">{% trans '"Your expertise saves lives. Stay confident, stay caring."' %}</p>
+      </div>
+
+      <div class="datetime-card" aria-label="{% trans 'Current date and time' %}">
+        <div class="clock-icon"><i class="bi bi-clock" aria-hidden="true"></i></div>
+        <div class="datetime-info">
+          <div id="digital-clock" class="clock"></div>
+          <div id="digital-date" class="date"></div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Quick Actions -->
+    <div class="quick-actions">
+      <a href="{% url 'prescription:list' %}" class="action-btn" data-tooltip="{% trans 'Go to prescriptions' %}">
+        <i class="bi bi-file-medical" aria-hidden="true"></i><span>{% trans "Prescriptions" %}</span>
+      </a>
+      <a href="{% url 'medical_archive:archive_list' %}" class="action-btn" data-tooltip="{% trans 'Browse archive' %}">
+        <i class="bi bi-archive" aria-hidden="true"></i><span>{% trans "Archive" %}</span>
+      </a>
+      <a href="{% url 'doctor:patients_list' %}" class="action-btn" data-tooltip="{% trans 'All patients' %}">
+        <i class="bi bi-people" aria-hidden="true"></i><span>{% trans "Patients" %}</span>
+      </a>
+      <!-- NEW ⇢ Doctor Reports (اختصار مباشر) -->
+      <a href="{% url 'doctor:doctor_reports' %}" class="action-btn" data-tooltip="{% trans 'Open doctor analytics' %}">
+        <i class="bi bi-clipboard-data" aria-hidden="true"></i><span>{% trans "Doctor Reports" %}</span>
+      </a>
+      <!-- Patient Reports (اختياري) -->
+      <a href="{% url 'doctor:report_search' %}" class="action-btn" data-tooltip="{% trans 'Generate patient report' %}">
+        <i class="bi bi-file-earmark-text" aria-hidden="true"></i><span>{% trans "Patient Reports" %}</span>
+      </a>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="card-icon prescription"><i class="bi bi-file-medical" aria-hidden="true"></i></div>
+        <div class="card-content">
+          <h3>{% trans "Prescriptions" %}</h3>
+          <p>{{ stats.prescription_count }}</p>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="card-icon patient"><i class="bi bi-people-fill" aria-hidden="true"></i></div>
+        <div class="card-content">
+          <h3>{% trans "Patients" %}</h3>
+          <p>{{ unique_patients }}</p>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="card-icon archive"><i class="bi bi-clock-history" aria-hidden="true"></i></div>
+        <div class="card-content">
+          <h3>{% trans "Recent Archives" %}</h3>
+          <p>{{ recent_archives|length }}</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chart Section -->
+    <section class="chart-section">
+      <div class="section-header">
+        <h2><i class="bi bi-bar-chart-line" aria-hidden="true"></i> {% trans "Weekly Appointments" %}</h2>
+      </div>
+      <div class="chart-container">
+        <canvas id="patientsWeekChart"></canvas>
+        <script id="chart-data" type="application/json">{{ chart_data_json|safe }}</script>
+      </div>
+    </section>
+
+    <!-- Archives Section -->
+    <section class="archives-section">
+      <div class="section-header">
+        <h2><i class="bi bi-list-task" aria-hidden="true"></i> {% trans "Recent Archives" %}</h2>
+      </div>
+      <div class="archives-list">
+        {% if recent_archives %}
+          {% for item in recent_archives %}
+            <div class="archive-item">
+              <div class="archive-time">{{ item.created_at|time:"H:i" }}</div>
+              <div class="archive-content">
+                <i class="bi bi-file-medical" aria-hidden="true"></i>
+                <div class="archive-text"><span>{{ item.title }}</span></div>
+              </div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="no-archives">
+            <i class="bi bi-inbox" aria-hidden="true"></i>
+            <p>{% trans "No recent archives available" %}</p>
+          </div>
+        {% endif %}
+      </div>
+    </section>
+  </main>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="{% static 'js/doctor/doctor_dashboard.js' %}"></script>
+{% endblock %}

@@ -1,0 +1,177 @@
+/* File: prescription/static/css/prescription_list.css */
+
+:root {
+  --primary-color: #4361ee;
+  --secondary-color: #3f37c9;
+  --success-color: #4cc9f0;
+  --light-bg: #f8f9fa;
+  --card-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.08);
+}
+
+/* General Styling */
+body {
+  background-color: #f5f7fb;
+  color: #343a40;
+  margin: 0;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.container-fluid {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+/* Card Styling */
+.card {
+  border-radius: 0.75rem;
+  overflow: hidden;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  background-color: #fff;
+}
+.card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--card-shadow);
+}
+.card-header {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+/* Table Styling */
+.table {
+  margin-bottom: 0;
+  background-color: transparent;
+}
+.table thead th {
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  letter-spacing: 0.5px;
+  color: #6c757d;
+  border-bottom: 2px solid #e9ecef;
+  padding: 0.75rem 1.25rem;
+}
+.table tbody td {
+  padding: 1rem 1.25rem;
+  vertical-align: middle;
+  border-top: 1px solid #edf2f7;
+}
+.table-hover tbody tr:hover {
+  background-color: rgba(67, 97, 238, 0.03);
+}
+
+/* Avatar Styling */
+.avatar-sm,
+.avatar-lg {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+}
+.avatar-sm {
+  width: 36px;
+  height: 36px;
+}
+.avatar-lg {
+  width: 48px;
+  height: 48px;
+}
+
+/* Badges */
+.badge {
+  font-weight: 500;
+  padding: 0.45em 0.75em;
+  border-radius: 0.5rem;
+}
+.bg-success-subtle {
+  background-color: rgba(76, 201, 240, 0.15) !important;
+  color: var(--success-color) !important;
+}
+
+/* Buttons */
+.btn {
+  border-radius: 0.5rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+.btn-sm {
+  padding: 0.35rem 0.7rem;
+  font-size: 0.8rem;
+}
+.btn-light {
+  background-color: #f1f3f9;
+  border-color: #f1f3f9;
+}
+.btn-light:hover {
+  background-color: #e2e7f4;
+  border-color: #e2e7f4;
+}
+
+/* Inputs */
+.form-control,
+.form-select {
+  border-radius: 0.5rem;
+  border: 1px solid #e2e8f0;
+  padding: 0.5rem 1rem;
+  transition: all 0.3s;
+}
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 0.25rem rgba(67, 97, 238, 0.15);
+}
+.input-group-text {
+  background-color: #fff;
+  border: 1px solid #e2e8f0;
+  border-right: none;
+}
+
+/* DataTables Customization */
+#prescTable_wrapper {
+  margin-top: 0 !important;
+}
+#prescTable_filter input {
+  border-radius: 0.5rem !important;
+  padding: 0.4rem 1rem !important;
+  border: 1px solid #e2e8f0 !important;
+  width: 100% !important;
+}
+.dataTables_wrapper .dataTables_paginate .paginate_button {
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 0.5rem !important;
+  margin-left: 0.3rem !important;
+  padding: 0.3rem 0.8rem !important;
+}
+.dataTables_wrapper .dataTables_paginate .paginate_button.current,
+.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+  background: var(--primary-color) !important;
+  color: #fff !important;
+  border-color: var(--primary-color) !important;
+}
+
+/* Grid View */
+#gridView .card {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+#gridView .card-body {
+  flex-grow: 1;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+  .d-flex.justify-content-between {
+    flex-direction: column;
+    gap: 1rem;
+  }
+  .text-end {
+    text-align: left !important;
+  }
+  #prescTable_wrapper .dataTables_length,
+  #prescTable_wrapper .dataTables_filter {
+    float: none !important;
+    text-align: left !important;
+    margin-bottom: 1rem;
+  }
+}

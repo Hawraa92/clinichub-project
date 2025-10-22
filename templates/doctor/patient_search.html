@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% load static i18n %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{% static 'css/doctor/patient_search.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="ps-wrapper" role="main">
+  <h1 class="ps-title">
+    <i class="bi bi-file-earmark-text" aria-hidden="true"></i>
+    {% trans "Generate Patient Report" %}
+  </h1>
+  <p class="ps-subtitle">
+    {% trans "Choose a patient and (optionally) limit the date range." %}
+  </p>
+
+  <!-- ===== اختيار المريض + النطاق ===== -->
+  <form method="get" class="ps-filter-card" aria-label="{% trans 'Report filter form' %}">
+    <div class="ps-grid">
+      <!-- قائمة المرضى -->
+      <div class="ps-field">
+        <label for="patient">{% trans "Patient" %}</label>
+        <select id="patient" name="patient" required>
+          <option value="" disabled selected>{% trans "Select…" %}</option>
+          {% for p in patients %}
+            <option value="{{ p.id }}">{{ p.full_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- تاريخ من -->
+      <div class="ps-field">
+        <label for="date_from">{% trans "From" %}</label>
+        <input type="date" id="date_from" name="date_from" value="{{ request.GET.date_from }}">
+      </div>
+
+      <!-- تاريخ إلى -->
+      <div class="ps-field">
+        <label for="date_to">{% trans "To" %}</label>
+        <input type="date" id="date_to" name="date_to" value="{{ request.GET.date_to }}">
+      </div>
+
+      <!-- زر الإنشاء -->
+      <div class="ps-actions">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-file-earmark-text" aria-hidden="true"></i>
+          <span>{% trans "Open Report" %}</span>
+        </button>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{# الصفحة لا تحتاج JS إضافي هنا #}
+{% endblock %}

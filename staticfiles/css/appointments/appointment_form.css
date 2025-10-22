@@ -1,0 +1,106 @@
+/* static/assets/css/appointments/secretary_form.css */
+
+/* ===== Patient Registration Form Container ===== */
+.patient-form {
+  max-width: 600px;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.1);
+  padding: 40px 30px;
+  margin: 50px auto;
+}
+
+/* ===== Card Header within Patient Form ===== */
+.patient-form .card-header {
+  background: linear-gradient(135deg, #5fb2ff, #0077cc);
+  border-radius: 16px 16px 0 0;
+  padding: 24px;
+  text-align: center;
+}
+
+.patient-form .card-header h4 {
+  color: #fff;
+  font-size: 1.6rem;
+  font-weight: bold;
+  margin: 0;
+}
+
+/* ===== Labels in Patient Form ===== */
+.patient-form label {
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 6px;
+  display: block;
+}
+
+/* ===== Form Fields Styling ===== */
+.patient-form .form-select,
+.patient-form .form-control {
+  width: 100%;
+  border-radius: 12px;
+  padding: 12px 15px;
+  font-size: 1rem;
+  border: 1px solid #ccc;
+  transition: border-color 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+}
+
+/* Hover effect for fields */
+.patient-form .form-select:hover,
+.patient-form .form-control:hover {
+  border-color: #0077cc;
+}
+
+/* Focus effect for fields */
+.patient-form .form-select:focus,
+.patient-form .form-control:focus {
+  border-color: #0077cc;
+  box-shadow: 0 0 8px rgba(0, 119, 204, 0.2);
+  outline: none;
+}
+
+/* ===== Validation Feedback ===== */
+.patient-form .invalid-feedback {
+  display: block;
+  font-size: 0.9rem;
+  color: #dc3545;
+  margin-top: 4px;
+}
+
+/* ===== Submit Button ===== */
+.patient-form .btn-primary {
+  display: inline-block;
+  font-size: 1.1rem;
+  padding: 10px 30px;
+  border-radius: 50px;
+  font-weight: bold;
+  transition: background 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+}
+
+.patient-form .btn-primary:hover {
+  background-color: #0056b3;
+  box-shadow: 0 0 10px rgba(0, 86, 179, 0.3);
+}
+
+/* Focus style for button */
+.patient-form .btn-primary:focus {
+  outline: 2px solid #0077cc;
+  outline-offset: 4px;
+}
+
+/* ===== Responsive Adjustments ===== */
+@media (max-width: 768px) {
+  .patient-form {
+    padding: 25px 15px;
+    margin: 30px auto;
+  }
+
+  .patient-form .btn-primary {
+    width: 100%;
+    font-size: 1rem;
+  }
+
+  .patient-form .form-control,
+  .patient-form .form-select {
+    font-size: 1.1rem;
+  }
+}

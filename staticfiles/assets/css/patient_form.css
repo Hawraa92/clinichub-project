@@ -1,0 +1,5 @@
+input, select, textarea {
+  border-radius: 0.5rem !important;
+  padding: 0.75rem !important;
+  font-size: 1rem !important;
+}

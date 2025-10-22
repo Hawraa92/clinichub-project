@@ -1,0 +1,38 @@
+.ticket-container {
+    width: 300px;
+    padding: 20px;
+    margin: 0 auto;
+    border: 1px solid #000;
+    border-radius: 8px;
+    font-family: Arial, sans-serif;
+    text-align: center;
+    background-color: #f9f9f9;
+}
+
+.ticket-header {
+    font-size: 24px;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.ticket-body {
+    margin-top: 20px;
+    font-size: 16px;
+}
+
+.ticket-body p {
+    margin: 5px 0;
+}
+
+.ticket-footer {
+    margin-top: 20px;
+    font-size: 14px;
+    color: #888;
+}
+
+@media print {
+    .ticket-container {
+        width: 100%;
+        font-size: 18px;
+    }
+}

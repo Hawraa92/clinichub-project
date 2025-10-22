@@ -1,0 +1,34 @@
+body {
+    padding-top: 70px;
+    background-color: #f8f9fa;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  }
+  
+  .navbar-brand {
+    font-weight: 700;
+    font-size: 1.5rem;
+    color: #0d6efd !important;
+  }
+  
+  .nav-link {
+    font-weight: 500;
+    color: #333;
+  }
+  
+  .nav-link:hover {
+    color: #0d6efd;
+  }
+  
+  .main-content {
+    padding: 40px 0;
+  }
+  
+  .site-footer {
+    margin-top: 60px;
+    background-color: #f1f1f1;
+    padding: 20px;
+    text-align: center;
+    font-size: 0.9rem;
+    color: #555;
+  }
+  

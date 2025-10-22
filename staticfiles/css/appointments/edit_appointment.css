@@ -1,0 +1,99 @@
+/* =========================================
+   edit_appointment.css  (Enhancement Layer)
+   يعتمد على المتغيرات في create_appointment.css
+   ========================================= */
+
+   .appointment-form-card.edit-mode {
+    border: 1px solid var(--color-border-strong);
+    position: relative;
+  }
+  
+  .appointment-form-card.edit-mode::before {
+    content: "EDIT MODE";
+    position: absolute;
+    top: .6rem;
+    right: .9rem;
+    font-size: .55rem;
+    letter-spacing: 1.5px;
+    font-weight: 700;
+    background: linear-gradient(90deg,var(--color-primary-start),var(--color-primary-end));
+    color: #fff;
+    padding: 3px 8px;
+    border-radius: 8px;
+    opacity: .72;
+    pointer-events: none;
+  }
+  
+  /* RTL ترجمة اختيارية */
+  [dir="rtl"] .appointment-form-card.edit-mode::before {
+    content: "وضع التعديل";
+    left: .9rem;
+    right: auto;
+    letter-spacing: .5px;
+  }
+  
+  .appointment-form-card.edit-mode .card-header {
+    background: linear-gradient(90deg, var(--color-primary-end), var(--color-primary-start));
+  }
+  
+  /* Status badge */
+  #statusBadge {
+    font-weight: 600;
+    border-radius: 10px;
+    padding: 4px 8px;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+    font-size: .58rem;
+  }
+  
+  #statusBadge.bg-success {
+    background: #d1f7e2 !important;
+    color: #1f7a49 !important;
+  }
+  #statusBadge.bg-danger {
+    background: #fdd9d9 !important;
+    color: #9a2f2f !important;
+  }
+  
+  /* Time field visual tweak */
+  .appointment-form-card.edit-mode input.datetimepicker {
+    background:
+      linear-gradient(#fff,#fff) padding-box,
+      linear-gradient(120deg,var(--color-primary-start)33%,var(--color-primary-end)) border-box;
+    border: 1px solid transparent;
+  }
+  .appointment-form-card.edit-mode input.datetimepicker:focus {
+    box-shadow: var(--shadow-focus);
+  }
+  
+  /* Busy state */
+  #saveBtn.is-busy {
+    pointer-events: none;
+    opacity: .7;
+    position: relative;
+  }
+  
+  /* Delete link refinement */
+  .appointment-form-card.edit-mode a.btn-outline-danger {
+    border-width: 1px;
+    font-size: .7rem;
+    letter-spacing: .4px;
+    font-weight: 600;
+    padding: .45rem .85rem;
+  }
+  
+  /* Responsive badge adjust */
+  @media (max-width: 576px) {
+    .appointment-form-card.edit-mode::before {
+      top: .45rem;
+      right: .55rem;
+      font-size: .5rem;
+      padding: 2px 6px;
+    }
+  }
+  
+  /* Optional: hide tag in print */
+  @media print {
+    .appointment-form-card.edit-mode::before { display: none; }
+  }
+  

@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% load static %}
+{% load group_filters %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/patient/patient_detail.css' %}">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+<script src="{% static 'js/patient/patient_detail.js' %}" defer></script>
+{% endblock %}
+
+{% block content %}
+<div class="glass-container">
+  <div class="patient-detail-card">
+
+    <!-- Header -->
+    <div class="pd-header">
+      <div class="pd-avatar">
+        <i class="fas fa-user-injured"></i>
+        <div class="status-indicator {{ patient.diabetes_status|default:'pending' }}"></div>
+      </div>
+
+      <div class="pd-header-info">
+        <h1>{{ patient.full_name }}</h1>
+        <div class="pd-meta">
+          <span class="pd-record-id">#{{ patient.id }}</span>
+          <span class="pd-age">{{ patient.display_age|default:"—" }} yr</span>
+          <span class="pd-gender">{{ patient.get_sex_display|default:"—" }}</span>
+        </div>
+      </div>
+
+      {% if request.user|has_group:"Doctors" or request.user.role == "doctor" %}
+        {% with patient.diabetes_prediction as dp %}
+          <div class="pd-prediction">
+            {% if dp == 2 %}
+              <span class="pd-badge pd-badge-pos"><i class="fas fa-vial"></i> Diabetic</span>
+            {% elif dp == 1 %}
+              <span class="pd-badge pd-badge-pre"><i class="fas fa-vial"></i> Prediabetic</span>
+            {% elif dp == 0 %}
+              <span class="pd-badge pd-badge-neg"><i class="fas fa-vial"></i> Healthy</span>
+            {% else %}
+              <span class="pd-badge pd-badge-pending"><i class="fas fa-vial"></i> Pending</span>
+            {% endif %}
+          </div>
+        {% endwith %}
+      {% endif %}
+    </div>
+
+    {% if request.user|has_group:"Doctors" or request.user.role == "doctor" %}
+      <!-- ===== Doctor-only view ===== -->
+      <div class="pd-info-grid">
+
+        <!-- Personal -->
+        <div class="pd-card">
+          <div class="pd-section-title"><i class="fas fa-id-card"></i> Personal</div>
+          <div class="pd-info-row"><span>Full Name</span><span class="highlight">{{ patient.full_name }}</span></div>
+          <div class="pd-info-row"><span>DOB</span><span>{{ patient.date_of_birth|date:"M d, Y" }}</span></div>
+          <div class="pd-info-row"><span>Address</span><span>{{ patient.address|default:"—" }}</span></div>
+        </div>
+
+        <!-- Contact -->
+        <div class="pd-card">
+          <div class="pd-section-title"><i class="fas fa-mobile-alt"></i> Contact</div>
+          <div class="pd-info-row"><span>Mobile</span><a href="tel:{{ patient.mobile }}">{{ patient.mobile|default:"—" }}</a></div>
+          <div class="pd-info-row"><span>Email</span><a href="mailto:{{ patient.email }}">{{ patient.email|default:"—" }}</a></div>
+        </div>
+
+        <!-- Quick metrics -->
+        <div class="pd-card metrics-card">
+          <div class="pd-section-title"><i class="fas fa-chart-line"></i> Metrics</div>
+          <div class="metrics-grid">
+            <div class="metric-item"><div class="metric-value">{{ patient.bmi|default:"—" }}</div><div class="metric-label">BMI</div></div>
+            <div class="metric-item"><div class="metric-value">{{ patient.hbA1c|default:"—" }}</div><div class="metric-label">HbA1c</div></div>
+          </div>
+        </div>
+
+        <!-- Clinical notes -->
+        <div class="pd-card notes-card">
+          <div class="pd-section-title"><i class="fas fa-notes-medical"></i> Clinical Notes</div>
+          <div class="notes-content">{{ patient.clinical_notes|default:"No notes yet." }}</div>
+        </div>
+      </div>
+
+      <div class="pd-actions">
+        <a class="pd-btn pd-btn-edit" href="{% url 'patient:edit' patient.pk %}"><i class="fas fa-edit"></i> Edit</a>
+        <a class="pd-btn pd-btn-back" href="{% url 'patient:list' %}"><i class="fas fa-arrow-left"></i> Back</a>
+      </div>
+
+    {% else %}
+      <!-- ===== Secretary / minimal view ===== -->
+      <div class="pd-card">
+        <div class="pd-section-title"><i class="fas fa-id-card"></i> Basic Info</div>
+        <div class="pd-info-row"><span>Full Name</span><span class="highlight">{{ patient.full_name }}</span></div>
+        <div class="pd-info-row"><span>DOB</span><span>{{ patient.date_of_birth|date:"M d, Y" }}</span></div>
+        <div class="pd-info-row"><span>Gender</span><span>{{ patient.get_sex_display|default:"—" }}</span></div>
+        <div class="pd-info-row"><span>Address</span><span>{{ patient.address|default:"—" }}</span></div>
+      </div>
+      <div class="pd-actions">
+        <a class="pd-btn pd-btn-back" href="{% url 'patient:list' %}"><i class="fas fa-arrow-left"></i> Back</a>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

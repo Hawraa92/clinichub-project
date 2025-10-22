@@ -1,0 +1,68 @@
+/* success_message.css */
+
+.success-box {
+  max-width: 640px;
+  border: 1px solid #e4f2e9;
+  border-radius: 1.2rem;
+  background: linear-gradient(145deg,#ffffff,#f6fff9);
+  position: relative;
+}
+
+.success-box h2 {
+  font-size: 1.55rem;
+  letter-spacing: .5px;
+}
+
+.success-details {
+  font-size: .95rem;
+  background: #f0fff5;
+  border: 1px solid #d7f5e3;
+  border-radius: .85rem;
+  padding: 1rem 1.25rem;
+  text-align: left;
+  display: inline-block;
+  min-width: 60%;
+}
+
+.success-details p {
+  line-height: 1.4;
+}
+
+.success-box .btn {
+  border-radius: 2rem;
+  font-weight: 600;
+  letter-spacing: .3px;
+  min-width: 165px;
+  transition: .25s;
+}
+
+.success-box .btn-outline-success:hover {
+  background: #198754;
+  color: #fff;
+}
+
+.success-box .btn-outline-primary:hover {
+  background: #0d6efd;
+  color: #fff;
+}
+
+.success-box .btn-outline-secondary:hover {
+  background: #6c757d;
+  color: #fff;
+}
+
+.auto-redirect-note {
+  opacity: .75;
+}
+
+@media (max-width: 576px) {
+  .success-box {
+    padding: 2rem 1.5rem;
+  }
+  .success-details {
+    width: 100%;
+  }
+  .success-box h2 {
+    font-size: 1.35rem;
+  }
+}

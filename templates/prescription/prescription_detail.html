@@ -1,0 +1,406 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{% static 'css/prescription/prescription_detail.css' %}">
+  <style>
+    :root{
+      /* Base neutrals */
+      --bg:#f3f6fb; --card:#ffffff; --ink:#0f172a; --muted:#6b7280;
+      --line:#e5e7eb; --shadow:0 10px 34px rgba(15,23,42,.08);
+      --radius:14px;
+
+      /* Colorful medical accents */
+      --accent:#2563eb;        /* blue */
+      --accent-2:#06b6d4;      /* cyan */
+      --accent-3:#10b981;      /* green */
+
+      /* UI elements */
+      --chip:#eef2ff; --chip-ink:#3730a3;
+      --chip-2:#ecfeff; --chip-2-ink:#0e7490;
+      --chip-3:#ecfdf5; --chip-3-ink:#065f46;
+
+      --btn-dark:#0f172a; --btn-dark-ink:#ffffff;
+      --btn-ok:#10b981; --btn-ok-ink:#ffffff;
+      --toast-bg:#0f172a; --toast-ink:#ffffff;
+    }
+
+    html,body{background:var(--bg);color:var(--ink)}
+    .rx-wrap{padding:28px 14px}
+    .rx-page{
+      max-width:940px;margin:0 auto;background:var(--card);
+      border-radius:var(--radius);box-shadow:var(--shadow);
+      position:relative;overflow:hidden
+    }
+
+    /* Header with subtle gradient band */
+    .rx-head{padding:0;border-bottom:1px solid var(--line)}
+    .rx-head-bar{
+      padding:22px 28px;
+      background:linear-gradient(120deg,var(--accent),var(--accent-2));
+      color:#fff; display:flex; align-items:center; justify-content:space-between; gap:16px
+    }
+    .rx-head-brand{display:flex;align-items:center;gap:14px}
+    .rx-logo{
+      width:40px;height:40px;border-radius:10px;
+      background:rgba(255,255,255,.15);backdrop-filter:blur(4px);
+      display:flex;align-items:center;justify-content:center;font-weight:900
+    }
+    .rx-brand-title{font-weight:900;letter-spacing:.2px}
+    .rx-sub{opacity:.9;font-size:.9rem}
+
+    .rx-head-meta{
+      display:flex;gap:10px;align-items:center;flex-wrap:wrap
+    }
+    .rx-chip{background:rgba(255,255,255,.16);color:#fff;padding:6px 10px;border-radius:999px;font-size:.82rem;font-weight:700;border:1px solid rgba(255,255,255,.25)}
+    .rx-chip-neutral{background:var(--chip);color:var(--chip-ink);border:1px solid #e9eaff}
+    .rx-chip-cyan{background:var(--chip-2);color:var(--chip-2-ink);border:1px solid #c0f7ff}
+    .rx-chip-green{background:var(--chip-3);color:var(--chip-3-ink);border:1px solid #c8f7e9}
+
+    .rx-ident{padding:18px 28px;display:grid;grid-template-columns:1fr auto;gap:12px;border-bottom:1px solid var(--line)}
+    .rx-doctor{font-weight:800}
+    .rx-patient{display:flex;gap:12px;flex-wrap:wrap}
+    .rx-kv{display:flex;gap:6px;align-items:center;background:#fafafa;border:1px solid var(--line);padding:6px 10px;border-radius:10px;font-size:.9rem}
+    .rx-kv b{font-weight:800}
+
+    .rx-body{padding:18px 28px 10px}
+    .rx-section{margin:0 0 16px 0;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+    .rx-section-h{
+      padding:10px 14px;font-weight:800;border-bottom:1px solid var(--line);
+      background:linear-gradient(90deg,#f8fafc,#f1f5f9)
+    }
+    .rx-section-h .rx-rxmark{color:var(--accent-3)}
+    .rx-section-c{padding:12px 14px}
+
+    .rx-table{width:100%;border-collapse:collapse;font-size:.95rem}
+    .rx-table thead th{
+      text-align:left;font-weight:800;border-bottom:2px solid var(--line);padding:10px 8px;
+      color:var(--accent)
+    }
+    .rx-table tbody td{border-bottom:1px solid var(--line);padding:10px 8px;vertical-align:top}
+    .rx-table tbody tr:nth-child(odd){ background:#fbfdff } /* zebra rows */
+    .rx-col-drug{min-width:220px;font-weight:800;word-break:break-word;hyphens:auto}
+    .rx-col-qty,.rx-col-refills{white-space:nowrap}
+    .rx-note{color:var(--muted);font-size:.9rem}
+
+    .rx-verify{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+    .rx-qr{
+      width:160px;height:160px;border-radius:12px;
+      background:linear-gradient(135deg,#f8fbff,#eef9ff);
+      border:1px solid var(--line);display:flex;align-items:center;justify-content:center;overflow:hidden
+    }
+    .rx-qr img{max-width:100%;max-height:100%}
+    .rx-ver-text small{color:var(--muted)}
+    .rx-copy{
+      appearance:none;border:1px solid var(--line);background:#fff;color:var(--ink);
+      border-radius:10px;padding:6px 10px;font-weight:700;cursor:pointer
+    }
+
+    .rx-signline{height:46px;border-bottom:2px solid var(--ink);width:260px;margin-top:8px}
+
+    .rx-actions{padding:8px 28px 24px;display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+    .btn{border:1px solid var(--line);border-radius:12px;padding:10px 16px;font-weight:800;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.06);transition:transform .08s ease}
+    .btn:active{transform:translateY(1px)}
+    .btn-primary{background:var(--btn-dark);color:var(--btn-dark-ink);border-color:var(--btn-dark)}
+    .btn-success{background:var(--btn-ok);color:var(--btn-ok-ink);border-color:var(--btn-ok)}
+
+    .rx-foot{padding:0 28px 22px;color:var(--muted);font-size:.9rem;text-align:center}
+
+    .watermark{position:absolute;inset:0;pointer-events:none;display:flex;align-items:center;justify-content:center;opacity:.05;filter:grayscale(100%)}
+    .watermark img{max-width:380px}
+
+    /* Toast for copy feedback */
+    .toast{
+      position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);
+      background:var(--toast-bg);color:var(--toast-ink);padding:10px 14px;border-radius:12px;
+      box-shadow:0 8px 20px rgba(15,23,42,.25);opacity:0;pointer-events:none;transition:all .25s ease;z-index:9999
+    }
+    .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+    .sr-only{position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden}
+
+    @media print{
+      html,body{background:#fff}
+      .rx-wrap{padding:0}
+      .rx-page{box-shadow:none;border-radius:0;max-width:none}
+      .rx-actions,.d-print-none{display:none!important}
+      .rx-head-bar,.rx-section-h{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+      .rx-qr img{ width:32mm; height:32mm; image-rendering:crisp-edges } /* clearer QR in print */
+    }
+    @page{size:A4;margin:16mm}
+  </style>
+{% endblock %}
+
+{% block content %}
+<div class="rx-wrap" dir="ltr" id="prescription-content">
+  <article class="rx-page" role="document" aria-label="Medical Prescription">
+    <div class="watermark">
+      <img src="{% static 'images/heart_logo.png' %}" alt="Clinic watermark">
+    </div>
+
+    <!-- Header -->
+    <header class="rx-head">
+      <div class="rx-head-bar">
+        <div class="rx-head-brand">
+          <div class="rx-logo" aria-hidden="true">Rx</div>
+          <div>
+            <div class="rx-brand-title">Clinic Prescription</div>
+            <div class="rx-sub">Confidential medical information — handle with care.</div>
+          </div>
+        </div>
+
+        <div class="rx-head-meta">
+          {% if prescription.date_issued %}
+            <span class="rx-chip">Date {{ prescription.date_issued|date:"Y-m-d" }}</span>
+            <span class="rx-chip">Time {{ prescription.date_issued|date:"H:i" }}</span>
+          {% elif prescription.created %}
+            <span class="rx-chip">Date {{ prescription.created|date:"Y-m-d" }}</span>
+            <span class="rx-chip">Time {{ prescription.created|date:"H:i" }}</span>
+          {% elif prescription.created_on %}
+            <span class="rx-chip">Date {{ prescription.created_on|date:"Y-m-d" }}</span>
+            <span class="rx-chip">Time {{ prescription.created_on|date:"H:i" }}</span>
+          {% else %}
+            <span class="rx-chip">Date {% now "Y-m-d" %}</span>
+            <span class="rx-chip">Time {% now "H:i" %}</span>
+          {% endif %}
+
+          <span class="rx-chip rx-chip-cyan">
+            Rx #<span id="rxNumber">{{ prescription.pk|stringformat:"06d" }}</span>
+            <button class="rx-copy d-print-none" type="button" onclick="copyTextFrom('rxNumber', this)">Copy</button>
+          </span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Identity -->
+    <section class="rx-ident" aria-labelledby="ident-title">
+      <h2 id="ident-title" class="sr-only">Identification</h2>
+      <div>
+        {% if doctor_name %}<div class="rx-doctor">Prescriber: {{ doctor_name }}</div>{% endif %}
+        <div class="rx-note">Signature on file if indicated below. No contact details are printed.</div>
+      </div>
+      <div class="rx-patient">
+        <div class="rx-kv"><b>Patient:</b> <span>{{ prescription.patient_full_name|default:"—" }}</span></div>
+        {% if prescription.age %}<div class="rx-kv"><b>Age:</b> <span>{{ prescription.age }}</span></div>{% endif %}
+        {% if prescription.gender %}<div class="rx-kv"><b>Sex:</b> <span>{{ prescription.gender }}</span></div>{% endif %}
+        {% if prescription.patient_id %}<div class="rx-kv"><b>ID:</b> <span>{{ prescription.patient_id }}</span></div>{% endif %}
+      </div>
+    </section>
+
+    <!-- Medications -->
+    <section class="rx-body rx-section" aria-labelledby="rx-meds-title">
+      <div id="rx-meds-title" class="rx-section-h">
+        <span class="rx-rxmark" aria-hidden="true">℞</span> Medications
+      </div>
+      <div class="rx-section-c">
+        {% if prescription.medication_set.all %}
+          <table class="rx-table" role="table" aria-label="Prescribed items">
+            <thead>
+              <tr>
+                <th class="rx-col-drug">Drug / Strength / Form</th>
+                <th>Sig (Directions & Route)</th>
+                <th class="rx-col-qty">Qty</th>
+                <th class="rx-col-refills">Refills</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for m in prescription.medication_set.all %}
+                <tr>
+                  <td class="rx-col-drug">
+                    {{ m.name }}
+                    {% if m.strength %}<span class="rx-note"> — {{ m.strength }}</span>{% endif %}
+                    {% if m.form %}<span class="rx-note"> · {{ m.form }}</span>{% endif %}
+                  </td>
+                  <td>
+                    {% if m.dosage %}<b>{{ m.dosage }}</b>{% endif %}
+                    {% if m.route %}{% if m.dosage %} · {% endif %}<span class="rx-note">{{ m.route }}</span>{% endif %}
+                    {% if m.frequency %}{% if m.dosage or m.route %} · {% endif %}{{ m.frequency }}{% endif %}
+                    {% if m.duration %}{% if m.dosage or m.route or m.frequency %} · {% endif %}for {{ m.duration }}{% endif %}
+                    {% if m.instructions %}<div class="rx-note">{{ m.instructions }}</div>{% endif %}
+                    {% if m.substitution_allowed is not None %}
+                      <div class="rx-note">Substitution: {{ m.substitution_allowed|yesno:"Allowed,Not allowed" }}</div>
+                    {% endif %}
+                  </td>
+                  <td>{% if m.quantity %}{{ m.quantity }}{% if m.unit %} {{ m.unit }}{% endif %}{% else %}—{% endif %}</td>
+                  <td>{% if m.refills is not None %}{{ m.refills }}{% else %}—{% endif %}</td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="4"><span class="rx-note">No medications recorded.</span></td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% elif prescription.medications.all %}
+          <table class="rx-table" role="table" aria-label="Prescribed items">
+            <thead>
+              <tr>
+                <th class="rx-col-drug">Drug / Strength / Form</th>
+                <th>Sig (Directions & Route)</th>
+                <th class="rx-col-qty">Qty</th>
+                <th class="rx-col-refills">Refills</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for m in prescription.medications.all %}
+                <tr>
+                  <td class="rx-col-drug">
+                    {{ m.name }}
+                    {% if m.strength %}<span class="rx-note"> — {{ m.strength }}</span>{% endif %}
+                    {% if m.form %}<span class="rx-note"> · {{ m.form }}</span>{% endif %}
+                  </td>
+                  <td>
+                    {% if m.dosage %}<b>{{ m.dosage }}</b>{% endif %}
+                    {% if m.route %}{% if m.dosage %} · {% endif %}<span class="rx-note">{{ m.route }}</span>{% endif %}
+                    {% if m.frequency %}{% if m.dosage or m.route %} · {% endif %}{{ m.frequency }}{% endif %}
+                    {% if m.duration %}{% if m.dosage or m.route or m.frequency %} · {% endif %}for {{ m.duration }}{% endif %}
+                    {% if m.instructions %}<div class="rx-note">{{ m.instructions }}</div>{% endif %}
+                    {% if m.substitution_allowed is not None %}
+                      <div class="rx-note">Substitution: {{ m.substitution_allowed|yesno:"Allowed,Not allowed" }}</div>
+                    {% endif %}
+                  </td>
+                  <td>{% if m.quantity %}{{ m.quantity }}{% if m.unit %} {{ m.unit }}{% endif %}{% else %}—{% endif %}</td>
+                  <td>{% if m.refills is not None %}{{ m.refills }}{% else %}—{% endif %}</td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="4"><span class="rx-note">No medications recorded.</span></td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="rx-note">No medications recorded.</p>
+        {% endif %}
+      </div>
+    </section>
+
+    {# Patient Instructions (hide if empty or "none") #}
+    {% with instr=prescription.instructions|default_if_none:'' %}
+      {% if instr and instr|lower != 'none' %}
+        <section class="rx-body rx-section" aria-labelledby="rx-ins-title">
+          <div id="rx-ins-title" class="rx-section-h">Patient Instructions</div>
+          <div class="rx-section-c">{{ instr }}</div>
+        </section>
+      {% endif %}
+    {% endwith %}
+
+    {% if prescription.allergies or prescription.patient_allergies %}
+    <section class="rx-body rx-section" aria-labelledby="rx-allergy-title">
+      <div id="rx-allergy-title" class="rx-section-h">Allergies</div>
+      <div class="rx-section-c">{{ prescription.allergies|default:prescription.patient_allergies }}</div>
+    </section>
+    {% endif %}
+
+    {% if prescription.voice_note %}
+    <section class="rx-body rx-section d-print-none" aria-labelledby="rx-voice-title">
+      <div id="rx-voice-title" class="rx-section-h">Voice Note</div>
+      <div class="rx-section-c">
+        <audio controls>
+          <source src="{{ prescription.voice_note.url }}" type="audio/mpeg">
+          Your browser does not support the audio element.
+        </audio>
+      </div>
+    </section>
+    {% endif %}
+
+    <section class="rx-body rx-section" aria-labelledby="rx-sign-title">
+      <div id="rx-sign-title" class="rx-section-h">Prescriber Signature</div>
+      <div class="rx-section-c" style="display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap">
+        {% if prescription.doctor_signature %}
+          <div><div class="rx-note">Digital signature on file.</div><div class="rx-signline" aria-hidden="true"></div></div>
+        {% else %}
+          <div><div class="rx-note">Signature not on file.</div><div class="rx-signline" aria-hidden="true"></div></div>
+        {% endif %}
+        {% if doctor_name %}<div class="rx-note">Printed name: {{ doctor_name }}</div>{% endif %}
+      </div>
+    </section>
+
+    <section class="rx-body rx-section" aria-labelledby="rx-verify-title">
+      <div id="rx-verify-title" class="rx-section-h">Verification</div>
+      <div class="rx-section-c">
+        <div class="rx-verify">
+          <div class="rx-qr" aria-label="Verification QR">
+            {% if prescription.qr_code and prescription.qr_code.url %}
+              <img src="{{ prescription.qr_code.url }}" alt="QR code to verify">
+            {% elif qr_code_b64 %}
+              <img src="data:image/png;base64,{{ qr_code_b64 }}" alt="QR code to verify">
+            {% elif qr_svg_uri %}
+              <img src="{{ qr_svg_uri }}" alt="QR code to verify">
+            {% else %}
+              <div class="rx-note" style="text-align:center;padding:12px">QR not generated</div>
+            {% endif %}
+          </div>
+          <div class="rx-ver-text">
+            {% if verify_url %}
+              <small>Verify at: <span id="verifyLink">{{ verify_url }}</span></small><br>
+              <button class="rx-copy d-print-none" type="button" onclick="copyTextFrom('verifyLink', this)">Copy link</button>
+            {% else %}
+              <small class="rx-note">No verification URL available.</small>
+            {% endif %}
+            {% if prescription.checksum %}<div class="rx-note">Checksum: {{ prescription.checksum }}</div>{% endif %}
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="rx-actions d-print-none">
+      <button type="button" class="btn btn-primary" onclick="window.print()">Print</button>
+      {% if whatsapp_share_url %}
+        <a class="btn btn-success" href="{{ whatsapp_share_url }}" target="_blank" rel="noopener">Share via WhatsApp</a>
+      {% endif %}
+    </div>
+
+    <footer class="rx-foot">
+      <div>Confidential — for the patient and dispensing pharmacist only. Do not forward without consent.</div>
+      <div>Generated: {% now "Y-m-d H:i" %}</div>
+    </footer>
+  </article>
+</div>
+
+<!-- Accessible toast + copy helpers -->
+<div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true">Copied</div>
+<span id="copyLive" class="sr-only" aria-live="polite"></span>
+
+<script class="d-print-none">
+  function showToast(msg){
+    const t = document.getElementById('toast');
+    if(!t) return;
+    t.textContent = msg || 'Copied';
+    t.classList.add('show');
+    setTimeout(()=>t.classList.remove('show'), 1600);
+    const live = document.getElementById('copyLive');
+    if(live){ live.textContent = msg || 'Copied'; }
+  }
+
+  // Optional btn param to temporarily change button text to "Copied ✓"
+  function copyTextFrom(id, btn){
+    const el = document.getElementById(id);
+    if(!el) return;
+    const text = (el.textContent || el.innerText || '').trim();
+    copyText(text, btn);
+  }
+
+  function copyText(text, btn){
+    if(!text) return;
+    const onDone = (ok)=>{
+      if(btn){
+        const prev = btn.textContent;
+        btn.textContent = ok ? 'Copied ✓' : 'Copy failed';
+        btn.disabled = true;
+        setTimeout(()=>{ btn.textContent = prev; btn.disabled = false; }, 1400);
+      }
+      showToast(ok ? 'Copied' : 'Copy failed');
+    };
+    if(navigator.clipboard && window.isSecureContext){
+      navigator.clipboard.writeText(text).then(()=>onDone(true),()=>onDone(false));
+    } else {
+      try{
+        const ta = document.createElement('textarea');
+        ta.value = text; ta.setAttribute('readonly','');
+        ta.style.position='fixed'; ta.style.left='-9999px';
+        document.body.appendChild(ta);
+        ta.select(); ta.setSelectionRange(0, 99999);
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        onDone(ok);
+      }catch(e){ onDone(false); }
+    }
+  }
+</script>
+{% endblock %}

@@ -1,0 +1,173 @@
+{# File: prescription/templates/prescription/prescription_create.html #}
+{% extends "base.html" %}
+{% load static %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{% static 'css/prescription/prescription_create.css' %}">
+  <link rel="stylesheet" href="{% static 'css/prescription/prescription_voice.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container py-5 prescription-page">
+  <div class="modern-card mx-auto" style="max-width: 960px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h2 class="text-primary">
+        <i class="bi bi-prescription2"></i>
+        {% if editing %} Edit Prescription {% else %} Create Prescription {% endif %}
+      </h2>
+      <a href="{% url 'prescription:new_prescription' %}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-clockwise"></i> Next Patient
+      </a>
+    </div>
+
+    <form id="prescriptionForm"
+          method="post"
+          enctype="multipart/form-data"
+          class="needs-validation"
+          novalidate>
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+
+      <!-- Section: General Info -->
+      <div class="section-title">
+        <i class="bi bi-person-vcard"></i> General Information
+      </div>
+      <div class="row g-3 mb-4">
+        <div class="col-md-6">
+          <label for="{{ form.appointment.id_for_label }}" class="form-label fw-semibold">
+            {{ form.appointment.label }}
+          </label>
+          {{ form.appointment }}
+          {% if form.appointment.errors %}
+            <div class="invalid-feedback">{{ form.appointment.errors|striptags }}</div>
+          {% endif %}
+        </div>
+        <div class="col-md-6">
+          <label for="{{ form.patient_full_name.id_for_label }}" class="form-label fw-semibold">
+            {{ form.patient_full_name.label }}
+          </label>
+          {{ form.patient_full_name }}
+        </div>
+        <div class="col-md-6">
+          <label for="{{ form.age.id_for_label }}" class="form-label fw-semibold">
+            {{ form.age.label }}
+          </label>
+          {{ form.age }}
+        </div>
+        <div class="col-12">
+          <label for="{{ form.instructions.id_for_label }}" class="form-label fw-semibold">
+            {{ form.instructions.label }}
+          </label>
+          {{ form.instructions }}
+          {% if form.instructions.help_text %}
+            <div class="form-text">{{ form.instructions.help_text }}</div>
+          {% endif %}
+          {% if form.instructions.errors %}
+            <div class="invalid-feedback">{{ form.instructions.errors|striptags }}</div>
+          {% endif %}
+        </div>
+        <div class="col-md-6">
+          <label for="{{ form.voice_note.id_for_label }}" class="form-label fw-semibold">
+            {{ form.voice_note.label }}
+          </label>
+          {{ form.voice_note }}
+        </div>
+        <div class="col-md-6">
+          <label for="{{ form.doctor_signature.id_for_label }}" class="form-label fw-semibold">
+            {{ form.doctor_signature.label }}
+          </label>
+          {{ form.doctor_signature }}
+        </div>
+      </div>
+
+      <!-- Section: Medications & Dosage -->
+      <div class="section-title">
+        <i class="bi bi-capsule-pill"></i> Medications & Dosage
+      </div>
+      {{ medication_formset.management_form }}
+      <div id="medications" class="mb-4">
+        {% for mform in medication_formset %}
+          <div class="medication-entry input-group mb-2">
+            {{ mform.id }} {{ mform.DELETE }}
+            <div class="flex-fill me-2">
+              {{ mform.name }}
+              {% if mform.name.errors %}
+                <div class="invalid-feedback">{{ mform.name.errors|striptags }}</div>
+              {% endif %}
+            </div>
+            <div class="flex-fill me-2">
+              {{ mform.dosage }}
+              {% if mform.dosage.errors %}
+                <div class="invalid-feedback">{{ mform.dosage.errors|striptags }}</div>
+              {% endif %}
+            </div>
+            <button type="button" class="btn btn-outline-danger remove-medication">
+              <i class="bi bi-dash-circle-fill"></i>
+            </button>
+          </div>
+        {% endfor %}
+      </div>
+
+      <!-- Empty template for dynamic cloning -->
+      <div id="empty-form" class="d-none">
+        <div class="medication-entry input-group mb-2">
+          {{ medication_formset.empty_form.id }} {{ medication_formset.empty_form.DELETE }}
+          <div class="flex-fill me-2">
+            {{ medication_formset.empty_form.name }}
+          </div>
+          <div class="flex-fill me-2">
+            {{ medication_formset.empty_form.dosage }}
+          </div>
+          <button type="button" class="btn btn-outline-danger remove-medication">
+            <i class="bi bi-dash-circle-fill"></i>
+          </button>
+        </div>
+      </div>
+
+      <button type="button" id="add-medication" class="btn btn-outline-primary mb-4">
+        <i class="bi bi-plus-circle-fill"></i> Add Another Medication
+      </button>
+
+      <!-- Section: Voice Note Controls -->
+      <div class="section-title">
+        <i class="bi bi-mic-fill"></i> Voice Note
+      </div>
+      <div class="voice-controls d-flex flex-wrap gap-2 mb-3">
+        <button type="button" class="btn btn-outline-primary" id="startRecordBtn">🎙️ Start</button>
+        <button type="button" class="btn btn-outline-danger" id="stopRecordBtn" disabled>🛑 Stop</button>
+        <button type="button" class="btn btn-outline-secondary" id="resetRecordBtn" disabled>🔄 Reset</button>
+      </div>
+      <div id="recordStatus" class="form-text text-info mb-2">No recording yet</div>
+      <audio id="audioPlayer" controls class="w-100 d-none mb-2"></audio>
+      <input type="file" name="voice_note" id="voiceNoteInput" accept="audio/*" hidden>
+
+      <!-- Section: Archive Option -->
+      <div class="section-title">
+        <i class="bi bi-folder-plus"></i> Archive Option
+      </div>
+      <div class="form-check mb-4">
+        {{ form.archive_prescription }}
+        <label class="form-check-label" for="{{ form.archive_prescription.id_for_label }}">
+          {{ form.archive_prescription.label }}
+        </label>
+        {% if form.archive_prescription.help_text %}
+          <div class="form-text">{{ form.archive_prescription.help_text }}</div>
+        {% endif %}
+      </div>
+
+      <!-- Submit Button -->
+      <div class="text-center mt-4">
+        <button type="submit" class="btn btn-success btn-lg px-5 shadow">
+          <i class="bi bi-check-circle-fill"></i>
+          {% if editing %} Update & View {% else %} Save & View {% endif %}
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+  <script src="{% static 'js/prescription/prescription_create.js' %}"></script>
+  <script src="{% static 'js/prescription/prescription_voice.js' %}"></script>
+{% endblock %}

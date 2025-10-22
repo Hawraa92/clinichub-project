@@ -1,0 +1,78 @@
+/* static/assets/css/accounts/register.css */
+
+/* مستند إلى تصميم auth.css مع تخصيصات بسيطة */
+.auth-card {
+    width: 100%;
+    max-width: 450px;
+    border-radius: 12px;
+    background-color: #ffffff;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    padding: 2rem 1.5rem;
+  }
+  
+  .auth-card h2 {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #0d6efd;
+  }
+  
+  .auth-card .form-label {
+    font-weight: 600;
+    color: #333;
+  }
+  
+  .auth-card input.form-control,
+  .auth-card select.form-select,
+  .auth-card textarea.form-control {
+    border-radius: 6px;
+    border: 1px solid #ced4da;
+    padding: 0.75rem 1rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  
+  .auth-card input.form-control:focus,
+  .auth-card select.form-select:focus,
+  .auth-card textarea.form-control:focus {
+    border-color: #38b6ff;
+    box-shadow: 0 0 0 0.2rem rgba(56, 182, 255, 0.25);
+    outline: none;
+  }
+  
+  .auth-card .text-danger {
+    font-size: 0.875rem;
+    margin-top: 0.25rem;
+  }
+  
+  .auth-card button.btn-success {
+    border-radius: 6px;
+    padding: 0.75rem;
+    font-weight: 600;
+    background-color: #198754;
+    border: none;
+  }
+  
+  .auth-card button.btn-success:hover {
+    background-color: #146c43;
+  }
+  
+  .auth-card .text-center.mt-3 p {
+    font-size: 0.9rem;
+    color: #555;
+  }
+  
+  .auth-card .text-center.mt-3 a {
+    color: #0d6efd;
+    text-decoration: none;
+  }
+  
+  .auth-card .text-center.mt-3 a:hover {
+    text-decoration: underline;
+  }
+  
+  @media (max-width: 576px) {
+    .auth-card {
+      margin: 0 1rem;
+      padding: 1.5rem;
+    }
+  }
+  

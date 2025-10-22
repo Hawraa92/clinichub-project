@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% load static %}
+{% load tz %} {# if you want to localize time #}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{% static 'css/appointments/success_message.css' %}">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+{% endblock %}
+
+{% block content %}
+<div class="container py-5 d-flex justify-content-center">
+  <div class="card success-box shadow-sm p-4 p-md-5 text-center" role="status" aria-live="polite">
+    <div class="card-body">
+      <h2 class="text-success fw-bold mb-3">
+        <i class="bi bi-check-circle-fill me-2" aria-hidden="true"></i>
+        Appointment Booked Successfully
+      </h2>
+
+      <p class="lead mb-4">The patient has been added to today’s queue.</p>
+
+      {% if appointment %}
+        <div class="success-details mb-4">
+          <p class="mb-1">
+            <strong>Patient:</strong>
+            {{ appointment.patient.full_name }}
+          </p>
+          <p class="mb-1">
+            <strong>Doctor:</strong>
+            Dr. {{ appointment.doctor.user.get_full_name|default:appointment.doctor.user.username }}
+          </p>
+          <p class="mb-0">
+            <strong>Scheduled Time:</strong>
+            {{ appointment.scheduled_time|date:"d M Y, h:i A" }}
+          </p>
+        </div>
+      {% else %}
+        <p class="text-muted small mb-4">Details are not available for this session.</p>
+      {% endif %}
+
+      <div class="d-flex flex-wrap justify-content-center gap-3">
+        <a href="{% url 'appointments:create_appointment' %}" class="btn btn-outline-success">
+          <i class="bi bi-plus-circle me-1" aria-hidden="true"></i>
+          Book Another
+        </a>
+        <a href="{% url 'appointments:queue_display' %}" class="btn btn-outline-primary">
+          <i class="bi bi-view-list me-1" aria-hidden="true"></i>
+          View Queue
+        </a>
+        <a href="{% url 'appointments:secretary_dashboard' %}" class="btn btn-outline-secondary">
+          <i class="bi bi-speedometer2 me-1" aria-hidden="true"></i>
+          Dashboard
+        </a>
+      </div>
+
+      <p class="auto-redirect-note small text-muted mt-4 mb-0" id="redirectNote">
+        You will be redirected to the dashboard shortly…
+      </p>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  // Graceful auto redirect (disable if user interacts)
+  (function() {
+    const REDIRECT_DELAY = 5000;
+    let cancelled = false;
+    const note = document.getElementById('redirectNote');
+
+    function redirect() {
+      if (!cancelled) {
+        window.location.href = "{% url 'appointments:secretary_dashboard' %}";
+      }
+    }
+
+    // Cancel redirect if user clicks a button
+    document.addEventListener('click', (e) => {
+      if (e.target.closest('a,button')) {
+        cancelled = true;
+        if (note) note.textContent = "Auto redirect cancelled.";
+      }
+    }, { once: true });
+
+    setTimeout(redirect, REDIRECT_DELAY);
+  })();
+</script>
+{% endblock %}

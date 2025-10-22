@@ -1,0 +1,296 @@
+{% extends "base.html" %}
+{% load static i18n %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{% static 'css/doctor/patient_records.css' %}">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css">
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div class="patient-dashboard">
+  <div class="dashboard-header">
+    <div class="header-content">
+      <h1 class="dashboard-title">
+        <i class="bi bi-heart-pulse-fill"></i>
+        {% trans "Patient Health Records" %}
+      </h1>
+      <p class="dashboard-subtitle">{% trans "Comprehensive health monitoring and analytics" %}</p>
+    </div>
+    <!-- لا يوجد زر تصدير هنا لتفادي الخطأ -->
+  </div>
+
+  <!-- Filter Panel -->
+  <div class="filter-panel neural-shadow">
+    <form method="get" class="advanced-filters">
+      <div class="filter-grid">
+        <div class="filter-group">
+          <label for="q">{% trans "Patient Search" %}</label>
+          <div class="input-with-icon">
+            <i class="bi bi-search"></i>
+            <input id="q" name="q" type="text" placeholder="{% trans 'Name, ID or Contact' %}" value="{{ query }}">
+          </div>
+        </div>
+        <div class="filter-group">
+          <label>{% trans "Date Range" %}</label>
+          <div class="date-range">
+            <div class="input-with-icon">
+              <i class="bi bi-calendar"></i>
+              <input id="date_from" name="date_from" type="date" value="{{ date_from }}">
+            </div>
+            <span class="date-separator">{% trans "to" %}</span>
+            <div class="input-with-icon">
+              <i class="bi bi-calendar"></i>
+              <input id="date_to" name="date_to" type="date" value="{{ date_to }}">
+            </div>
+          </div>
+        </div>
+        <div class="filter-group">
+          <label>{% trans "Health Status" %}</label>
+          <div class="status-filters">
+            <select id="status" name="status" class="custom-select">
+              <option value="">{% trans "All Statuses" %}</option>
+              <option value="positive">{% trans "Positive Risk" %}</option>
+              <option value="negative">{% trans "Negative Risk" %}</option>
+              <option value="pending">{% trans "Pending Evaluation" %}</option>
+            </select>
+          </div>
+        </div>
+        <div class="filter-actions">
+          <button type="reset" class="btn btn-secondary">
+            <i class="bi bi-arrow-counterclockwise"></i> {% trans "Reset" %}
+          </button>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-funnel"></i> {% trans "Apply Filters" %}
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <!-- Data Summary Cards -->
+  <div class="summary-cards">
+    <div class="summary-card">
+      <div class="card-icon bg-pastel-blue">
+        <i class="bi bi-people-fill"></i>
+      </div>
+      <div class="card-content">
+        <span class="card-value">{{ patients|length }}</span>
+        <span class="card-label">{% trans "Total Patients" %}</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <div class="card-icon bg-pastel-green">
+        <i class="bi bi-clipboard2-check-fill"></i>
+      </div>
+      <div class="card-content">
+        <span class="card-value">{{ monitored_count }}</span>
+        <span class="card-label">{% trans "Under Monitoring" %}</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <div class="card-icon bg-pastel-orange">
+        <i class="bi bi-exclamation-triangle-fill"></i>
+      </div>
+      <div class="card-content">
+        <span class="card-value">{{ high_risk_count }}</span>
+        <span class="card-label">{% trans "High Risk Cases" %}</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <div class="card-icon bg-pastel-purple">
+        <i class="bi bi-file-medical-fill"></i>
+      </div>
+      <div class="card-content">
+        <span class="card-value">{{ recent_records }}</span>
+        <span class="card-label">{% trans "New Records (7d)" %}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Patient Records Table -->
+  <div class="records-container neural-shadow">
+    <div class="table-header">
+      <h3>{% trans "Patient Health Records" %}</h3>
+      <div class="table-actions">
+        <div class="records-count">
+          <i class="bi bi-database"></i>
+          {{ patients|length }} {% trans "records" %}
+        </div>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="medical-records-table">
+        <thead>
+          <tr>
+            <th>{% trans "Patient" %}</th>
+            <th>{% trans "Age" %}</th>
+            <th>{% trans "Gender" %}</th>
+            <th>{% trans "Vitals" %}</th>
+            <th>{% trans "Health Indicators" %}</th>
+            <th>{% trans "Risk Factors" %}</th>
+            <th>{% trans "Status" %}</th>
+            <th>{% trans "Actions" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for patient in patients %}
+          <tr>
+            <td>
+              <div class="patient-info">
+                <div class="patient-avatar">
+                  {% if patient.gender == 'M' %}
+                    <i class="bi bi-gender-male"></i>
+                  {% elif patient.gender == 'F' %}
+                    <i class="bi bi-gender-female"></i>
+                  {% else %}
+                    <i class="bi bi-person-circle"></i>
+                  {% endif %}
+                </div>
+                <div>
+                  <div class="patient-name">{{ patient.full_name }}</div>
+                  <div class="patient-id">ID: {{ patient.id }}</div>
+                </div>
+              </div>
+            </td>
+            <td>
+              <div class="data-cell">
+                <span>{{ patient.age|default:"—" }}</span>
+                <div class="data-label">{% trans "years" %}</div>
+              </div>
+            </td>
+            <td>
+              <span class="gender-badge gender-{{ patient.gender|default:'other'|lower }}">
+                {{ patient.get_gender_display|default:"—" }}
+              </span>
+            </td>
+            <td>
+              <div class="vitals-grid">
+                <div class="vital-item">
+                  <div class="vital-label">BMI</div>
+                  <div class="vital-value">{{ patient.bmi|default:"—" }}</div>
+                </div>
+                <div class="vital-item">
+                  <div class="vital-label">HbA1c</div>
+                  <div class="vital-value">{{ patient.hbA1c_level|default:"—" }}</div>
+                </div>
+                <div class="vital-item">
+                  <div class="vital-label">Glucose</div>
+                  <div class="vital-value">{{ patient.blood_glucose_level|default:"—" }}</div>
+                </div>
+              </div>
+            </td>
+            <td>
+              <div class="indicators">
+                <div class="indicator-item">
+                  <span class="indicator-dot hypertension-{{ patient.hypertension|yesno:'yes,no' }}"></span>
+                  {% trans "Hypertension" %}
+                </div>
+                <div class="indicator-item">
+                  <span class="indicator-dot heart-{{ patient.heart_disease|yesno:'yes,no' }}"></span>
+                  {% trans "Heart Disease" %}
+                </div>
+                <div class="indicator-item">
+                  <span class="indicator-dot smoke-{{ patient.smoking_history|yesno:'yes,no' }}"></span>
+                  {% trans "Smoking History" %}
+                </div>
+              </div>
+            </td>
+            <td>
+              <div class="risk-factors">
+                {% if patient.hypertension %}
+                <span class="risk-factor bg-pastel-red">{% trans "Hypertension" %}</span>
+                {% endif %}
+                {% if patient.heart_disease %}
+                <span class="risk-factor bg-pastel-orange">{% trans "Heart Disease" %}</span>
+                {% endif %}
+                {% if patient.smoking_history %}
+                <span class="risk-factor bg-pastel-yellow">{% trans "Smoker" %}</span>
+                {% endif %}
+                {% if patient.bmi and patient.bmi > 30 %}
+                <span class="risk-factor bg-pastel-purple">{% trans "High BMI" %}</span>
+                {% endif %}
+              </div>
+            </td>
+            <td>
+              <div class="status-badge status-{{ patient.diabetes_prediction|default:'pending'|lower }}">
+                <div class="status-dot"></div>
+                <div class="status-text">
+                  {% if patient.diabetes_prediction %}
+                    {% trans patient.diabetes_prediction %}
+                  {% else %}
+                    {% trans "Pending" %}
+                  {% endif %}
+                </div>
+              </div>
+            </td>
+            <td>
+              <div class="action-buttons">
+                <a href="{% url 'doctor:patient_report' patient.id %}" 
+                   class="btn-icon" 
+                   title="{% trans 'Medical Report' %}">
+                  <i class="bi bi-file-earmark-medical"></i>
+                </a>
+                <a href="{% url 'patient:detail' patient.pk %}" 
+                   class="btn-icon" 
+                   title="{% trans 'View Profile' %}">
+                  <i class="bi bi-eye"></i>
+                </a>
+                <a href="{% url 'patient:edit' patient.pk %}" 
+                   class="btn-icon" 
+                   title="{% trans 'Edit Record' %}">
+                  <i class="bi bi-pencil-square"></i>
+                </a>
+                <!-- زر تصدير سجل مريض كـ CSV فردي -->
+                <a href="{% url 'doctor:report_csv' patient.id %}" 
+                   class="btn-icon"
+                   title="{% trans 'Export as CSV' %}">
+                  <i class="bi bi-file-earmark-arrow-down"></i>
+                </a>
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="8" class="no-records">
+              <div class="empty-state">
+                <i class="bi bi-file-earmark-excel"></i>
+                <h4>{% trans "No patient records found" %}</h4>
+                <p>{% trans "Try adjusting your search filters or add new patients" %}</p>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <!-- Pagination -->
+    <div class="table-footer">
+      {% if patients.has_other_pages %}
+        <div class="pagination-info">
+          {% trans "Showing" %} {{ patients.start_index }} - {{ patients.end_index }} {% trans "of" %} {{ patients.paginator.count }}
+        </div>
+        <div class="pagination-controls">
+          {% if patients.has_previous %}
+            <a href="?page=1" class="pagination-btn">
+              <i class="bi bi-chevron-double-left"></i>
+            </a>
+            <a href="?page={{ patients.previous_page_number }}" class="pagination-btn">
+              <i class="bi bi-chevron-left"></i>
+            </a>
+          {% endif %}
+          <span class="current-page">Page {{ patients.number }}</span>
+          {% if patients.has_next %}
+            <a href="?page={{ patients.next_page_number }}" class="pagination-btn">
+              <i class="bi bi-chevron-right"></i>
+            </a>
+            <a href="?page={{ patients.paginator.num_pages }}" class="pagination-btn">
+              <i class="bi bi-chevron-double-right"></i>
+            </a>
+          {% endif %}
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,128 @@
+/* =================== Page Styling =================== */
+.prescription-page {
+  background-color: #f8f9fa;
+  padding-bottom: 50px;
+}
+
+/* =================== Card Container =================== */
+.modern-card {
+  background: linear-gradient(to right, #fdfbfb, #ebedee);
+  border-radius: 20px;
+  padding: 30px;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
+}
+
+/* =================== Section Titles =================== */
+.section-title {
+  font-size: 1.4rem;
+  font-weight: bold;
+  color: #333;
+  border-left: 5px solid #0d6efd;
+  padding-left: 10px;
+  margin-bottom: 20px;
+}
+
+/* =================== Labels & Inputs =================== */
+label.form-label {
+  font-weight: 600;
+  color: #333;
+}
+
+input.form-control,
+textarea.form-control,
+select.form-select {
+  border-radius: 12px;
+  padding: 10px 14px;
+  border: 1px solid #ced4da;
+  transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+  background-color: #ffffff;
+}
+
+input.form-control:focus,
+textarea.form-control:focus,
+select.form-select:focus {
+  border-color: #0d6efd;
+  box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+/* =================== Medication Entry =================== */
+.medication-entry input {
+  border-radius: 12px;
+}
+
+.medication-entry .btn {
+  border-radius: 10px;
+}
+
+/* =================== Buttons =================== */
+button.btn {
+  border-radius: 12px;
+  font-weight: 500;
+}
+
+button.btn-outline-primary:hover,
+button.btn-outline-secondary:hover,
+button.btn-outline-danger:hover {
+  opacity: 0.9;
+  transform: scale(1.02);
+}
+
+/* =================== Submit Button =================== */
+button[type="submit"] {
+  border-radius: 30px;
+  font-size: 1.1rem;
+  padding: 12px 35px;
+  transition: all 0.3s ease-in-out;
+}
+
+button[type="submit"]:hover {
+  transform: scale(1.03);
+}
+
+/* =================== Audio Player =================== */
+audio {
+  border-radius: 10px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
+}
+
+/* =================== Voice Recorder Animation =================== */
+.voice-controls button {
+  min-width: 150px;
+}
+
+.voice-controls .btn-outline-primary.active-recording {
+  background-color: #d0e6ff;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(13, 110, 253, 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(13, 110, 253, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(13, 110, 253, 0);
+  }
+}
+
+/* =================== Responsive Adjustments =================== */
+@media (max-width: 768px) {
+  .section-title {
+    font-size: 1.1rem;
+  }
+
+  .modern-card {
+    padding: 25px;
+  }
+
+  button.btn {
+    width: 100%;
+    margin-bottom: 10px;
+  }
+}
+/* يخفي مربع الـ DELETE في كل سطر */
+.medication-entry input[type="checkbox"][name$="-DELETE"] {
+  display: none;
+}

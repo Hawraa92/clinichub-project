@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{% static 'css/medical_archive/archive_list.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+  <!-- Header Section -->
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0 text-primary">🗃️ Patient Archives</h2>
+    <a href="{% url 'medical_archive:create_archive' %}" class="btn btn-lg btn-success shadow-sm">
+      + New Archive
+    </a>
+  </div>
+
+  <!-- Filter & Search Form Section -->
+  <form method="get" class="row g-3 align-items-end mb-5">
+    <!-- Filter by Type -->
+    <div class="col-md-3">
+      <label for="type" class="form-label fw-semibold">📑 Record Type</label>
+      <select name="type" id="type" class="form-select">
+        <option value="">All Types</option>
+        {% for key, label in types %}
+          <option value="{{ key }}" {% if selected_type == key %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <!-- Filter by Doctor -->
+    <div class="col-md-3">
+      <label for="doctor" class="form-label fw-semibold">🩺 Doctor</label>
+      <select name="doctor" id="doctor" class="form-select">
+        <option value="">All Doctors</option>
+        {% for id, name in doctors %}
+          <option value="{{ id }}" {% if selected_doctor == id|stringformat:"s" %}selected{% endif %}>{{ name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <!-- Filter by Start Date -->
+    <div class="col-md-3">
+      <label for="start_date" class="form-label fw-semibold">📅 From Date</label>
+      <input type="date" name="start_date" id="start_date" class="form-control"
+             value="{{ request.GET.start_date }}">
+    </div>
+
+    <!-- Filter by End Date -->
+    <div class="col-md-3">
+      <label for="end_date" class="form-label fw-semibold">📅 To Date</label>
+      <input type="date" name="end_date" id="end_date" class="form-control"
+             value="{{ request.GET.end_date }}">
+    </div>
+
+    <!-- Search by Patient Name -->
+    <div class="col-md-6">
+      <label for="search" class="form-label fw-semibold">🔍 Patient Name</label>
+      <input type="text" name="search" id="search" class="form-control"
+             placeholder="Enter patient name..." value="{{ request.GET.search }}">
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="col-md-6 d-flex gap-2">
+      <button type="submit" class="btn btn-primary w-100">
+        🔎 Apply Filters
+      </button>
+      <a href="{% url 'medical_archive:archive_list' %}" class="btn btn-outline-secondary w-100">
+        ✖️ Clear
+      </a>
+    </div>
+  </form>
+
+  <!-- Table Section -->
+  <div class="table-responsive">
+    <table class="table table-bordered table-hover table-striped shadow-lg rounded-3">
+      <thead class="table-dark">
+        <tr>
+          <th>Patient</th>
+          <th>Doctor</th>
+          <th>Title</th>
+          <th>Type</th>
+          <th>Date</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for archive in page_obj %}
+          <tr>
+            <td>{{ archive.patient.full_name }}</td>
+            <td>{{ archive.doctor.full_name }}</td>
+            <td>{{ archive.title }}</td>
+            <td>
+              <span class="badge bg-{{ archive.get_color_tag }} text-dark">
+                {{ archive.get_archive_type_display }}
+              </span>
+            </td>
+            <td>{{ archive.created_at|date:"Y-m-d H:i" }}</td>
+            <td>
+              <a href="{% url 'medical_archive:archive_detail' archive.id %}" class="btn btn-sm btn-info rounded-pill shadow-sm me-2">
+                👁️ View
+              </a>
+              <a href="{% url 'medical_archive:edit_archive' archive.id %}" class="btn btn-sm btn-warning rounded-pill shadow-sm me-2">
+                ✏️ Edit
+              </a>
+              <a href="{% url 'medical_archive:delete_archive' archive.id %}" class="btn btn-sm btn-danger rounded-pill shadow-sm">
+                🗑️ Delete
+              </a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6" class="text-center text-muted">No archives available.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination Controls -->
+  <div class="d-flex justify-content-center mt-4">
+    <nav aria-label="Page navigation">
+      <ul class="pagination">
+        {% if page_obj.has_previous %}
+          <li class="page-item">
+            <a class="page-link" href="?{% if request.GET %}{{ request.GET.urlencode|safe }}&{% endif %}page={{ page_obj.previous_page_number }}" aria-label="Previous">
+              <span aria-hidden="true">&laquo;</span>
+            </a>
+          </li>
+        {% else %}
+          <li class="page-item disabled"><span class="page-link">&laquo;</span></li>
+        {% endif %}
+
+        {% for num in page_obj.paginator.page_range %}
+          {% if page_obj.number == num %}
+            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+          {% else %}
+            <li class="page-item"><a class="page-link" href="?{% if request.GET %}{{ request.GET.urlencode|safe }}&{% endif %}page={{ num }}">{{ num }}</a></li>
+          {% endif %}
+        {% endfor %}
+
+        {% if page_obj.has_next %}
+          <li class="page-item">
+            <a class="page-link" href="?{% if request.GET %}{{ request.GET.urlencode|safe }}&{% endif %}page={{ page_obj.next_page_number }}" aria-label="Next">
+              <span aria-hidden="true">&raquo;</span>
+            </a>
+          </li>
+        {% else %}
+          <li class="page-item disabled"><span class="page-link">&raquo;</span></li>
+        {% endif %}
+      </ul>
+    </nav>
+  </div>
+</div>
+{% endblock %}

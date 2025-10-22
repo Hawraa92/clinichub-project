@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{% static 'css/medical_archive/create_archive.css' %}">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+{% endblock %}
+
+{% block content %}
+<div class="archive-container">
+  <div class="archive-card">
+    <div class="card-header">
+      <div class="header-content">
+        <h2><i class="fas fa-file-medical pulse"></i> Create New Medical Record</h2>
+        <p class="header-subtitle">Complete patient medical documentation</p>
+      </div>
+    </div>
+
+    {% if messages %}
+      <div class="messages-container">
+        {% for message in messages %}
+          <div class="alert alert-{{ message.tags }} slide-in">
+            <div class="alert-content">
+              <i class="fas {% if message.tags == 'success' %}fa-check-circle{% else %}fa-exclamation-circle{% endif %}"></i>
+              <span>{{ message }}</span>
+            </div>
+            <button type="button" class="close-btn" aria-label="Close">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data" class="archive-form" id="medicalRecordForm">
+      {% csrf_token %}
+
+      <!-- Patient & Doctor Section -->
+      <div class="form-section glass-card">
+        <div class="section-header">
+          <div class="section-icon">
+            <i class="fas fa-user-friends"></i>
+          </div>
+          <h3>Patient & Doctor Information</h3>
+          <div class="section-tooltip">
+            <i class="fas fa-info-circle"></i>
+            <span class="tooltip-text">Select patient and attending physician</span>
+          </div>
+        </div>
+        
+        <div class="form-row">
+          <div class="form-group {% if archive_form.patient.errors %}has-error{% endif %}">
+            <label for="id_patient"><i class="fas fa-user-injured"></i> Patient</label>
+            <div class="select-wrapper">
+              {{ archive_form.patient }}
+              <i class="fas fa-chevron-down"></i>
+            </div>
+            {% if archive_form.patient.errors %}
+              <div class="errorlist">{{ archive_form.patient.errors }}</div>
+            {% endif %}
+          </div>
+          
+          <div class="form-group {% if archive_form.doctor.errors %}has-error{% endif %}">
+            <label for="id_doctor"><i class="fas fa-user-md"></i> Attending Physician</label>
+            <div class="select-wrapper">
+              {{ archive_form.doctor }}
+              <i class="fas fa-chevron-down"></i>
+            </div>
+            {% if archive_form.doctor.errors %}
+              <div class="errorlist">{{ archive_form.doctor.errors }}</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <!-- Record Details -->
+      <div class="form-section glass-card">
+        <div class="section-header">
+          <div class="section-icon">
+            <i class="fas fa-file-medical"></i>
+          </div>
+          <h3>Medical Record Details</h3>
+          <div class="section-tooltip">
+            <i class="fas fa-info-circle"></i>
+            <span class="tooltip-text">Provide detailed medical information</span>
+          </div>
+        </div>
+        
+        <div class="form-group {% if archive_form.title.errors %}has-error{% endif %}">
+          <label for="id_title"><i class="fas fa-heading"></i> Record Title</label>
+          {{ archive_form.title }}
+          {% if archive_form.title.errors %}
+            <div class="errorlist">{{ archive_form.title.errors }}</div>
+          {% endif %}
+          <div class="input-hint">Example: Initial Visit, Blood Test Results, Surgery Report</div>
+        </div>
+
+        <div class="form-group {% if archive_form.notes.errors %}has-error{% endif %}">
+          <label for="id_notes"><i class="fas fa-notes-medical"></i> Doctor's Notes</label>
+          <div class="rich-text-editor">
+            <div class="rich-text-toolbar">
+              <button type="button" class="format-btn" data-command="bold" title="Bold"><i class="fas fa-bold"></i></button>
+              <button type="button" class="format-btn" data-command="italic" title="Italic"><i class="fas fa-italic"></i></button>
+              <button type="button" class="format-btn" data-command="insertUnorderedList" title="Bullet List"><i class="fas fa-list-ul"></i></button>
+              <button type="button" class="format-btn" data-command="insertOrderedList" title="Numbered List"><i class="fas fa-list-ol"></i></button>
+              <button type="button" class="format-btn" data-command="createLink" title="Insert Link"><i class="fas fa-link"></i></button>
+            </div>
+            {{ archive_form.notes }}
+          </div>
+          {% if archive_form.notes.errors %}
+            <div class="errorlist">{{ archive_form.notes.errors }}</div>
+          {% endif %}
+        </div>
+
+        <div class="form-row">
+          <div class="form-group {% if archive_form.archive_type.errors %}has-error{% endif %}">
+            <label for="id_archive_type"><i class="fas fa-tag"></i> Record Type</label>
+            <div class="select-wrapper">
+              {{ archive_form.archive_type }}
+              <i class="fas fa-chevron-down"></i>
+            </div>
+            {% if archive_form.archive_type.errors %}
+              <div class="errorlist">{{ archive_form.archive_type.errors }}</div>
+            {% endif %}
+          </div>
+          
+          <div class="form-group switch-group">
+            <div class="critical-toggle">
+              <label class="switch">
+                {{ archive_form.is_critical }}
+                <span class="slider round"></span>
+              </label>
+              <label for="id_is_critical" class="switch-label">
+                <i class="fas fa-exclamation-triangle"></i> Critical Condition
+              </label>
+            </div>
+            {% if archive_form.is_critical.errors %}
+              <div class="errorlist">{{ archive_form.is_critical.errors }}</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <!-- Attachments Section -->
+      <div class="form-section glass-card">
+        <div class="section-header">
+          <div class="section-icon">
+            <i class="fas fa-paperclip"></i>
+          </div>
+          <h3>Attachments</h3>
+          <div class="section-tooltip">
+            <i class="fas fa-info-circle"></i>
+            <span class="tooltip-text">Upload relevant documents or reports</span>
+          </div>
+        </div>
+        
+        <div class="form-group file-upload">
+          <label><i class="fas fa-cloud-upload-alt"></i> Upload Files</label>
+          <div class="upload-container" id="uploadContainer">
+            {{ attachment_form.files }}
+            <div class="upload-prompt">
+              <i class="fas fa-cloud-upload-alt fa-3x"></i>
+              <p>Drag & drop files here or click to browse</p>
+              <small>Supports: JPG, PNG, PDF, DOCX (Max 10MB each)</small>
+            </div>
+            <div class="upload-loading" id="uploadLoading">
+              <div class="spinner"></div>
+              <p>Processing files...</p>
+            </div>
+          </div>
+          <div class="file-preview-grid" id="filePreview"></div>
+          {% if attachment_form.files.errors %}
+            <div class="errorlist">{{ attachment_form.files.errors }}</div>
+          {% endif %}
+        </div>
+
+        <div class="form-group {% if attachment_form.description.errors %}has-error{% endif %}">
+          <label><i class="fas fa-align-left"></i> Attachment Description</label>
+          {{ attachment_form.description }}
+          {% if attachment_form.description.errors %}
+            <div class="errorlist">{{ attachment_form.description.errors }}</div>
+          {% endif %}
+          <div class="input-hint">Brief description of the attached documents</div>
+        </div>
+      </div>
+
+      <!-- Form Actions -->
+      <div class="form-actions">
+        <button type="button" class="btn btn-clear" id="clearForm">
+          <i class="fas fa-eraser"></i> Clear Form
+        </button>
+        <a href="{% url 'medical_archive:archive_list' %}" class="btn btn-cancel">
+          <i class="fas fa-times"></i> Cancel
+        </a>
+        <button type="submit" class="btn btn-save" id="submitBtn">
+          <i class="fas fa-save"></i> Save Record
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+  <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+  <script src="{% static 'js/medical_archive/create_archive.js' %}"></script>
+{% endblock %}

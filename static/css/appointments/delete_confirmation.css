@@ -1,0 +1,176 @@
+/* ======================================
+   delete_confirmation.css (Improved)
+   ====================================== */
+
+/* -------- CSS Variables -------- */
+:root {
+  --font-sans: "Inter", "Tajawal", system-ui, Arial, sans-serif;
+
+  /* Backgrounds & Surfaces */
+  --bg-page: #f8f9fa;
+  --card-bg: #ffffff;
+  --border: #e1e8f0;
+  --accent-danger: #dc3545;
+  --accent-muted: #6c757d;
+
+  /* Text Colors */
+  --text-default: #223238;
+  --text-muted: #6c757d;
+
+  /* Status Pills */
+  --pill-bg: #e4ecf7;
+  --pill-text: #274569;
+
+  /* Radius & Shadow */
+  --radius-lg: 20px;
+  --shadow-card: 0 6px 16px -4px rgba(0,0,0,0.08);
+
+  /* Transition */
+  --transition: .2s ease;
+}
+
+/* -------- Dark Mode Support -------- */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-page: #121418;
+    --card-bg: #1e2329;
+    --border: #2c3138;
+    --text-default: #e6eef2;
+    --text-muted: #9da5b1;
+  }
+}
+
+/* -------- Page Layout -------- */
+body {
+  background: var(--bg-page);
+}
+.delete-wrapper {
+  min-height: 80vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  font-family: var(--font-sans);
+}
+
+/* -------- Card -------- */
+.delete-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 2rem;
+  max-width: 520px;
+  width: 100%;
+  box-shadow: var(--shadow-card);
+  text-align: center;
+  position: relative;
+}
+.delete-card::before {
+  content: "";
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(circle at 85% 20%, rgba(220,53,69,0.08), transparent 60%),
+    radial-gradient(circle at 15% 85%, rgba(255,105,105,0.08), transparent 65%);
+  pointer-events: none;
+}
+
+/* -------- Icon & Titles -------- */
+.delete-icon {
+  font-size: 3rem;
+  color: var(--accent-danger);
+  margin-bottom: .5rem;
+}
+.title {
+  margin: .5rem 0;
+  font-size: 1.5rem;
+  color: var(--accent-danger);
+  font-weight: 600;
+}
+.subtitle {
+  margin-bottom: 1.5rem;
+  color: var(--text-muted);
+}
+
+/* -------- Summary List -------- */
+.appt-summary {
+  margin: 1rem 0;
+  padding: 1rem;
+  background: var(--bg-page);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  text-align: left;
+}
+.appt-summary .line {
+  display: flex;
+  justify-content: space-between;
+  padding: .4rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.appt-summary .line:last-child { border-bottom: none; }
+.appt-summary .label {
+  font-weight: 600;
+  min-width: 90px;
+  color: var(--text-default);
+}
+.appt-summary .value {
+  color: var(--text-default);
+  font-weight: 500;
+  text-align: right;
+}
+.status-pill {
+  display: inline-block;
+  background: var(--pill-bg);
+  color: var(--pill-text);
+  padding: .25rem .5rem;
+  border-radius: 8px;
+  font-size: .65rem;
+  font-weight: 600;
+}
+
+/* -------- Warning -------- */
+.warn {
+  margin: 1.5rem 0;
+  color: var(--accent-danger);
+  font-weight: 600;
+}
+
+/* -------- Actions -------- */
+.actions {
+  display: flex;
+  gap: .75rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.actions .btn {
+  min-width: 140px;
+  padding: .7rem 1.2rem;
+  border-radius: var(--radius-lg);
+  font-weight: 600;
+  transition: var(--transition);
+}
+.btn-danger {
+  background: var(--accent-danger);
+  color: #fff;
+  border: none;
+  box-shadow: 0 4px 12px -4px rgba(220,53,69,0.35);
+}
+.btn-danger:hover,
+.btn-danger:focus-visible {
+  transform: translateY(-2px);
+}
+.btn-secondary {
+  background: #e9eef4;
+  color: var(--text-default);
+  border: none;
+}
+.btn-secondary:hover,
+.btn-secondary:focus-visible {
+  background: #d8e2ec;
+  transform: translateY(-2px);
+}
+
+/* -------- Responsive -------- */
+@media (max-width: 520px) {
+  .appt-summary { font-size: .85rem; }
+  .actions .btn { width: 100%; }
+}

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Prescription PDF</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 30px;
+    }
+    h1 {
+      color: #007bff;
+    }
+  </style>
+</head>
+<body>
+  <h1>Electronic Prescription</h1>
+  <p><strong>Patient:</strong> {{ prescription.patient_full_name }}</p>
+  <p><strong>Age:</strong> {{ prescription.age }}</p>
+  <p><strong>Doctor:</strong> {{ prescription.doctor.full_name }}</p>
+  <p><strong>Date:</strong> {{ prescription.date_issued }}</p>
+  <hr>
+  <p><strong>Medication:</strong> {{ prescription.medication }}</p>
+  <p><strong>Dosage:</strong> {{ prescription.dosage }}</p>
+  {% if prescription.instructions %}
+    <p><strong>Instructions:</strong> {{ prescription.instructions }}</p>
+  {% endif %}
+</body>
+</html>

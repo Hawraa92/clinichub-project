@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{% static 'css/appointments/book_appointment.css' %}">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+        rel="stylesheet"
+        integrity="sha512-pVnE7Jq6Jk+..."
+        crossorigin="anonymous" referrerpolicy="no-referrer"/>
+{% endblock %}
+
+{% block content %}
+<div class="booking-page" dir="rtl">
+  <div class="booking-container">
+    <div class="booking-card">
+
+      <h2 class="title">
+        <i class="fas fa-calendar-check"></i>
+        حجز موعد
+      </h2>
+
+      {# رسائل Django #}
+      {% if messages %}
+        <div class="messages">
+          {% for msg in messages %}
+            <div class="alert alert-{{ msg.tags }}">{{ msg }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      {# أخطاء عامة #}
+      {% if form.non_field_errors %}
+        <div class="alert alert-danger mb-3">
+          {% for err in form.non_field_errors %}
+            <div>{{ err }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      <form method="post" novalidate id="bookApptForm">
+        {% csrf_token %}
+
+        {# ----------- حقل الطبيب ----------- #}
+        {% if doctor_instance %}
+          <div class="form-group">
+            <label class="form-label">الطبيب</label>
+            {# «disabled» مطلوب كى ينجح الاختبار #}
+            <input type="text" class="form-control"
+                   value="د. {{ doctor_instance.full_name }}"
+                   readonly disabled aria-readonly="true">
+            <input type="hidden" name="doctor" value="{{ doctor_instance.id }}">
+          </div>
+        {% else %}
+          <div class="form-group">
+            {{ form.doctor.label_tag }}
+            {{ form.doctor }}
+            {% if form.doctor.errors %}
+              <div class="field-errors">
+                {% for e in form.doctor.errors %}<div class="err">{{ e }}</div>{% endfor %}
+              </div>
+            {% endif %}
+          </div>
+        {% endif %}
+
+        {# ----------- الوقت ----------- #}
+        <div class="form-group">
+          {{ form.scheduled_time.label_tag }}
+          {{ form.scheduled_time }}
+          {% if form.scheduled_time.errors %}
+            <div class="field-errors">
+              {% for e in form.scheduled_time.errors %}<div class="err">{{ e }}</div>{% endfor %}
+            </div>
+          {% endif %}
+          <small class="hint">اختر الوقت المناسب (يجب أن يكون مستقبلاً).</small>
+        </div>
+
+        {# ----------- بيانات المريض ----------- #}
+        <div class="form-group">
+          {{ form.full_name.label_tag }}
+          {{ form.full_name }}
+          {% if form.full_name.errors %}
+            <div class="field-errors">
+              {% for e in form.full_name.errors %}<div class="err">{{ e }}</div>{% endfor %}
+            </div>
+          {% endif %}
+        </div>
+
+        <div class="form-group">
+          {{ form.contact_info.label_tag }}
+          {{ form.contact_info }}
+          {% if form.contact_info.errors %}
+            <div class="field-errors">
+              {% for e in form.contact_info.errors %}<div class="err">{{ e }}</div>{% endfor %}
+            </div>
+          {% endif %}
+        </div>
+
+        <div class="form-group">
+          {{ form.date_of_birth.label_tag }}
+          {{ form.date_of_birth }}
+          {% if form.date_of_birth.errors %}
+            <div class="field-errors">
+              {% for e in form.date_of_birth.errors %}<div class="err">{{ e }}</div>{% endfor %}
+            </div>
+          {% endif %}
+        </div>
+
+        {# ----------- honeypot ----------- #}
+        <div class="hp-wrapper" aria-hidden="true" style="display:none;">
+          <label for="hp_field">لا تملأ هذا الحقل</label>
+          <input type="text" id="hp_field" name="hp_field" autocomplete="off">
+        </div>
+
+        <button type="submit" class="submit-btn">
+          <i class="fas fa-paper-plane"></i> إرسال الطلب
+        </button>
+      </form>
+
+      <div class="info-note">
+        <small>بعد إرسال الطلب سيتم مراجعته والتواصل معكم للتأكيد.</small>
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,87 @@
+/* ===================== CREATE APPOINTMENT STYLES ===================== */
+
+/* Card Container */
+.card.appointment-form-card {
+    background-color: #ffffff;
+    border: none;
+    border-radius: 1rem;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.06);
+    overflow: hidden;
+  }
+  
+  /* Card Header */
+  .card.appointment-form-card .card-header {
+    background: linear-gradient(to right, #4b63ff, #708bff);
+    color: #ffffff;
+    font-size: 1.4rem;
+    font-weight: 700;
+    padding: 1.5rem;
+    border-top-left-radius: 1rem;
+    border-top-right-radius: 1rem;
+  }
+  
+  /* Form Body */
+  .card.appointment-form-card .card-body {
+    padding: 2.5rem;
+    background-color: #f9fbff;
+  }
+  
+  /* Form Labels */
+  .card.appointment-form-card .form-label {
+    font-weight: 600;
+    color: #333333;
+    margin-bottom: 0.5rem;
+  }
+  
+  /* Form Fields */
+  .card.appointment-form-card select,
+  .card.appointment-form-card input,
+  .card.appointment-form-card .datetimepicker {
+    border-radius: 0.5rem;
+    padding: 0.65rem;
+    font-size: 1rem;
+    background-color: #ffffff;
+    border: 1px solid #ced4da;
+  }
+  
+  /* Error Feedback */
+  .invalid-feedback {
+    font-size: 0.85rem;
+    color: #dc3545;
+    margin-top: 0.25rem;
+  }
+  
+  /* Non-field error alert */
+  .alert.alert-danger {
+    font-size: 0.95rem;
+    padding: 0.75rem 1.25rem;
+    border-radius: 0.5rem;
+    background-color: #f8d7da;
+    color: #721c24;
+  }
+  
+  /* Submit Button */
+  .card.appointment-form-card .btn-success {
+    padding: 0.75rem 2rem;
+    font-size: 1.1rem;
+    border-radius: 2rem;
+    box-shadow: 0 5px 15px rgba(40, 167, 69, 0.2);
+    transition: all 0.3s ease-in-out;
+  }
+  
+  .card.appointment-form-card .btn-success:hover {
+    background-color: #28a745;
+    transform: scale(1.03);
+  }
+  
+  /* Responsive adjustments */
+  @media (max-width: 768px) {
+    .card.appointment-form-card .card-body {
+      padding: 1.5rem;
+    }
+  
+    .card.appointment-form-card .btn-success {
+      width: 100%;
+    }
+  }
+  

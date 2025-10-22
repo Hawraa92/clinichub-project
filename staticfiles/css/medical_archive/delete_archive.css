@@ -1,0 +1,63 @@
+/* ========== Container ========== */
+.container {
+  max-width: 600px;
+  margin-top: 50px;
+}
+
+/* ========== Heading ========== */
+h2 {
+  font-size: 1.75rem;
+  font-weight: bold;
+  color: #dc3545;
+  margin-bottom: 20px;
+}
+
+/* ========== Text ========== */
+p {
+  font-size: 1.1rem;
+  color: #333;
+  margin-bottom: 30px;
+}
+
+/* ========== Buttons ========== */
+button,
+.btn {
+  font-size: 1rem;
+  padding: 12px 24px;
+  border-radius: 6px;
+  transition: all 0.3s ease-in-out;
+}
+
+.btn-danger {
+  background-color: #dc3545;
+  border-color: #dc3545;
+  color: #fff;
+}
+
+.btn-danger:hover {
+  background-color: #c82333;
+  border-color: #bd2130;
+  transform: scale(1.05);
+}
+
+.btn-secondary {
+  background-color: #f8f9fa;
+  color: #6c757d;
+  border: 1px solid #ced4da;
+}
+
+.btn-secondary:hover {
+  background-color: #e2e6ea;
+  border-color: #adb5bd;
+  color: #495057;
+  transform: scale(1.03);
+}
+
+/* ========== Responsive ========== */
+@media (max-width: 576px) {
+  button,
+  .btn {
+    width: 100%;
+    margin-bottom: 10px;
+  }
+}

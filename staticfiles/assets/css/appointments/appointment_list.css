@@ -1,0 +1,257 @@
+body, html {
+  font-family: 'Inter', Arial, sans-serif;
+  background: linear-gradient(127deg, #ecf4fc 0%, #d0e9fa 70%, #eef3fd 100%);
+  color: #21344b;
+  margin: 0;
+  padding: 0;
+}
+.glass-bg-appt {
+  min-height: 96vh;
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 64px 0 36px 0;
+  position: relative;
+  background: none;
+}
+.glass-bg-wave {
+  position: absolute;
+  top: -18px;
+  left: 0;
+  width: 100vw;
+  height: 220px;
+  z-index: 1;
+  pointer-events: none;
+}
+.glass-appt-card {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 1050px;
+  border-radius: 2.2rem;
+  background: rgba(255,255,255,0.63);
+  box-shadow: 0 16px 42px 0 #82aaf311, 0 3px 13px #97cdf6a8;
+  border: 1.7px solid #b3d1f7cc;
+  backdrop-filter: blur(22px) saturate(135%);
+  margin: auto;
+  overflow: hidden;
+}
+
+/* ---- لمعة ألماسية متحركة ---- */
+.shine-anim {
+  position: relative;
+  overflow: hidden;
+}
+.shine-anim::before {
+  content: "";
+  position: absolute;
+  left: -110px;
+  top: -40px;
+  width: 60%;
+  height: 220%;
+  background: linear-gradient(105deg, rgba(255,255,255,0.10) 18%, rgba(181,210,255,0.23) 48%, rgba(255,255,255,0.11) 82%);
+  filter: blur(1.6px);
+  pointer-events: none;
+  border-radius: 3rem;
+  transform: skewX(-18deg);
+  animation: shine-move 4.5s infinite linear;
+}
+@keyframes shine-move {
+  0% { left: -80%; top: -40px;}
+  35% { left: 110%; top: 30px;}
+  100% { left: 110%; top: 30px;}
+}
+/* ---- لمعة متحركة على زر ---- */
+.shine-btn {
+  position: relative;
+  overflow: hidden;
+}
+.shine-btn::after {
+  content: '';
+  position: absolute;
+  left: -60px;
+  top: -10px;
+  width: 70px;
+  height: 150%;
+  background: linear-gradient(115deg, rgba(255,255,255,0.10) 27%, rgba(122,196,255,0.20) 55%, rgba(255,255,255,0.05) 81%);
+  filter: blur(1px);
+  border-radius: 30px;
+  transform: skewX(-20deg);
+  animation: shine-move-btn 3.2s infinite linear;
+  pointer-events: none;
+}
+@keyframes shine-move-btn {
+  0% { left: -60px;}
+  40% { left: 110%;}
+  100% { left: 110%;}
+}
+
+/* -------- HEADER --------- */
+.glass-appt-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  background: rgba(201,221,255,0.33);
+  border-bottom: 1.7px solid #d4e9fc8c;
+  padding: 2.1rem 2.2rem 1.1rem 2.2rem;
+  border-radius: 2.2rem 2.2rem 0 0;
+  box-shadow: 0 2px 14px #a7cefc1c;
+}
+.glass-appt-header h3 {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: #3e60aa;
+  letter-spacing: 1.5px;
+  margin: 0;
+}
+.glass-appt-subtitle {
+  color: #49a1d1;
+  font-size: 1.07rem;
+  margin-top: 3px;
+  margin-bottom: 2px;
+  font-weight: 500;
+  opacity: 0.79;
+}
+.glass-btn-new {
+  background: linear-gradient(91deg, #c5e6ff 35%, #9fd8fa 90%);
+  color: #4173b8;
+  font-weight: 700;
+  border: none;
+  border-radius: 17px;
+  font-size: 1.08rem;
+  padding: 12px 31px;
+  box-shadow: 0 2px 11px #b8eaf588;
+  transition: background .18s, color .18s, box-shadow .18s;
+  text-decoration: none;
+  display: flex; align-items: center; gap: 8px;
+  position: relative;
+  top: -0.6rem;
+}
+.glass-btn-new:hover, .glass-btn-new:focus {
+  background: linear-gradient(96deg, #9fd8fa 10%, #c5e6ff 100%);
+  color: #234a7a;
+  box-shadow: 0 4px 19px #3e60aa25;
+}
+
+/* -------- TABLE --------- */
+.glass-appt-table-wrap {
+  padding: 2.2rem 2.1rem 1.6rem 2.1rem;
+  background: none;
+  overflow-x: auto;
+}
+.glass-appt-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin-bottom: 0;
+  border-radius: 1.45rem;
+  background: rgba(246,251,255,0.68);
+  box-shadow: 0 1px 8px #90d0f119;
+  border: 1.3px solid #bde6ee50;
+  overflow: hidden;
+}
+.glass-appt-table thead tr th {
+  background: rgba(201,221,255,0.59);
+  color: #407cd2;
+  font-weight: 800;
+  font-size: 1.13rem;
+  padding: 1.01rem 0.9rem;
+  border-bottom: 2px solid #c2ecf7;
+  text-align: center;
+  letter-spacing: 0.5px;
+  backdrop-filter: blur(2px);
+}
+.glass-appt-table tbody td {
+  padding: 1.06rem 0.7rem;
+  text-align: center;
+  background: rgba(255,255,255,0.68);
+  font-size: 1.01rem;
+  color: #2b5b7d;
+  border-bottom: 1px solid #e1e1e1;
+  vertical-align: middle;
+  transition: background-color 0.24s;
+  border-left: 1px solid #eafaf944;
+}
+.glass-appt-table tbody tr:nth-child(even) td {
+  background: rgba(201,233,255,0.25);
+}
+.glass-appt-table tbody tr:hover td {
+  background: rgba(168,219,255,0.23) !important;
+  color: #325f7b;
+}
+
+.g-patient, .g-doctor {
+  font-weight: 600;
+  color: #2868ab;
+  display: flex; align-items: center; gap: 7px; justify-content: center;
+}
+.g-badge {
+  background: linear-gradient(93deg,#9fd8fa 40%,#b3e9ff 90%);
+  color: #3266c2;
+  font-weight: 700;
+  border-radius: 15px;
+  padding: 6px 22px;
+  font-size: 1.04rem;
+  box-shadow: 0 1px 7px #b0e4fd4d;
+}
+.g-empty-row {
+  color: #a2abb1;
+  font-size: 1.11rem;
+  text-align: center;
+  padding: 22px 0;
+  background: none;
+  border: none;
+}
+.g-pagination {
+  margin-top: 2.7rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+}
+.g-btn-pg {
+  background: rgba(201,221,255,0.35);
+  color: #4173b8;
+  font-weight: 700;
+  border-radius: 15px;
+  border: 1.1px solid #9fd8fa;
+  font-size: 1rem;
+  padding: 8px 25px;
+  box-shadow: 0 1px 7px #a8f0f533;
+  transition: background .14s, color .14s, border .14s;
+  text-decoration: none;
+  display: inline-block;
+}
+.g-btn-pg:hover, .g-btn-pg:focus {
+  background: #b3e9ff;
+  color: #234a7a;
+  border: 1.1px solid #407cd2;
+}
+.g-pg-info {
+  color: #407cd2;
+  background: #eafaf9;
+  border-radius: 11px;
+  padding: 9px 20px;
+  margin: 0 10px;
+  font-weight: 700;
+  font-size: 1.04rem;
+  letter-spacing: 0.3px;
+}
+
+/* Responsive */
+@media (max-width: 1100px) {
+  .glass-appt-card { max-width: 99vw; }
+  .glass-appt-header, .glass-appt-table-wrap { padding-left: 0.7rem; padding-right: 0.7rem;}
+}
+@media (max-width: 700px) {
+  .glass-appt-header, .glass-appt-table-wrap { padding: 0.6rem 0.1rem; }
+  .glass-appt-card { padding: 0; border-radius: 1rem; }
+  .glass-appt-header { border-radius: 1rem 1rem 0 0; }
+  .glass-appt-table thead tr th, .glass-appt-table tbody td {
+    font-size: 0.88rem; padding: 0.5rem 0.13rem;
+  }
+  .g-pg-info { font-size: 0.87rem; padding: 5px 9px;}
+}
+::-webkit-scrollbar { width: 9px; background: #eaf6fa;}
+::-webkit-scrollbar-thumb { background: #bde6ee; border-radius: 10px;}

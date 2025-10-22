@@ -1,0 +1,170 @@
+/* ===== CalmVerse Hero Section ===== */
+.innerverse-hero {
+  position: relative;
+  height: 90vh;
+  background: #f0f4f8;
+  overflow: hidden;
+}
+
+#innerverse-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  background: #f0f4f8;
+  pointer-events: none;
+}
+
+/* Calm Overlay */
+.innerverse-overlay {
+  position: relative;
+  z-index: 2;
+  text-align: center;
+  padding-top: 25vh;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+.innerverse-overlay h1 {
+  color: #004d60;
+  font-weight: 700;
+  font-size: 2.8rem;
+  text-shadow: none;
+}
+
+.innerverse-overlay p {
+  color: #607d8b;
+  font-size: 1.2rem;
+  margin-top: 1rem;
+  margin-bottom: 2rem;
+}
+
+/* Calm Buttons */
+.btn-innerverse,
+.btn-innerverse-light {
+  padding: 12px 24px;
+  border-radius: 30px;
+  font-weight: 500;
+  font-size: 1rem;
+  transition: 0.3s ease;
+  text-decoration: none;
+  border: none;
+}
+
+.btn-innerverse {
+  background-color: #4db6ac;
+  color: white;
+}
+
+.btn-innerverse:hover {
+  background-color: #3ba299;
+}
+
+.btn-innerverse-light {
+  background-color: white;
+  color: #4db6ac;
+  border: 1px solid #4db6ac;
+}
+
+.btn-innerverse-light:hover {
+  background-color: #4db6ac;
+  color: white;
+}
+
+/* ===== Features Section ===== */
+.magic-features {
+  background-color: #ffffff;
+  padding: 90px 0;
+}
+
+.glass-card {
+  background: #f9fdfd;
+  border-radius: 16px;
+  padding: 30px;
+  border: 1px solid #e0f2f1;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.04);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.glass-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 12px 24px rgba(0, 188, 212, 0.1);
+}
+
+.icon-circle {
+  width: 65px;
+  height: 65px;
+  line-height: 65px;
+  border-radius: 50%;
+  font-size: 1.8rem;
+  background: #4db6ac;
+  color: white;
+  margin-bottom: 20px;
+  display: inline-block;
+  text-align: center;
+}
+
+/* ===== CTA Section ===== */
+.magic-cta {
+  padding: 80px 0;
+  background: linear-gradient(to right, #e8f5f7, #ffffff);
+  text-align: center;
+}
+
+.magic-cta h2 {
+  font-size: 2.4rem;
+  font-weight: 600;
+  color: #006064;
+}
+
+.magic-cta p {
+  font-size: 1.1rem;
+  color: #555;
+}
+
+.btn-gradient {
+  background: #4db6ac;
+  color: white;
+  border-radius: 30px;
+  padding: 12px 28px;
+  font-weight: 600;
+  font-size: 1rem;
+  transition: 0.3s ease;
+  box-shadow: 0 3px 12px rgba(0, 188, 212, 0.2);
+}
+
+.btn-gradient:hover {
+  background: #3ba299;
+  box-shadow: 0 6px 20px rgba(0, 188, 212, 0.3);
+}
+
+/* ===== Animation (minimal) ===== */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ===== Responsive Adjustments ===== */
+@media (max-width: 768px) {
+  .innerverse-overlay h1 {
+    font-size: 2rem;
+  }
+
+  .btn-innerverse,
+  .btn-innerverse-light {
+    font-size: 0.9rem;
+    padding: 10px 20px;
+  }
+
+  .magic-cta h2 {
+    font-size: 1.8rem;
+  }
+}

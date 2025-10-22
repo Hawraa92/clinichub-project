@@ -1,0 +1,85 @@
+/* static/css/doctor/patient_search.css — 28‑Jul‑2025 (report picker) */
+
+:root{
+  --p-blue:#A2D2FF;
+  --bg:#F8FAFC;
+  --white:#FFF;
+  --text:#2D3748;
+  --text-light:#718096;
+  --border:#E2E8F0;
+  --radius:16px;
+  --radius-sm:10px;
+  --shadow-md:0 8px 22px rgba(0,0,0,.06);
+}
+
+*{box-sizing:border-box;}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+
+.ps-wrapper{
+  max-width:700px;
+  margin:40px auto;
+  padding:0 18px;
+  text-align:center;
+}
+
+.ps-title{
+  font-size:28px;
+  font-weight:600;
+  margin:0 0 6px;
+}
+.ps-title i{
+  color:var(--p-blue);
+  margin-inline-end:6px;
+}
+.ps-subtitle{
+  color:var(--text-light);
+  margin-bottom:26px;
+  font-size:15px;
+}
+
+.ps-filter-card{
+  background:var(--white);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:26px 28px;
+  box-shadow:var(--shadow-md);
+}
+
+.ps-grid{
+  display:grid;
+  gap:20px;
+  grid-template-columns:repeat(auto-fit,minmax(210px,1fr));
+  align-items:end;
+}
+
+.ps-field{display:flex;flex-direction:column;}
+.ps-field label{
+  font-size:14px;
+  margin-bottom:6px;
+  font-weight:500;
+}
+.ps-field input,
+.ps-field select{
+  padding:11px 13px;
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  background:var(--bg);
+}
+
+.btn{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  background:var(--p-blue);
+  color:#1A365D;
+  border:none;
+  padding:11px 24px;
+  border-radius:var(--radius-sm);
+  cursor:pointer;
+  font-weight:500;
+}
+.btn:hover{filter:brightness(.95);}

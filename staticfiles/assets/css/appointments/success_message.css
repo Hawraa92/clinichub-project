@@ -1,0 +1,68 @@
+/* static/assets/css/appointments/success_message.css */
+
+/* Success Box Container */
+.card.success-box {
+  background: #e9fbe9;
+  border: none;
+  border-radius: 1rem;
+  box-shadow: 0 10px 30px rgba(40, 167, 69, 0.1);
+}
+
+/* Card Body Padding */
+.card.success-box .card-body {
+  padding: 2.5rem;
+}
+
+/* Heading */
+.card.success-box h2 {
+  font-weight: bold;
+  font-size: 2rem;
+  color: #28a745;
+  margin-bottom: 1.5rem;
+}
+
+/* Paragraph */
+.card.success-box p {
+  font-size: 1.1rem;
+  color: #333;
+  margin-bottom: 1.5rem;
+}
+
+/* Buttons Container */
+.card.success-box .btn {
+  font-weight: 600;
+  border-radius: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+/* Primary Outline Button */
+.card.success-box .btn-outline-primary {
+  color: #007bff;
+  border-color: #007bff;
+}
+.card.success-box .btn-outline-primary:hover {
+  background-color: #007bff;
+  color: #fff;
+}
+
+/* Secondary Outline Button */
+.card.success-box .btn-outline-secondary {
+  color: #6c757d;
+  border-color: #6c757d;
+}
+.card.success-box .btn-outline-secondary:hover {
+  background-color: #6c757d;
+  color: #fff;
+}
+
+/* Responsive */
+@media (max-width: 576px) {
+  .card.success-box .card-body {
+    padding: 1.5rem;
+  }
+  .card.success-box .btn {
+    width: 100%;
+    margin-bottom: 0.5rem;
+  }
+}

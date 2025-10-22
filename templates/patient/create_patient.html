@@ -1,0 +1,164 @@
+{# templates/patient/create_patient.html #}
+{% extends "base.html" %}
+{% load static %}
+{% load group_filters %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{% static 'css/patient/create_patient.css' %}">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+{% endblock %}
+
+{% block content %}
+
+  {# Django flash messages #}
+  {% if messages %}
+    <div class="container mt-3">
+      {% for msg in messages %}
+        <div class="alert alert-{{ msg.tags }} alert-dismissible fade show" role="alert">
+          {{ msg }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <div class="patient-registration-container">
+    <div class="registration-header">
+      <div class="header-icon">
+        <i class="fas fa-user-injured"></i>
+        <div class="icon-pulse"></div>
+      </div>
+      {% if request.user.role == "doctor" or request.user|has_group:"Doctors" %}
+        <h1>Register New Patient</h1>
+        <p>Complete all required fields to create a new patient record.</p>
+      {% elif request.user.role == "secretary" or request.user|has_group:"Secretaries" %}
+        <h1>Quick Patient Registration</h1>
+        <p>Fill the essential information. The doctor will complete the medical record.</p>
+      {% else %}
+        <h1>Access Denied</h1>
+        <p>You do not have permission to add patients.</p>
+      {% endif %}
+    </div>
+
+    {% if request.user.role == "doctor" or request.user|has_group:"Doctors" or request.user.role == "secretary" or request.user|has_group:"Secretaries" %}
+      <div class="registration-card">
+        <form method="post" id="patient-form" novalidate autocomplete="off">
+          {% csrf_token %}
+
+          {% if form.non_field_errors %}
+            <div class="alert alert-danger mb-3">
+              {% for e in form.non_field_errors %}
+                <div><i class="fas fa-exclamation-circle me-1"></i> {{ e }}</div>
+              {% endfor %}
+            </div>
+          {% endif %}
+
+          <div class="form-intro">
+            <div class="intro-icon">
+              <i class="fas fa-id-card"></i>
+            </div>
+            <div>
+              <h3>Patient Information</h3>
+              <p>Fields marked with <span class="required-asterisk">*</span> are required.</p>
+            </div>
+          </div>
+
+          <div class="form-grid">
+            {% for field in form %}
+              <div class="form-group">
+                <label for="{{ field.id_for_label }}" class="form-label">
+                  {{ field.label }}{% if field.field.required %}<span class="required-asterisk">*</span>{% endif %}
+                </label>
+                <div class="input-container">
+                  {% if field.name == 'date_of_birth' %}
+                    <div class="input-with-icon">
+                      {{ field }}
+                      <span class="input-icon"><i class="fas fa-calendar-day"></i></span>
+                      <button type="button" class="date-today-btn" title="Set to today">Today</button>
+                    </div>
+                  {% else %}
+                    <div class="input-with-icon">
+                      {{ field }}
+                      <span class="input-icon">
+                        {% if field.name == 'full_name' %}<i class="fas fa-user"></i>
+                        {% elif field.name == 'email' %}<i class="fas fa-envelope"></i>
+                        {% elif field.name == 'mobile' %}<i class="fas fa-phone"></i>
+                        {% elif field.name == 'address' %}<i class="fas fa-home"></i>
+                        {% elif field.name == 'sex' %}<i class="fas fa-venus-mars"></i>
+                        {% elif field.name == 'diabetes_status' %}<i class="fas fa-clipboard-check"></i>
+                        {% elif field.name == 'high_bp' or field.name == 'high_chol' %}<i class="fas fa-tint"></i>
+                        {% elif field.name == 'chol_check' %}<i class="fas fa-vial-circle-check"></i>
+                        {% elif field.name == 'bmi' %}<i class="fas fa-weight"></i>
+                        {% elif field.name == 'hbA1c' %}<i class="fas fa-vial"></i>
+                        {% elif field.name == 'smoker' %}<i class="fas fa-smoking"></i>
+                        {% elif field.name == 'stroke' %}<i class="fas fa-brain"></i>
+                        {% elif field.name == 'heart_disease_or_attack' %}<i class="fas fa-heartbeat"></i>
+                        {% elif field.name == 'phys_activity' %}<i class="fas fa-person-running"></i>
+                        {% elif field.name == 'fruits' %}<i class="fas fa-apple-alt"></i>
+                        {% elif field.name == 'veggies' %}<i class="fas fa-carrot"></i>
+                        {% elif field.name == 'hvy_alcohol_consump' %}<i class="fas fa-wine-bottle"></i>
+                        {% elif field.name == 'any_healthcare' %}<i class="fas fa-briefcase-medical"></i>
+                        {% elif field.name == 'no_doc_bc_cost' %}<i class="fas fa-hand-holding-dollar"></i>
+                        {% elif field.name == 'gen_hlth' %}<i class="fas fa-star-half-stroke"></i>
+                        {% elif field.name == 'ment_hlth' %}<i class="fas fa-face-tired"></i>
+                        {% elif field.name == 'phys_hlth' %}<i class="fas fa-heart-pulse"></i>
+                        {% elif field.name == 'diff_walk' %}<i class="fas fa-person-walking-with-cane"></i>
+                        {% elif field.name == 'education' %}<i class="fas fa-graduation-cap"></i>
+                        {% elif field.name == 'income' %}<i class="fas fa-dollar-sign"></i>
+                        {% elif field.name == 'past_medical_history' %}<i class="fas fa-clipboard-list"></i>
+                        {% elif field.name == 'drug_history' %}<i class="fas fa-pills"></i>
+                        {% elif field.name == 'investigations' %}<i class="fas fa-microscope"></i>
+                        {% elif field.name == 'clinical_notes' %}<i class="fas fa-notes-medical"></i>
+                        {% elif field.name == 'doctor' %}<i class="fas fa-user-doctor"></i>
+                        {% else %}<i class="fas fa-pen"></i>
+                        {% endif %}
+                      </span>
+                    </div>
+                  {% endif %}
+                  {% if field.help_text %}
+                    <div class="form-tip">{{ field.help_text }}</div>
+                  {% endif %}
+                  {% for error in field.errors %}
+                    <div class="form-error">
+                      <i class="fas fa-exclamation-circle"></i> {{ error }}
+                    </div>
+                  {% endfor %}
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+
+          <div class="form-actions">
+            <a
+              href="{% if request.user.role == 'doctor' or request.user|has_group:'Doctors' %}{% url 'patient:list' %}{% else %}{% url 'appointments:secretary_dashboard' %}{% endif %}"
+              class="btn-cancel"
+            >
+              <i class="fas fa-arrow-left"></i> Back
+            </a>
+
+            {# زر التسجيل فقط (أزلنا Save & Edit) #}
+            <button type="submit" class="submit-btn" id="submit-btn">
+              <i class="fas fa-user-plus"></i> Register Patient
+            </button>
+          </div>
+        </form>
+      </div>
+    {% else %}
+      <div class="access-denied">
+        <div class="denied-icon">
+          <i class="fas fa-lock"></i>
+          <div class="lock-animation"></div>
+        </div>
+        <h2>Access Denied</h2>
+        <p>You do not have permission to add patients</p>
+        <a href="{% url 'home:index' %}" class="home-link">
+          <i class="fas fa-arrow-left"></i> Return to Dashboard
+        </a>
+      </div>
+    {% endif %}
+  </div>
+{% endblock %}
+
+{% block extra_js %}
+  <script src="{% static 'js/patient/create_patient.js' %}"></script>
+{% endblock %}

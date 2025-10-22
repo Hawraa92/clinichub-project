@@ -1,0 +1,342 @@
+{# templates/doctor/available_doctors.html #}
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Available Doctors{% endblock %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{% static 'css/doctor/available_doctors.css' %}">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+{% endblock %}
+
+{% block content %}
+<section class="available-doctors" aria-labelledby="pageTitle">
+  <div class="container">
+    <!-- Header -->
+    <header class="section-header">
+      <div class="header-content">
+        <h1 id="pageTitle">Available <span class="highlight">Medical Specialists</span></h1>
+        <p class="subtitle">Board-certified physicians ready for consultation</p>
+      </div>
+      <div class="header-decoration" aria-hidden="true">
+        <div class="decoration-element"></div>
+        <div class="decoration-element"></div>
+      </div>
+    </header>
+
+    <!-- Controls (Search / Filters / Sort / View) -->
+    <form id="filtersForm" class="controls" method="get" role="search" aria-label="Doctor search and filters">
+      <div class="search-container">
+        <div class="search-input">
+          <i class="fas fa-search" aria-hidden="true"></i>
+          <input
+            type="text"
+            id="doctor-search"
+            name="q"
+            value="{{ request.GET.q|default_if_none:'' }}"
+            placeholder="Search by name, specialty, or condition..."
+            aria-label="Search doctors" />
+          <button type="button" class="clear-search" aria-label="Clear search" data-clear="#doctor-search">
+            <i class="fas fa-times" aria-hidden="true"></i>
+          </button>
+        </div>
+
+        <button type="button" class="filter-btn" data-open="#filter-modal" aria-controls="filter-modal" aria-expanded="false">
+          <i class="fas fa-sliders-h" aria-hidden="true"></i> Filters
+        </button>
+      </div>
+
+      <div class="sorting-container">
+        <div class="sorting">
+          <label for="sort"><i class="fas fa-sort" aria-hidden="true"></i> Sort by:</label>
+          <select id="sort" name="sort" aria-label="Sort doctors">
+            <option value="rating"      {% if request.GET.sort == "rating" or not request.GET.sort %}selected{% endif %}>Highest Rating</option>
+            <option value="experience"  {% if request.GET.sort == "experience" %}selected{% endif %}>Most Experienced</option>
+            <option value="fee"         {% if request.GET.sort == "fee" %}selected{% endif %}>Consultation Fee</option>
+            <option value="availability"{% if request.GET.sort == "availability" %}selected{% endif %}>Availability</option>
+          </select>
+        </div>
+
+        <div class="view-toggle" aria-label="Toggle view">
+          <button type="button" class="view-option active" data-view="grid" aria-label="Grid view">
+            <i class="fas fa-th" aria-hidden="true"></i>
+          </button>
+          <button type="button" class="view-option" data-view="list" aria-label="List view">
+            <i class="fas fa-list" aria-hidden="true"></i>
+          </button>
+        </div>
+      </div>
+
+      {# Keep core filter params in the form so pagination can reuse them #}
+      <input type="hidden" name="specialty" value="{{ request.GET.specialty|default_if_none:'' }}">
+      <input type="hidden" name="online"    value="{{ request.GET.online|default_if_none:'' }}">
+      <input type="hidden" name="min_fee"   value="{{ request.GET.min_fee|default_if_none:'' }}">
+      <input type="hidden" name="max_fee"   value="{{ request.GET.max_fee|default_if_none:'' }}">
+    </form>
+
+    <!-- Doctors Grid -->
+    <div id="doctorGrid" class="doctor-grid" aria-live="polite">
+      {% for doctor in doctors %}
+        <article class="doctor-card"
+                 itemscope itemtype="https://schema.org/Physician"
+                 data-rating="{{ doctor.rating|default:'4.8' }}"
+                 data-experience="{{ doctor.experience|default:'10' }}"
+                 data-fee="{{ doctor.consultation_fee|default:'25000' }}"
+                 data-available="{{ doctor.is_available|yesno:'true,false' }}">
+
+          <!-- Card Header -->
+          <div class="card-header">
+            <div class="avatar">
+              {% if doctor.photo %}
+                <img src="{{ doctor.photo.url }}"
+                     alt="Dr. {{ doctor.full_name|default:doctor.user.get_full_name|default:doctor.user.username }}"
+                     itemprop="image"
+                     loading="lazy">
+              {% else %}
+                <img src="{% static 'img/default-doctor.png' %}"
+                     alt="Medical professional"
+                     loading="lazy">
+              {% endif %}
+            </div>
+
+            <div class="badges">
+              <span class="certified" title="Board Certified">
+                <i class="fas fa-certificate" aria-hidden="true"></i> Certified
+              </span>
+              {% if doctor.is_available %}
+              <span class="available" title="Currently Available">
+                <i class="fas fa-check-circle" aria-hidden="true"></i> Online
+              </span>
+              {% endif %}
+            </div>
+          </div>
+
+          <!-- Card Body -->
+          <div class="card-body">
+            <div class="doctor-title">
+              <h2 class="doctor-name" itemprop="name">
+                Dr. {{ doctor.get_display_name|default:doctor.full_name|default:doctor.user.get_full_name|default:doctor.user.username }}
+              </h2>
+              {% if doctor.credentials %}
+                <span class="doctor-credentials">{{ doctor.credentials }}</span>
+              {% else %}
+                <span class="doctor-credentials">MD</span>
+              {% endif %}
+            </div>
+
+            {% if doctor.specialty %}
+              <p class="specialty" itemprop="medicalSpecialty">
+                <i class="fas fa-stethoscope" aria-hidden="true"></i> {{ doctor.specialty }}
+              </p>
+            {% endif %}
+
+            <div class="meta">
+              <div class="rating"
+                   itemprop="aggregateRating"
+                   itemscope
+                   itemtype="https://schema.org/AggregateRating">
+                <meta itemprop="ratingValue" content="{{ doctor.rating|default:'4.8' }}">
+                <meta itemprop="reviewCount" content="{{ doctor.review_count|default:'128' }}">
+                <div class="stars" aria-label="{{ doctor.rating|default:'4.8' }} out of 5">
+                  {% with ''|center:5 as range %}
+                    {% for _ in range %}
+                      <i class="fas fa-star {% if forloop.counter <= doctor.rating|default:5 %}filled{% endif %}" aria-hidden="true"></i>
+                    {% endfor %}
+                  {% endwith %}
+                </div>
+                <span class="rating-text">
+                  {{ doctor.rating|default:"4.8" }} ({{ doctor.review_count|default:"128" }} reviews)
+                </span>
+              </div>
+
+              <div class="experience">
+                <i class="fas fa-user-md" aria-hidden="true"></i>
+                <span itemprop="yearsOfExperience">
+                  {{ doctor.experience|default:"10" }}+ years
+                </span>
+              </div>
+            </div>
+
+            {% if doctor.short_bio %}
+              <p class="bio" itemprop="description">
+                {{ doctor.short_bio|truncatechars:140 }}
+              </p>
+            {% endif %}
+
+            <div class="expertise">
+              {# Example tags; replace with dynamic tags if available #}
+              <span class="expertise-tag">Cardiology</span>
+              <span class="expertise-tag">Preventive Care</span>
+              <span class="expertise-tag">Diagnostics</span>
+            </div>
+          </div>
+
+          <!-- Card Footer -->
+          <div class="card-footer">
+            <div class="pricing">
+              <span class="fee" itemprop="offers" itemscope itemtype="https://schema.org/Offer">
+                <meta itemprop="priceCurrency" content="IQD">
+                <span itemprop="price">{{ doctor.consultation_fee|default:"25000" }}</span> IQD
+              </span>
+              <span class="duration">
+                <i class="fas fa-clock" aria-hidden="true"></i> 30 min session
+              </span>
+            </div>
+
+            <div class="action-buttons">
+              <a href="#" class="profile-btn">
+                <i class="fas fa-user" aria-hidden="true"></i> Profile
+              </a>
+
+              <!-- IMPORTANT: Patient-portal booking route -->
+              <a href="{% url 'appointments:book_patient' doctor.id %}"
+                 class="book-btn"
+                 aria-label="Book appointment with Dr. {{ doctor.full_name|default:doctor.user.get_full_name|default:doctor.user.username }}">
+                <i class="fas fa-calendar-check" aria-hidden="true"></i> Book Now
+              </a>
+            </div>
+          </div>
+        </article>
+      {% empty %}
+        <div class="no-results" role="status" aria-live="polite">
+          <div class="no-results-icon">
+            <i class="fas fa-user-md" aria-hidden="true"></i>
+          </div>
+          <h3>No Available Specialists</h3>
+          <p>Please adjust your filters or try again later.</p>
+          <a href="{% url 'contact' %}" class="support-btn">Contact Support</a>
+        </div>
+      {% endfor %}
+    </div>
+
+    <!-- Pagination (GET form preserves current filters) -->
+    {% if doctors.has_other_pages %}
+      <div class="pagination">
+        <form method="get" class="pagination-form">
+          {# Preserve existing filters #}
+          <input type="hidden" name="q"         value="{{ request.GET.q|default_if_none:'' }}">
+          <input type="hidden" name="sort"      value="{{ request.GET.sort|default_if_none:'rating' }}">
+          <input type="hidden" name="specialty" value="{{ request.GET.specialty|default_if_none:'' }}">
+          <input type="hidden" name="online"    value="{{ request.GET.online|default_if_none:'' }}">
+          <input type="hidden" name="min_fee"   value="{{ request.GET.min_fee|default_if_none:'' }}">
+          <input type="hidden" name="max_fee"   value="{{ request.GET.max_fee|default_if_none:'' }}">
+
+          <div class="pager">
+            <button
+              class="pagination-btn"
+              name="page"
+              value="{{ doctors.previous_page_number }}"
+              {% if not doctors.has_previous %}disabled{% endif %}
+              aria-label="Previous page">
+              <i class="fas fa-chevron-left" aria-hidden="true"></i>
+            </button>
+
+            <span class="current-page">{{ doctors.number }}</span>
+            <span class="of">of</span>
+            <span class="total-pages">{{ doctors.paginator.num_pages }}</span>
+
+            <button
+              class="pagination-btn"
+              name="page"
+              value="{{ doctors.next_page_number }}"
+              {% if not doctors.has_next %}disabled{% endif %}
+              aria-label="Next page">
+              <i class="fas fa-chevron-right" aria-hidden="true"></i>
+            </button>
+          </div>
+        </form>
+      </div>
+    {% endif %}
+  </div>
+</section>
+
+<!-- Filter Modal -->
+<div class="filter-modal" id="filter-modal" role="dialog" aria-modal="true" aria-labelledby="filterTitle" hidden>
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 id="filterTitle">Filter Doctors</h3>
+      <button class="close-modal" aria-label="Close filter modal" data-close="#filter-modal">
+        <i class="fas fa-times" aria-hidden="true"></i>
+      </button>
+    </div>
+
+    <form method="get" class="modal-body">
+      <!-- Keep search text & sort in modal so user doesn't lose them -->
+      <input type="hidden" name="q"    value="{{ request.GET.q|default_if_none:'' }}">
+      <input type="hidden" name="sort" value="{{ request.GET.sort|default_if_none:'rating' }}">
+
+      <div class="filter-section">
+        <h4>Specialty</h4>
+        <div class="filter-options">
+          <label class="filter-option">
+            <input type="radio" name="specialty" value="" {% if not request.GET.specialty %}checked{% endif %}> Any
+          </label>
+          <label class="filter-option">
+            <input type="radio" name="specialty" value="Cardiology" {% if request.GET.specialty == "Cardiology" %}checked{% endif %}> Cardiology
+          </label>
+          <label class="filter-option">
+            <input type="radio" name="specialty" value="Neurology" {% if request.GET.specialty == "Neurology" %}checked{% endif %}> Neurology
+          </label>
+          <label class="filter-option">
+            <input type="radio" name="specialty" value="Pediatrics" {% if request.GET.specialty == "Pediatrics" %}checked{% endif %}> Pediatrics
+          </label>
+        </div>
+      </div>
+
+      <div class="filter-section">
+        <h4>Availability</h4>
+        <div class="filter-options">
+          <label class="filter-option">
+            <input type="checkbox" name="online" value="1" {% if request.GET.online == "1" %}checked{% endif %}>
+            Available Now
+          </label>
+        </div>
+      </div>
+
+      <div class="filter-section">
+        <h4>Consultation Fee</h4>
+        <div class="fee-row">
+          <label>
+            Min (IQD)
+            <input type="number" name="min_fee" min="0" step="5000" value="{{ request.GET.min_fee|default_if_none:'' }}">
+          </label>
+          <label>
+            Max (IQD)
+            <input type="number" name="max_fee" min="0" step="5000" value="{{ request.GET.max_fee|default_if_none:'' }}">
+          </label>
+        </div>
+      </div>
+
+      <div class="filter-section">
+        <h4>Rating</h4>
+        <div class="rating-filter">
+          <div class="stars">
+            {% for i in "54321" %}
+              <input type="radio" name="min_rating" id="rating-{{ i }}" value="{{ i }}"
+                     {% if request.GET.min_rating == i %}checked{% endif %}>
+              <label for="rating-{{ i }}" aria-label="{{ i }} stars and up">
+                {% for j in "12345"|slice:i %}<i class="fas fa-star" aria-hidden="true"></i>{% endfor %}+
+              </label>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <a class="btn btn-secondary" href="?">Reset Filters</a>
+        <button class="btn btn-primary" type="submit">Apply Filters</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<noscript>
+  <div class="noscript-hint">
+    JavaScript is disabled. Some interactive features (filters, view toggle) are limited.
+  </div>
+</noscript>
+{% endblock %}
+
+{% block extra_js %}
+  <script src="{% static 'js/doctor/available_doctors.js' %}"></script>
+{% endblock %}

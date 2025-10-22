@@ -1,0 +1,49 @@
+{
+  "features": [
+    "HighBP",
+    "HighChol",
+    "CholCheck",
+    "BMI",
+    "Smoker",
+    "Stroke",
+    "HeartDiseaseorAttack",
+    "PhysActivity",
+    "Fruits",
+    "Veggies",
+    "HvyAlcoholConsump",
+    "AnyHealthcare",
+    "NoDocbcCost",
+    "GenHlth",
+    "MentHlth",
+    "PhysHlth",
+    "DiffWalk",
+    "Sex",
+    "Age",
+    "Education",
+    "Income"
+  ],
+  "class_names": {
+    "0": "Healthy",
+    "1": "Prediabetic",
+    "2": "Diabetic"
+  },
+  "sklearn_version": "1.5.1",
+  "macro_f1": 0.8836060722878273,
+  "confusion_matrix": [
+    [
+      36201,
+      940,
+      5599
+    ],
+    [
+      696,
+      40718,
+      1327
+    ],
+    [
+      4565,
+      1772,
+      36404
+    ]
+  ]
+}

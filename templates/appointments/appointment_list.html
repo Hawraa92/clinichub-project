@@ -1,0 +1,199 @@
+{# templates/appointments/appointment_list.html #}
+{% extends "base.html" %}
+{% load static humanize %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{% static 'css/appointments/appointment_list.css' %}">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div class="glass-bg-appt">
+  <svg class="glass-bg-wave" viewBox="0 0 1440 220" fill="none" aria-hidden="true">
+    <path fill="url(#grad)" fill-opacity="0.16" d="M0,80 Q720,200 1440,80 V220H0Z"/>
+    <defs>
+      <linearGradient id="grad" x1="0" x2="1" y1="0" y2="1">
+        <stop offset="0%" stop-color="#53b8bb"/>
+        <stop offset="100%" stop-color="#3e60aa"/>
+      </linearGradient>
+    </defs>
+  </svg>
+
+  <div class="glass-appt-card shine-anim">
+    <div class="glass-appt-header">
+      <div>
+        <h3><i class="bi bi-calendar-check"></i> Appointment List</h3>
+        <div class="glass-appt-subtitle">All booked appointments in one place</div>
+      </div>
+      <a href="{% url 'appointments:create_appointment' %}" class="glass-btn-new shine-btn">
+        <i class="bi bi-plus-circle"></i> New Appointment
+      </a>
+    </div>
+
+    <form method="get" class="g-search-form" role="search" aria-label="Search appointments">
+      <input type="text"
+             name="q"
+             value="{{ search_query }}"
+             placeholder="Search patient or doctor…"
+             class="g-search-input"
+             aria-label="Search by patient or doctor name">
+      <input type="hidden" name="sort" value="{{ current_sort }}">
+      <button type="submit" class="g-search-btn" title="Search"><i class="bi bi-search"></i></button>
+      {% if search_query %}
+        <a href="?sort={{ current_sort }}" class="g-clear-search" aria-label="Clear search">&times;</a>
+      {% endif %}
+    </form>
+
+    <div class="glass-appt-table-wrap">
+      <table class="glass-appt-table">
+        <caption class="visually-hidden">List of appointments with patient, doctor, time, amount and status.</caption>
+        <thead>
+          <tr>
+            <th scope="col">#</th>
+            <th scope="col">
+              <a href="?q={{ search_query }}&amp;sort=patient"
+                 class="{% if current_sort == 'patient' %}g-sort-active{% endif %}">
+                Patient
+              </a>
+            </th>
+            <th scope="col">
+              <a href="?q={{ search_query }}&amp;sort=doctor"
+                 class="{% if current_sort == 'doctor' %}g-sort-active{% endif %}">
+                Doctor
+              </a>
+            </th>
+            <th scope="col">Date</th>
+            <th scope="col">Time</th>
+            <th scope="col">IQD</th>
+            <th scope="col">Queue</th>
+            <th scope="col">Status</th>
+            <th scope="col" class="actions-col">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% with start=appointments.start_index %}
+          {% for appt in appointments %}
+            <tr>
+              <td data-label="#"> {{ start|add:forloop.counter0 }} </td>
+
+              <td data-label="Patient">
+                <span class="g-patient">
+                  <i class="bi bi-person-circle" aria-hidden="true"></i>
+                  {{ appt.patient.full_name }}
+                </span>
+              </td>
+
+              <td data-label="Doctor">
+                <span class="g-doctor">
+                  <i class="bi bi-person-badge" aria-hidden="true"></i>
+                  {{ appt.doctor.user.get_full_name|default:appt.doctor.user.username }}
+                </span>
+              </td>
+
+              <td data-label="Date">
+                {% if appt.scheduled_time %}
+                  {{ appt.scheduled_time|date:"Y-m-d" }}
+                {% else %} &mdash; {% endif %}
+              </td>
+
+              <td data-label="Time">
+                {% if appt.scheduled_time %}
+                  {{ appt.scheduled_time|date:"h:i A" }}
+                {% else %} &mdash; {% endif %}
+              </td>
+
+              <td data-label="IQD">
+                <span class="g-amount">
+                  {{ appt.iqd_amount|default:0|intcomma }} <span class="cur">IQD</span>
+                </span>
+              </td>
+
+              <td data-label="Queue">
+                {% if appt.queue_number %}
+                  <span class="g-badge g-badge-queue">P-{{ appt.queue_number|stringformat:"03d" }}</span>
+                {% else %}
+                  <span class="g-badge g-badge-muted">—</span>
+                {% endif %}
+              </td>
+
+              <td data-label="Status">
+                {% with appt.status as s %}
+                  {% if s == 'pending' %}
+                    <span class="g-status g-status-pending">{{ appt.get_status_display }}</span>
+                  {% elif s == 'completed' %}
+                    <span class="g-status g-status-completed">{{ appt.get_status_display }}</span>
+                  {% elif s == 'cancelled' %}
+                    <span class="g-status g-status-cancelled">{{ appt.get_status_display }}</span>
+                  {% else %}
+                    <span class="g-status">{{ appt.get_status_display|default:"Unknown" }}</span>
+                  {% endif %}
+                {% endwith %}
+              </td>
+
+              <td class="g-actions" data-label="Actions">
+                <a href="{% url 'appointments:edit_appointment' appt.pk %}"
+                   class="btn btn-sm btn-outline-primary"
+                   title="Edit appointment" aria-label="Edit appointment">
+                   <i class="bi bi-pencil-square" aria-hidden="true"></i>
+                </a>
+
+                {% if appt.status == 'pending' %}
+                  <a href="{% url 'appointments:cancel_appointment' appt.pk %}"
+                     class="btn btn-sm btn-outline-warning"
+                     title="Cancel appointment" aria-label="Cancel appointment">
+                     <i class="bi bi-x-circle" aria-hidden="true"></i>
+                  </a>
+                {% else %}
+                  <button class="btn btn-sm btn-outline-secondary" disabled
+                          title="Cancel disabled" aria-label="Cancel disabled">
+                    <i class="bi bi-x-circle" aria-hidden="true"></i>
+                  </button>
+                {% endif %}
+
+                {% if request.user.is_superuser %}
+                  <a href="{% url 'appointments:delete_appointment' appt.pk %}"
+                     class="btn btn-sm btn-outline-danger"
+                     title="Delete permanently" aria-label="Delete permanently">
+                     <i class="bi bi-trash" aria-hidden="true"></i>
+                  </a>
+                {% endif %}
+
+                <a href="{% url 'appointments:appointment_ticket' appt.pk %}"
+                   class="btn btn-sm btn-outline-secondary"
+                   title="Print ticket" aria-label="Print ticket">
+                   <i class="bi bi-printer" aria-hidden="true"></i>
+                </a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="9" class="g-empty-row">
+                <i class="bi bi-emoji-frown" aria-hidden="true"></i> No appointments available.
+              </td>
+            </tr>
+          {% endfor %}
+          {% endwith %}
+        </tbody>
+      </table>
+
+      <!-- Pagination -->
+      <div class="g-pagination" role="navigation" aria-label="Pagination">
+        {% if appointments.has_previous %}
+          <a href="?q={{ search_query }}&amp;sort={{ current_sort }}&amp;page=1" class="g-btn-pg">First</a>
+          <a href="?q={{ search_query }}&amp;sort={{ current_sort }}&amp;page={{ appointments.previous_page_number }}" class="g-btn-pg">Previous</a>
+        {% endif %}
+
+        <span class="g-pg-info">
+          Page {{ appointments.number }} of {{ appointments.paginator.num_pages }}
+        </span>
+
+        {% if appointments.has_next %}
+          <a href="?q={{ search_query }}&amp;sort={{ current_sort }}&amp;page={{ appointments.next_page_number }}" class="g-btn-pg">Next</a>
+          <a href="?q={{ search_query }}&amp;sort={{ current_sort }}&amp;page={{ appointments.paginator.num_pages }}" class="g-btn-pg">Last</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

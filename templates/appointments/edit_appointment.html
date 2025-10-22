@@ -1,0 +1,232 @@
+{% extends "base.html" %}
+{% load static %}
+{% load widget_tweaks %}
+
+
+{# {% load form_extras %}  لو مستخدمة فلتر add_class #}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{% static 'css/appointments/create_appointment.css' %}">
+  <link rel="stylesheet" href="{% static 'css/appointments/edit_appointment.css' %}">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+{% endblock %}
+
+{% block content %}
+<div class="container py-5 create-appt-wrapper">
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="card shadow-lg rounded-4 appointment-form-card">
+    <div class="card-header d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+      <div>
+        <h3 class="mb-1">
+          <i class="bi bi-pencil-square me-2"></i> Edit Appointment
+        </h3>
+        <div class="small text-light opacity-75">
+          ID #{{ appointment.id }} |
+          Queue: {% if appointment.queue_number %}P-{{ appointment.queue_number }}{% else %}—{% endif %} |
+          Status:
+          <span class="badge bg-warning text-dark"
+                style="font-size:.65rem;"
+                id="statusBadge">
+            {{ appointment.status|capfirst }}
+          </span>
+        </div>
+      </div>
+      <div class="d-flex gap-2 flex-wrap">
+        <a href="{% url 'appointments:appointment_list' %}" class="btn btn-outline-light btn-sm">
+          <i class="bi bi-arrow-left"></i> Back
+        </a>
+        <a href="{% url 'appointments:delete_appointment' appointment.pk %}"
+           class="btn btn-outline-danger btn-sm"
+           onclick="return confirm('Delete this appointment? This cannot be undone.');">
+          <i class="bi bi-trash"></i> Delete
+        </a>
+      </div>
+    </div>
+
+    <div class="card-body p-4">
+      <form method="post"
+            action=""
+            novalidate
+            class="patient-form"
+            id="editApptForm">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger mb-4">
+            <strong>There were some issues:</strong>
+            <ul class="mb-0 mt-2">
+              {% for error in form.non_field_errors %}
+                <li>{{ error }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
+
+        <div class="row g-4">
+
+          {# Patient #}
+          <div class="col-md-6">
+            <label for="{{ form.patient.id_for_label }}" class="form-label required-star">Patient</label>
+            {% with field=form.patient %}
+              {% if field.errors %}
+                {{ field|add_class:"form-select is-invalid" }}
+              {% else %}
+                {{ field }}
+              {% endif %}
+              {% if field.errors %}
+                <ul class="field-errors">
+                  {% for e in field.errors %}<li>{{ e }}</li>{% endfor %}
+                </ul>
+              {% endif %}
+            {% endwith %}
+          </div>
+
+          {# Doctor #}
+            <div class="col-md-6">
+            <label for="{{ form.doctor.id_for_label }}" class="form-label required-star">Doctor</label>
+            {% with field=form.doctor %}
+              {% if field.errors %}
+                {{ field|add_class:"form-select is-invalid" }}
+              {% else %}
+                {{ field }}
+              {% endif %}
+              {% if field.errors %}
+                <ul class="field-errors">
+                  {% for e in field.errors %}<li>{{ e }}</li>{% endfor %}
+                </ul>
+              {% endif %}
+            {% endwith %}
+          </div>
+
+          {# Scheduled Time #}
+          <div class="col-md-6">
+            <label for="{{ form.scheduled_time.id_for_label }}" class="form-label required-star">Appointment Time</label>
+            {% with field=form.scheduled_time %}
+              {% if field.errors %}
+                {{ field|add_class:"datetimepicker form-control is-invalid" }}
+              {% else %}
+                {{ field|add_class:"datetimepicker form-control" }}
+              {% endif %}
+              <small class="text-muted d-block mt-1">
+                Must be a future time (local).
+              </small>
+              {% if field.errors %}
+                <ul class="field-errors">
+                  {% for e in field.errors %}<li>{{ e }}</li>{% endfor %}
+                </ul>
+              {% endif %}
+            {% endwith %}
+          </div>
+
+          {# Status #}
+          <div class="col-md-6">
+            <label for="{{ form.status.id_for_label }}" class="form-label">Status</label>
+            {% with field=form.status %}
+              {% if field.errors %}
+                {{ field|add_class:"form-select is-invalid" }}
+              {% else %}
+                {{ field }}
+              {% endif %}
+              {% if field.errors %}
+                <ul class="field-errors">
+                  {% for e in field.errors %}<li>{{ e }}</li>{% endfor %}
+                </ul>
+              {% endif %}
+            {% endwith %}
+          </div>
+
+          {# Amount #}
+          <div class="col-md-6">
+            <label for="{{ form.iqd_amount.id_for_label }}" class="form-label">Amount (IQD)</label>
+            {% with field=form.iqd_amount %}
+              {% if field.errors %}
+                {{ field|add_class:"form-control is-invalid" }}
+              {% else %}
+                {{ field }}
+              {% endif %}
+              <small class="text-muted d-block mt-1">
+                Set 0 if unpaid.
+              </small>
+              {% if field.errors %}
+                <ul class="field-errors">
+                  {% for e in field.errors %}<li>{{ e }}</li>{% endfor %}
+                </ul>
+              {% endif %}
+            {% endwith %}
+          </div>
+
+          {# Notes (إذا موجود في الفورم) #}
+          {% if form.notes %}
+          <div class="col-12">
+            <label for="{{ form.notes.id_for_label }}" class="form-label">Notes</label>
+            {% with field=form.notes %}
+              {% if field.errors %}
+                {{ field|add_class:"form-control is-invalid" }}
+              {% else %}
+                {{ field }}
+              {% endif %}
+              {% if field.errors %}
+                <ul class="field-errors">
+                  {% for e in field.errors %}<li>{{ e }}</li>{% endfor %}
+                </ul>
+              {% endif %}
+            {% endwith %}
+          </div>
+          {% endif %}
+
+        </div>
+
+        <div class="d-flex justify-content-between flex-wrap gap-2 mt-5">
+          <a href="{% url 'appointments:appointment_list' %}" class="btn btn-outline-secondary px-4">
+            <i class="bi bi-arrow-left-circle me-1"></i> Cancel
+          </a>
+          <button type="submit" class="btn btn-success px-4" id="saveBtn">
+            <i class="bi bi-check-circle-fill me-2"></i> Save Changes
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  flatpickr(".datetimepicker", {
+    enableTime: true,
+    dateFormat: "Y-m-d h:i K",
+    minDate: "today",
+    minuteIncrement: 5,
+    time_24hr: false
+  });
+
+  const form = document.getElementById('editApptForm');
+  const btn  = document.getElementById('saveBtn');
+  form.addEventListener('submit', () => {
+    btn.disabled = true;
+    btn.classList.add('is-busy');
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
+  });
+
+  // تلوين الشارة حسب الحالة
+  const badge = document.getElementById('statusBadge');
+  if (badge) {
+    const txt = badge.textContent.trim().toLowerCase();
+    if (txt === 'completed') badge.classList.replace('bg-warning','bg-success');
+    else if (txt === 'cancelled') badge.classList.replace('bg-warning','bg-danger');
+  }
+});
+</script>
+{% endblock %}

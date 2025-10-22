@@ -1,0 +1,87 @@
+{# templates/accounts/login.html #}
+{% extends "base.html" %}
+{% load static %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{% static 'css/accounts/login.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="login-container">
+  <div class="login-card">
+    <!-- Left Panel: Branding -->
+    <div class="left-panel">
+      <img src="{% static 'images/image4.png' %}"
+           alt="Login Illustration"
+           class="illustration">
+      <div class="brand-container">
+        <h1 class="brand-name">ClinicHub</h1>
+        <p class="brand-tagline">Your health, our priority</p>
+      </div>
+    </div>
+
+    <!-- Right Panel: Login Form -->
+    <div class="right-panel">
+      <div class="form-header">
+        <h2 class="greeting">Welcome Back</h2>
+        <p class="subheading">Access your healthcare dashboard</p>
+      </div>
+
+      {% if messages %}
+        <div class="messages-container">
+          {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      {% if form.non_field_errors %}
+        <div class="alert alert-error">
+          {% for error in form.non_field_errors %}
+            <div>{{ error }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      <form method="post" class="auth-form" novalidate>
+        {% csrf_token %}
+        {% for field in form %}
+          <div class="form-group">
+            {{ field.label_tag }}
+            {{ field }}
+            {% if field.help_text %}
+              <small class="help-text">{{ field.help_text }}</small>
+            {% endif %}
+            {% for error in field.errors %}
+              <div class="field-error">
+                <span class="error-icon">!</span> {{ error }}
+              </div>
+            {% endfor %}
+          </div>
+        {% endfor %}
+
+        <div class="forgot-password">
+          <a href="{% url 'accounts:password_reset' %}">Forgot your password?</a>
+        </div>
+
+        <button type="submit" class="btn-submit">
+          <span>Sign In</span>
+          <svg class="arrow-icon" viewBox="0 0 24 24">
+            <path d="M4,11V13H16L10.5,18.5L11.9,19.9L19.8,12L11.9,4.1L10.5,5.5L16,11H4Z"/>
+          </svg>
+        </button>
+      </form>
+
+      {# Display the sign-up link only if show_signup is True #}
+      {% if show_signup %}
+        <div class="auth-footer">
+          <p>New here?</p>
+          <a href="{% url 'accounts:register' %}" class="auth-link">
+            Create Patient Account
+          </a>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

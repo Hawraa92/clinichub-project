@@ -1,0 +1,131 @@
+{# templates/appointments/my_appointments.html #}
+{% extends "base.html" %}
+{% load static humanize tz %}
+
+{% block title %}My Appointments{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+
+  <!-- Header + actions -->
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h2 class="m-0">My Appointments</h2>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-secondary" href="{% url 'patient:dashboard' %}">
+        <i class="bi bi-speedometer2 me-1"></i> Dashboard
+      </a>
+      <a class="btn btn-primary" href="{% url 'doctor:available_doctors' %}">
+        <i class="bi bi-plus-circle me-1"></i> Book New
+      </a>
+    </div>
+  </div>
+
+  {% if messages %}
+    {% for msg in messages %}
+      <div class="alert alert-{{ msg.tags }} mb-3">{{ msg }}</div>
+    {% endfor %}
+  {% endif %}
+
+  {# -------------------- Actual Appointments -------------------- #}
+  <div class="card shadow-sm mb-4">
+    <div class="card-header bg-white">
+      <strong>Upcoming / Scheduled Appointments</strong>
+    </div>
+
+    <div class="card-body p-0">
+      {% if appointments %}
+        <div class="table-responsive">
+          <table class="table align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th scope="col">Date</th>
+                <th scope="col">Time</th>
+                <th scope="col">Doctor</th>
+                <th scope="col">Specialty</th>
+                <th scope="col">Status</th>
+                <th scope="col">Queue</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for appt in appointments %}
+                <tr>
+                  <td>
+                    {{ appt.scheduled_time|localtime|date:"Y-m-d" }}
+                    <div class="text-muted small">{{ appt.scheduled_time|localtime|naturaltime }}</div>
+                  </td>
+                  <td>{{ appt.scheduled_time|localtime|time:"H:i" }}</td>
+                  <td>Dr. {{ appt.doctor.user.get_full_name|default:appt.doctor.user.username }}</td>
+                  <td>{{ appt.doctor.specialization|default:appt.doctor.specialty|default:"General" }}</td>
+                  <td>
+                    {% with s=appt.get_status_display|default:appt.status|lower %}
+                      <span class="badge
+                        {% if 'pending' in s %} bg-warning text-dark
+                        {% elif 'approved' in s %} bg-success
+                        {% elif 'completed' in s %} bg-primary
+                        {% elif 'cancel' in s %} bg-secondary
+                        {% else %} bg-light text-dark {% endif %}">
+                        {{ appt.get_status_display|default:appt.status|title }}
+                      </span>
+                    {% endwith %}
+                  </td>
+                  <td>
+                    {% if appt.queue_number %}
+                      #{{ appt.queue_number }}
+                    {% else %}
+                      <span class="text-muted">—</span>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="p-4 text-center text-muted">No appointments yet.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# -------------------- Pending Booking Requests -------------------- #}
+  {% if booking_requests %}
+    <div class="card shadow-sm">
+      <div class="card-header bg-white">
+        <strong>Pending Booking Requests (awaiting secretary approval)</strong>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th scope="col">Requested Date</th>
+                <th scope="col">Time</th>
+                <th scope="col">Doctor</th>
+                <th scope="col">Submitted</th>
+                <th scope="col">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in booking_requests %}
+                <tr>
+                  <td>{{ r.scheduled_time|localtime|date:"Y-m-d" }}</td>
+                  <td>{{ r.scheduled_time|localtime|time:"H:i" }}</td>
+                  <td>Dr. {{ r.doctor.user.get_full_name|default:r.doctor.user.username }}</td>
+                  <td class="text-muted">
+                    {% if r.submitted_at %}
+                      {{ r.submitted_at|localtime|naturaltime }}
+                    {% else %}—{% endif %}
+                  </td>
+                  <td>
+                    <span class="badge rounded-pill bg-warning text-dark">Pending</span>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}

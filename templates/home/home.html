@@ -1,0 +1,387 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ClinicHub | AI-Powered Healthcare Platform</title>
+
+  <link rel="stylesheet" href="{% static 'css/global/home.css' %}">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+  <!-- Styles (footer + KPI + إخفاء الرسوم) -->
+  <style>
+    .site-footer{border-top:1px solid var(--border, #e5e7eb);background:var(--panel,#fff);padding:16px 0;margin-top:24px}
+    .site-footer .credit{margin:0;text-align:center;color:var(--muted,#64748b);font-weight:600;letter-spacing:.3px}
+    .site-footer .credit .heart-blue{color:#2563eb}
+    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+    /* كانفاس الرسوم (مخفى للحفاظ على التوافق مع سكربتات قديمة) */
+    .metric-chart{display:none}
+    .metric-chart canvas{display:block;width:100%;height:180px}
+
+    /* لوحة مؤشرات بديلة للرسوم */
+    .metric-compact{padding:12px 14px}
+    .kpi-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+    .pill{display:inline-flex;align-items:center;gap:6px;padding:8px 10px;border:1px solid var(--border,#e5e7eb);background:#f8fafc;border-radius:999px}
+    .pill .lbl{color:var(--muted,#64748b);font-size:12px}
+    .range .lbl{display:block;color:var(--muted,#64748b);font-size:12px;margin-bottom:6px}
+    .range .bar{position:relative;height:8px;background:#e5e7eb;border-radius:999px;overflow:hidden}
+    .range .bar i{position:absolute;inset:0 auto 0 0;width:0;background:var(--primary,#2563eb);border-radius:999px;transition:width .8s ease}
+    .metric-card:hover .range .bar i{filter:brightness(1.05)}
+  </style>
+</head>
+<body>
+  <!-- Advanced Medical Navigation -->
+  <header class="medical-nav">
+    <div class="container">
+      <div class="logo">
+        <div class="logo-icon">
+          <i class="fas fa-heartbeat"></i>
+        </div>
+        <span>Clinic<span class="highlight">Hub</span></span>
+      </div>
+
+      <!-- 🔒 زر واحد فقط: Login أو Logout (بدون قائمة منسدلة) -->
+      <div class="user-actions">
+        {% if user.is_authenticated %}
+          <a href="{% url 'accounts:logout' %}" class="medical-btn login-btn">
+            <i class="fas fa-right-from-bracket"></i>
+            <span>Logout</span>
+          </a>
+        {% else %}
+          <a href="{% url 'accounts:patient_login' %}" class="medical-btn login-btn">
+            <i class="fas fa-fingerprint"></i>
+            <span>Secure Login</span>
+          </a>
+        {% endif %}
+      </div>
+    </div>
+  </header>
+
+  <!-- Medical Hero Section -->
+  <section class="medical-hero">
+    <div class="container">
+      <div class="hero-content">
+        <div class="hero-text">
+          <h1 class="hero-title">
+            <span class="title-gradient">Intelligent Healthcare</span>
+            <span class="typing-text"></span>
+          </h1>
+          <p class="hero-subtitle">AI-powered diagnostics and patient management for modern medicine</p>
+
+          <div class="medical-stats">
+            <div class="stat-card">
+              <div class="stat-icon">
+                <i class="fas fa-user-injured"></i>
+              </div>
+              <div class="stat-info">
+                <span class="stat-number" data-count="5240">0</span>
+                <span>Patients Managed</span>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon">
+                <i class="fas fa-stethoscope"></i>
+              </div>
+              <div class="stat-info">
+                <span class="stat-number" data-count="127">0</span>
+                <span>Medical Professionals</span>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon">
+                <i class="fas fa-clinic-medical"></i>
+              </div>
+              <div class="stat-info">
+                <span class="stat-number" data-count="18">0</span>
+                <span>Connected Clinics</span>
+              </div>
+            </div>
+          </div>
+
+          {% if user.is_authenticated %}
+            <div class="quick-actions">
+              <a href="{% url 'patient:create_patient' %}" class="medical-action">
+                <div class="action-icon">
+                  <i class="fas fa-user-plus"></i>
+                </div>
+                <span>New Patient</span>
+              </a>
+              <a href="{% url 'appointments:create_appointment' %}" class="medical-action">
+                <div class="action-icon">
+                  <i class="fas fa-calendar-check"></i>
+                </div>
+                <span>Book Appointment</span>
+              </a>
+              <a href="{% url 'prescription:new_prescription' %}" class="medical-action">
+                <div class="action-icon">
+                  <i class="fas fa-file-prescription"></i>
+                </div>
+                <span>New Prescription</span>
+              </a>
+            </div>
+          {% else %}
+            <div class="cta-buttons">
+              <a href="{% url 'accounts:patient_login' %}" class="medical-btn primary">
+                <i class="fas fa-brain"></i>
+                <span>AI-Powered Login</span>
+              </a>
+              <a href="#" class="medical-btn secondary">
+                <i class="fas fa-video"></i>
+                <span>Virtual Tour</span>
+              </a>
+            </div>
+          {% endif %}
+        </div>
+
+        <div class="hero-visualization">
+          <div class="medical-illustration">
+            <div class="organ heart active">
+              <i class="fas fa-heart"></i>
+            </div>
+            <div class="organ brain">
+              <i class="fas fa-brain"></i>
+            </div>
+            <div class="organ lung">
+              <i class="fas fa-lungs"></i>
+            </div>
+            <div class="data-points">
+              <div class="data-point" style="top: 20%; left: 25%;"></div>
+              <div class="data-point" style="top: 40%; left: 60%;"></div>
+              <div class="data-point" style="top: 70%; left: 35%;"></div>
+              <div class="data-point" style="top: 50%; left: 15%;"></div>
+            </div>
+            <div class="wave-animation"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- AI Health Assistant -->
+  <section class="ai-assistant">
+    <div class="container">
+      <div class="ai-container">
+        <div class="ai-header">
+          <h2 class="section-title">AI Diagnostic <span class="highlight">Assistant</span></h2>
+          <p class="section-subtitle">Experience our neural network in action</p>
+        </div>
+
+        <div class="ai-content">
+          <div class="ai-stats">
+            <div class="stat">
+              <div class="stat-value">97.3%</div>
+              <div class="stat-label">Diagnostic Accuracy</div>
+            </div>
+            <div class="stat">
+              <div class="stat-value">300+</div>
+              <div class="stat-label">Conditions Recognized</div>
+            </div>
+            <div class="stat">
+              <div class="stat-value">24ms</div>
+              <div class="stat-label">Average Analysis Time</div>
+            </div>
+          </div>
+
+          <div class="ai-demo">
+            <div class="ai-process">
+              <div class="process-step active">
+                <div class="step-icon">1</div>
+                <p>Input Symptoms</p>
+              </div>
+              <div class="process-step">
+                <div class="step-icon">2</div>
+                <p>Pattern Recognition</p>
+              </div>
+              <div class="process-step">
+                <div class="step-icon">3</div>
+                <p>Differential Analysis</p>
+              </div>
+              <div class="process-step">
+                <div class="step-icon">4</div>
+                <p>Treatment Plan</p>
+              </div>
+            </div>
+
+            <div class="ai-chart">
+              <div class="chart-bars">
+                <div class="bar" style="height: 70%; background: var(--medical-primary);">
+                  <span>Cardiology</span>
+                </div>
+                <div class="bar" style="height: 85%; background: var(--medical-secondary);">
+                  <span>Neurology</span>
+                </div>
+                <div class="bar" style="height: 60%; background: var(--medical-accent);">
+                  <span>Pulmonology</span>
+                </div>
+                <div class="bar" style="height: 75%; background: var(--medical-primary);">
+                  <span>Endocrinology</span>
+                </div>
+              </div>
+              <div class="chart-label">AI Diagnostic Accuracy by Specialty</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Health Monitoring -->
+  <section class="health-monitoring">
+    <div class="container">
+      <div class="monitoring-header">
+        <h2 class="section-title">Real-time Health <span class="highlight">Monitoring</span></h2>
+        <p class="section-subtitle">Continuous patient data tracking and analysis</p>
+      </div>
+
+      <div class="monitoring-grid">
+        <div class="metric-card">
+          <div class="metric-header">
+            <i class="fas fa-heartbeat"></i>
+            <h3>Cardiac Health</h3>
+          </div>
+
+          <!-- كانفاس مخفي + لوحة مؤشرات -->
+          <div class="metric-chart" aria-hidden="true">
+            <canvas id="heartRateChart" height="180"></canvas>
+          </div>
+          <div class="metric-compact" role="group" aria-label="Cardiac summary">
+            <div class="kpi-row">
+              <div class="pill"><span class="lbl">Last</span><strong>72</strong></div>
+              <div class="pill"><span class="lbl">Min</span><strong>68</strong></div>
+              <div class="pill"><span class="lbl">Max</span><strong>76</strong></div>
+            </div>
+            <div class="range">
+              <span class="lbl">Target (60–100 BPM)</span>
+              <div class="bar" role="progressbar" aria-valuemin="60" aria-valuemax="100" aria-valuenow="72">
+                <i data-w="30%"></i> <!-- (72-60)/40 = 30% -->
+              </div>
+            </div>
+          </div>
+
+          <div class="metric-summary">
+            <div class="summary-item">
+              <span>Avg. BPM</span>
+              <span class="value">72</span>
+            </div>
+            <div class="summary-item">
+              <span>Variability</span>
+              <span class="value">12ms</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-header">
+            <i class="fas fa-lungs"></i>
+            <h3>Respiratory</h3>
+          </div>
+
+          <div class="metric-chart" aria-hidden="true">
+            <canvas id="respiratoryChart" height="180"></canvas>
+          </div>
+          <div class="metric-compact" role="group" aria-label="Respiratory summary">
+            <div class="kpi-row">
+              <div class="pill"><span class="lbl">Last</span><strong>98%</strong></div>
+              <div class="pill"><span class="lbl">Min</span><strong>96%</strong></div>
+              <div class="pill"><span class="lbl">Max</span><strong>99%</strong></div>
+            </div>
+            <div class="range">
+              <span class="lbl">Target (95–100%)</span>
+              <div class="bar" role="progressbar" aria-valuemin="95" aria-valuemax="100" aria-valuenow="98">
+                <i data-w="60%"></i> <!-- (98-95)/5 = 60% -->
+              </div>
+            </div>
+          </div>
+
+          <div class="metric-summary">
+            <div class="summary-item">
+              <span>O2 Saturation</span>
+              <span class="value">98%</span>
+            </div>
+            <div class="summary-item">
+              <span>Rate</span>
+              <span class="value">16/min</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-header">
+            <i class="fas fa-brain"></i>
+            <h3>Neurological</h3>
+          </div>
+
+          <div class="metric-chart" aria-hidden="true">
+            <canvas id="neuroChart" height="180"></canvas>
+          </div>
+          <div class="metric-compact" role="group" aria-label="Neurological summary">
+            <div class="kpi-row">
+              <div class="pill"><span class="lbl">Activity</span><strong>Normal</strong></div>
+              <div class="pill"><span class="lbl">Patterns</span><strong>Stable</strong></div>
+            </div>
+            <div class="range">
+              <span class="lbl">Stability Index</span>
+              <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="82">
+                <i data-w="82%"></i>
+              </div>
+            </div>
+          </div>
+
+          <div class="metric-summary">
+            <div class="summary-item">
+              <span>Activity</span>
+              <span class="value">Normal</span>
+            </div>
+            <div class="summary-item">
+              <span>Patterns</span>
+              <span class="value">Stable</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="container">
+      <p class="credit">
+        &copy; <span id="year-range" data-start="2025"></span> ClinicHub. All rights reserved — designed by Hawraa with
+        <i class="fa-solid fa-heart heart-blue" aria-hidden="true"></i>
+        <span class="sr-only">love</span>
+      </p>
+    </div>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="{% static 'js/home.js' %}?v=1"></script>
+  <script>
+    // Year range auto-update: 2025–current (or single year if equal)
+    (function(){
+      var el = document.getElementById('year-range');
+      if(!el) return;
+      var start = parseInt(el.getAttribute('data-start'), 10) || new Date().getFullYear();
+      var now = new Date().getFullYear();
+      el.textContent = (start >= now) ? String(now) : (start + '–' + now);
+    })();
+
+    // حرّك أشرطة الـKPI عند ظهورها
+    (function(){
+      var bars = document.querySelectorAll('.range .bar i[data-w]');
+      if(!bars.length) return;
+      var apply = function(i){ i.style.width = i.getAttribute('data-w') || '0%'; };
+      if('IntersectionObserver' in window){
+        var io = new IntersectionObserver(function(es){
+          es.forEach(function(e){ if(e.isIntersecting){ apply(e.target); io.unobserve(e.target); } });
+        }, {threshold:.4});
+        bars.forEach(function(i){ io.observe(i); });
+      } else { bars.forEach(apply); }
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,186 @@
+/* --------------------------------------------------
+   ClinicHub Custom Styles & Enhancements
+   -------------------------------------------------- */
+
+/* Navbar */
+.app-navbar {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  height: var(--app-nav-height);
+  transition: var(--transition);
+}
+
+.navbar-brand .brand-text {
+  font-size: 1.5rem;
+  letter-spacing: 0.5px;
+}
+
+.nav-link {
+  position: relative;
+  padding: 0.5rem 1rem !important;
+  margin: 0 0.25rem;
+  border-radius: 6px;
+  transition: var(--transition);
+  font-weight: 500;
+}
+
+.nav-link:not(.btn-nav):not(.btn-register):not(.btn-admin):hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.nav-link i {
+  transition: var(--transition);
+}
+
+.nav-link:hover i {
+  transform: translateY(-2px);
+}
+
+.btn-nav {
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.btn-nav:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: translateY(-2px);
+}
+
+.btn-register {
+  background: var(--secondary);
+  border-radius: 6px;
+  padding: 0.5rem 1rem !important;
+}
+
+.btn-register:hover {
+  background: #2c9c96;
+  transform: translateY(-2px);
+}
+
+.btn-admin {
+  background: var(--warning);
+  color: #000 !important;
+  border-radius: 6px;
+  padding: 0.5rem 1rem !important;
+}
+
+.btn-admin:hover {
+  background: #e0a800;
+  transform: translateY(-2px);
+}
+
+/* Theme Toggle */
+.theme-toggle .btn-toggle-theme {
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 30px;
+  width: 50px;
+  height: 26px;
+  position: relative;
+  padding: 0;
+}
+
+.theme-toggle .btn-toggle-theme i {
+  position: absolute;
+  top: 3px;
+  font-size: 0.8rem;
+  transition: var(--transition);
+}
+
+.theme-toggle .btn-toggle-theme .fa-sun {
+  left: 5px;
+  color: #ffc107;
+}
+
+.theme-toggle .btn-toggle-theme .fa-moon {
+  right: 5px;
+  color: #f8f9fa;
+  opacity: 0.7;
+}
+
+/* Toast enhancements */
+.toast {
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.toast-icon {
+  background: rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+}
+
+/* Footer */
+.site-footer {
+  background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 100%);
+  color: #fff;
+  padding: 2rem 0;
+}
+
+.footer-brand {
+  font-size: 1.8rem;
+  font-weight: 700;
+}
+
+.footer-links a {
+  text-decoration: none;
+  position: relative;
+  padding: 0.25rem 0;
+  transition: var(--transition);
+}
+
+.footer-links a:hover {
+  color: var(--accent) !important;
+}
+
+.footer-links a::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background: var(--accent);
+  transition: var(--transition);
+}
+
+.footer-links a:hover::after {
+  width: 100%;
+}
+
+.social-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  margin: 0 0.5rem;
+  color: white;
+  transition: var(--transition);
+}
+
+.social-icon:hover {
+  background: var(--secondary);
+  transform: translateY(-3px);
+}
+
+/* Dark mode support */
+[data-bs-theme="dark"] body {
+  background: #121212;
+  color: #e0e0e0;
+}
+
+[data-bs-theme="dark"] .main-content {
+  background: #1e1e1e;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+[data-bs-theme="dark"] .navbar {
+  background: linear-gradient(135deg, #1a535c 0%, #0d3b45 100%);
+}
+
+[data-bs-theme="dark"] .site-footer {
+  background: linear-gradient(135deg, #0d3b45 0%, #1a535c 100%);
+}

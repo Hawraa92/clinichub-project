@@ -1,0 +1,294 @@
+/* ===== BASE STYLES ===== */
+:root {
+  --primary: #4361ee;
+  --primary-dark: #3a0ca3;
+  --secondary: #4cc9f0;
+  --success: #2ec4b6;
+  --danger: #e71d36;
+  --warning: #ff9f1c;
+  --dark: #2b2d42;
+  --light: #f8f9fa;
+  --gray: #8d99ae;
+  --border: #e9ecef;
+  --card-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+  --focus-shadow: 0 0 0 3px rgba(67, 97, 238, 0.2);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #f5f7fb;
+  color: var(--dark);
+  line-height: 1.6;
+}
+
+/* ===== PATIENT REGISTRATION CONTAINER ===== */
+.patient-registration-container {
+  max-width: 1200px;
+  margin: 2rem auto;
+  padding: 0 1.5rem;
+}
+
+/* ===== HEADER STYLES ===== */
+.registration-header {
+  text-align: center;
+  margin-bottom: 2.5rem;
+  position: relative;
+}
+
+.header-icon {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 1.5rem;
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 20px rgba(67, 97, 238, 0.3);
+}
+.header-icon i { font-size: 2.5rem; color: #fff; }
+
+.icon-pulse {
+  position: absolute;
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  background: var(--primary);
+  opacity: 0.7;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); opacity: 0.7; }
+  50% { transform: scale(1.1); opacity: 0.4; }
+  100% { transform: scale(1); opacity: 0.7; }
+}
+
+.registration-header h1 {
+  font-size: 2.5rem; font-weight: 700; color: var(--dark); margin-bottom: 0.5rem;
+}
+.registration-header p {
+  font-size: 1.1rem; color: var(--gray); max-width: 600px; margin: 0 auto;
+}
+
+/* ===== REGISTRATION CARD ===== */
+.registration-card {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: var(--card-shadow);
+  overflow: hidden;
+}
+
+.form-intro {
+  display: flex; align-items: center;
+  padding: 1.5rem 2rem;
+  background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+  border-bottom: 1px solid var(--border);
+}
+.intro-icon {
+  width: 50px; height: 50px;
+  background: var(--primary);
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  margin-right: 1rem;
+}
+.intro-icon i { color: #fff; font-size: 1.5rem; }
+.form-intro h3 { font-size: 1.5rem; font-weight: 600; color: var(--dark); margin-bottom: 0.25rem; }
+.form-intro p { color: var(--gray); font-size: 0.95rem; }
+
+/* ===== FORM STYLES ===== */
+#patient-form { padding: 2rem; }
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.form-group { position: relative; }
+.form-label {
+  display: block; margin-bottom: 0.75rem;
+  font-weight: 500; color: var(--dark); font-size: 0.95rem;
+}
+.required-asterisk { color: var(--danger); margin-left: 4px; }
+
+.input-container { position: relative; }
+.input-with-icon { position: relative; }
+
+.input-with-icon input,
+.input-with-icon select,
+.input-with-icon textarea {
+  width: 100%;
+  padding: 0.9rem 1rem 0.9rem 3rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 1rem;
+  color: var(--dark);
+  background-color: #fff;
+  transition: all 0.3s ease;
+}
+
+.input-with-icon input:focus,
+.input-with-icon select:focus,
+.input-with-icon textarea:focus {
+  border-color: var(--primary);
+  box-shadow: var(--focus-shadow);
+  outline: none;
+}
+
+.input-icon {
+  position: absolute;
+  left: 1rem; top: 50%;
+  transform: translateY(-50%);
+  color: var(--gray);
+  font-size: 1rem;
+  transition: color 0.3s ease;
+}
+
+/* Focused field styling */
+.form-group.focused .form-label {
+  color: var(--primary);
+}
+
+.form-group.focused .input-icon {
+  color: var(--primary);
+}
+
+/* لون الأيقونة عند التركيز — يشمل textarea */
+.input-with-icon input:focus + .input-icon,
+.input-with-icon select:focus + .input-icon,
+.input-with-icon textarea:focus + .input-icon {
+  color: var(--primary);
+}
+
+.date-today-btn {
+  position: absolute;
+  right: 0.5rem; top: 50%;
+  transform: translateY(-50%);
+  background: #f0f5ff;
+  color: var(--primary);
+  border: none;
+  padding: 0.25rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+.date-today-btn:hover { background: var(--primary); color: #fff; }
+
+.form-tip {
+  font-size: 0.85rem; color: var(--gray);
+  margin-top: 0.5rem; font-style: italic;
+}
+.form-error {
+  color: var(--danger);
+  font-size: 0.85rem;
+  margin-top: 0.5rem;
+  display: flex; align-items: center;
+}
+.form-error i { margin-right: 0.5rem; }
+
+/* ===== FORM ACTIONS ===== */
+.form-actions {
+  display: flex; justify-content: flex-end; gap: 1rem;
+  margin-top: 1.5rem; padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.submit-btn {
+  padding: 0.9rem 1.8rem;
+  border-radius: 10px;
+  font-weight: 600; font-size: 1rem;
+  display: inline-flex; align-items: center;
+  border: none; cursor: pointer;
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  color: #fff;
+  box-shadow: 0 4px 15px rgba(67, 97, 238, 0.3);
+  transition: all 0.3s ease;
+}
+.submit-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(67, 97, 238, 0.4);
+}
+.submit-btn i { margin-right: 0.75rem; }
+
+/* زر الرجوع الموجود في القالب */
+.btn-cancel {
+  padding: 0.9rem 1.2rem;
+  border-radius: 10px;
+  font-weight: 600; font-size: 1rem;
+  display: inline-flex; align-items: center; gap: .5rem;
+  text-decoration: none;
+  background: #f8f9fa; color: var(--dark);
+  border: 1px solid var(--border);
+  transition: all 0.3s ease;
+}
+.btn-cancel:hover { background: #e9ecef; }
+
+/* Disabled button state */
+button:disabled, button[disabled] {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* ===== ACCESS DENIED STYLES ===== */
+.access-denied {
+  text-align: center;
+  max-width: 500px;
+  margin: 5rem auto;
+  padding: 2rem;
+}
+.denied-icon {
+  position: relative;
+  width: 100px; height: 100px;
+  margin: 0 auto 2rem;
+  background: #f8f9fa;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  border: 3px solid #e9ecef;
+}
+.denied-icon i { font-size: 3rem; color: var(--danger); }
+.lock-animation {
+  position: absolute; width: 100%; height: 100%;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  border-top-color: var(--danger);
+  animation: spinLock 1.5s linear infinite;
+}
+@keyframes spinLock { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+.access-denied h2 { font-size: 2rem; color: var(--dark); margin-bottom: 1rem; }
+.access-denied p { font-size: 1.1rem; color: var(--gray); margin-bottom: 2rem; }
+.home-link {
+  display: inline-flex; align-items: center;
+  color: var(--primary); font-weight: 600;
+  text-decoration: none; transition: all 0.3s ease;
+}
+.home-link i { margin-right: 0.5rem; transition: transform 0.3s ease; }
+.home-link:hover { color: var(--primary-dark); }
+.home-link:hover i { transform: translateX(-5px); }
+
+/* ===== RTL support ===== */
+[dir="rtl"] .input-icon { right: 1rem; left: auto; }
+[dir="rtl"] .input-with-icon input,
+[dir="rtl"] .input-with-icon select,
+[dir="rtl"] .input-with-icon textarea { padding: 0.9rem 3rem 0.9rem 1rem; }
+[dir="rtl"] .home-link:hover i { transform: translateX(5px); }
+
+/* ===== Reduced motion ===== */
+@media (prefers-reduced-motion: reduce) {
+  .icon-pulse, .lock-animation, .home-link i { animation: none !important; }
+  .submit-btn:hover { transform: none; }
+}
+
+/* ===== RESPONSIVE STYLES ===== */
+@media (max-width: 768px) {
+  .form-grid { grid-template-columns: 1fr; }
+  .form-actions { flex-direction: column; }
+  .submit-btn, .btn-cancel { width: 100%; justify-content: center; }
+  .registration-header h1 { font-size: 2rem; }
+}
