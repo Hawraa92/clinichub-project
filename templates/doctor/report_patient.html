@@ -1,198 +1,406 @@
+{# File: doctor/templates/doctor/report_patient.html #}
 {% extends "base.html" %}
 {% load static i18n %}
+
+{% block title %}{% trans "Patient Report" %}{% endblock %}
 
 {% block extra_head %}
   <link rel="stylesheet" href="{% static 'css/doctor/report_patient.css' %}">
   <link rel="stylesheet"
         href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
-        integrity="sha512-BMOnRcQhFzUu4..." crossorigin="anonymous" referrerpolicy="no-referrer">
+        crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  {# ✅ html2pdf (Front-end PDF) #}
+  <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
 {% endblock %}
 
 {% block content %}
-<div class="rp2" role="main">
+{% with df=date_from|default:"" dt=date_to|default:"" latest_visit=archives|first latest_rx=prescriptions|first %}
 
-  <!-- Toolbar -->
+{# اختر دكتور مناسب: doctor من الـ view أو دكتور آخر زيارة أو آخر وصفة #}
+{% firstof doctor latest_visit.doctor latest_rx.doctor "" as docobj %}
+
+{# اسم الدكتور للعرض (سلسلة fallback) #}
+{% firstof docobj.user.get_full_name docobj.full_name docobj.user.username request.user.get_full_name request.user.username "—" as doctor_display %}
+
+{# تاريخ آخر زيارة (مرن) #}
+{% firstof latest_visit.created_at latest_visit.created_on latest_visit.date latest_visit.created "" as last_visit_dt %}
+
+{# ✅ report id string (for file name) - FIXED (بدون add غلط) #}
+{% with report_id="MED-"|add:patient.id|slugify %}
+
+<div id="rp2-report" class="rp2" role="main" data-report-id="{{ report_id }}">
+
+  <!-- Toolbar -->
   <div class="rp2-toolbar no-print" aria-label="Export / Print">
-    <button class="btn btn-print" onclick="window.print()"
-            aria-label="{% trans 'Print report' %}">
-      <i class="fa-solid fa-print"></i><span>{% trans 'Print' %}</span>
+    <button class="btn btn-print" type="button" onclick="window.print()" aria-label="{% trans 'Print report' %}">
+      <i class="fa-solid fa-print"></i><span>{% trans "Print" %}</span>
     </button>
-    <a class="btn btn-pdf" aria-label="PDF"
-       href="{% url 'doctor:report_pdf' patient.id %}?date_from={{ date_from }}&date_to={{ date_to }}">
-       <i class="fa-regular fa-file-pdf"></i><span>PDF</span></a>
+
+    <button id="rp2PdfBtn" class="btn btn-pdf" type="button" aria-label="PDF">
+      <i class="fa-regular fa-file-pdf"></i><span>PDF</span>
+    </button>
+
     <a class="btn btn-csv" aria-label="CSV"
-       href="{% url 'doctor:report_csv' patient.id %}?date_from={{ date_from }}&date_to={{ date_to }}">
-       <i class="fa-regular fa-file-csv"></i><span>CSV</span></a>
+       href="{% url 'doctor:report_csv' patient.id %}{% if df or dt %}?{% if df %}date_from={{ df|urlencode }}{% endif %}{% if df and dt %}&{% endif %}{% if dt %}date_to={{ dt|urlencode }}{% endif %}{% endif %}">
+      <i class="fa-regular fa-file-csv"></i><span>CSV</span>
+    </a>
   </div>
 
-  <!-- Hero -->
+  <!-- Header -->
   <section class="rp2-hero">
     <div class="hero-left">
       <img class="hero-logo" src="{% static 'img/clinic_logo.png' %}" alt="{% trans 'Clinic logo' %}">
-      <h1>{% trans 'Patient Medical Dossier' %}</h1>
-      <p class="clinic">{% trans 'International Medical Center · JCI Accredited' %}</p>
+      <div>
+        <h1>{% trans "Patient Report" %}</h1>
+        <p class="clinic">
+          <strong>{{ patient.full_name }}</strong>
+          {% if patient.mrn %} · {% trans "MRN" %} {{ patient.mrn }}{% endif %}
+        </p>
+      </div>
     </div>
+
     <div class="hero-right">
-      <div class="meta-line">{% trans 'Report ID' %} <span>MED‑{{ patient.id|stringformat:"06d" }}</span></div>
-      <div class="meta-line">{% trans 'Generated' %} <span>{{ now|date:"d M Y H:i" }} UTC</span></div>
+      <div class="meta-line">
+        {% trans "Report ID" %} <span>{{ report_id }}</span>
+      </div>
+
+      <div class="meta-line">
+        {% trans "Generated" %}: <span>{% now "Y-m-d H:i" %}</span>
+      </div>
+
+      <div class="meta-line">
+        {% trans "Period" %}:
+        <span>
+          {% if df or dt %}
+            {{ df|default:"—" }} → {{ dt|default:"—" }}
+          {% else %}
+            {% trans "All records" %}
+          {% endif %}
+        </span>
+      </div>
+
+      <div class="meta-line">
+        {% trans "Doctor" %}: <span>{{ doctor_display }}</span>
+      </div>
     </div>
-    <span class="hero-shape"></span>
+
+    <span class="hero-shape" aria-hidden="true"></span>
   </section>
 
-  <!-- Mini‑nav -->
-  <nav class="rp2-nav no-print">
-    <a href="#summary">{% trans 'Summary' %}</a>
-    <a href="#demo">{% trans 'Demographics' %}</a>
-    <a href="#clinical">{% trans 'Clinical' %}</a>
-    <a href="#vitals">{% trans 'Vitals & Labs' %}</a>
-    <a href="#history">{% trans 'History' %}</a>
-    <a href="#rx">{% trans 'Prescriptions' %}</a>
-    <a href="#sign">{% trans 'Sign' %}</a>
+  <!-- Quick links -->
+  <nav class="rp2-nav no-print" aria-label="{% trans 'Quick links' %}">
+    <a href="#summary">{% trans "Summary" %}</a>
+    <a href="#demo">{% trans "Demographics" %}</a>
+    <a href="#clinical">{% trans "Clinical" %}</a>
+    <a href="#vitals">{% trans "Vitals & Labs" %}</a>
+    <a href="#history">{% trans "Visits" %}</a>
+    <a href="#rx">{% trans "Prescriptions" %}</a>
+    <a href="#sign">{% trans "Sign" %}</a>
   </nav>
 
-  <!-- Executive snapshot -->
-  <section id="summary" class="section">
-    <h2 class="sec-title pastel-blue">{% trans 'Executive Snapshot' %}</h2>
+  <!-- Summary -->
+  <section class="section" id="summary">
+    <h2 class="sec-title pastel-blue">{% trans "Summary" %}</h2>
+
     <div class="cards-row">
       <div class="stat-card pastel-blue">
-        <span class="stat-label">{% trans 'Primary Dx' %}</span>
-        <span class="stat-value">{{ primary_diagnosis.code|default:"—" }}</span>
+        <span class="stat-label">{% trans "Primary Dx" %}</span>
+        <span class="stat-value">
+          {% firstof primary_diagnosis.code primary_diagnosis latest_rx.diagnosis latest_visit.diagnosis latest_visit.primary_diagnosis latest_visit.final_diagnosis "—" %}
+        </span>
       </div>
+
       <div class="stat-card pastel-green">
-        <span class="stat-label">{% trans 'Active Meds' %}</span>
+        <span class="stat-label">{% trans "Prescriptions" %}</span>
         <span class="stat-value">{{ prescriptions|length }}</span>
       </div>
+
       <div class="stat-card pastel-lav">
-        <span class="stat-label">{% trans 'Visits (period)' %}</span>
+        <span class="stat-label">{% trans "Visits" %}</span>
         <span class="stat-value">{{ archives|length }}</span>
       </div>
+
       <div class="stat-card pastel-peach">
-        <span class="stat-label">{% trans 'Doctor' %}</span>
-        <span class="stat-value">{{ doctor.user.get_full_name }}</span>
+        <span class="stat-label">{% trans "Last Visit" %}</span>
+        <span class="stat-value">
+          {% if last_visit_dt %}{{ last_visit_dt|date:"Y-m-d" }}{% else %}—{% endif %}
+        </span>
       </div>
     </div>
   </section>
 
-  <!-- Demographics -->
-  <section id="demo" class="section">
+  <!-- Demographics -->
+  <section class="section" id="demo">
     <div class="sec-head">
-      <h2 class="sec-title pastel-green">{% trans 'Patient Demographics' %}</h2>
-      <span class="badge">MRN {{ patient.mrn }}</span>
+      <h2 class="sec-title pastel-green">{% trans "Demographics" %}</h2>
+      <span class="badge">
+        {% trans "DOB" %}: {{ patient.date_of_birth|default:"—" }}
+        · {% trans "Age" %}: {{ patient.age|default:"—" }}
+      </span>
     </div>
+
     <div class="info-grid">
-      <div><label>{% trans 'Full Name' %}</label><p>{{ patient.full_name }}</p></div>
-      <div><label>{% trans 'DOB' %}</label><p>{{ patient.date_of_birth }} ({% trans 'Age' %}: {{ patient.age }})</p></div>
-      <div><label>{% trans 'Gender' %}</label><p>{{ patient.get_gender_display }}</p></div>
-      <div><label>{% trans 'Contact' %}</label><p>{{ patient.phone|default:"—" }} | {{ patient.email|default:"—" }}</p></div>
-      <div><label>{% trans 'Nationality' %}</label><p>{{ patient.nationality|default:"—" }}</p></div>
-      <div><label>{% trans 'Blood Type' %}</label><p>{{ patient.blood_type|default:"—" }}</p></div>
+      <div><label>{% trans "Gender" %}</label><p>{{ patient.get_gender_display|default:"—" }}</p></div>
+      <div><label>{% trans "Phone" %}</label><p>{{ patient.phone|default:"—" }}</p></div>
+      <div><label>{% trans "Email" %}</label><p>{{ patient.email|default:"—" }}</p></div>
+      <div><label>{% trans "Nationality" %}</label><p>{{ patient.nationality|default:"—" }}</p></div>
+      <div><label>{% trans "Blood Type" %}</label><p>{{ patient.blood_type|default:"—" }}</p></div>
     </div>
   </section>
 
-  <!-- Clinical -->
-  <section id="clinical" class="section">
-    <h2 class="sec-title pastel-lav">{% trans 'Clinical Summary' %}</h2>
+  <!-- Clinical -->
+  <section class="section" id="clinical">
+    <h2 class="sec-title pastel-lav">{% trans "Clinical" %}</h2>
+
     <div class="three-grid">
       <div class="clip-card border-lav">
-        <h3>{% trans 'Primary Diagnosis' %}</h3>
-        <p>{% firstof primary_diagnosis.name "—" %}</p>
+        <h3>{% trans "Primary Diagnosis" %}</h3>
+        <p>
+          {% firstof primary_diagnosis.name primary_diagnosis latest_rx.diagnosis latest_visit.diagnosis latest_visit.primary_diagnosis latest_visit.final_diagnosis "—" %}
+        </p>
       </div>
+
       <div class="clip-card border-blue">
-        <h3>{% trans 'Allergies' %}</h3>
+        <h3>{% trans "Allergies" %}</h3>
         <p>{{ patient.allergies|default:_("No known allergies") }}</p>
       </div>
+
       <div class="clip-card border-green">
-        <h3>{% trans 'Chronic Conditions' %}</h3>
+        <h3>{% trans "Chronic Conditions" %}</h3>
         <ul>
-          {% for cond in chronic_conditions %}<li>{{ cond }}</li>{% empty %}<li>{% trans 'None reported' %}</li>{% endfor %}
+          {% for cond in chronic_conditions %}
+            <li>{{ cond }}</li>
+          {% empty %}
+            <li>{% trans "None reported" %}</li>
+          {% endfor %}
         </ul>
       </div>
     </div>
   </section>
 
-  <!-- Vitals & Labs -->
-  <section id="vitals" class="section">
-    <h2 class="sec-title pastel-yellow">{% trans 'Vitals & Labs' %}</h2>
+  <!-- Vitals & Labs -->
+  <section class="section" id="vitals">
+    <h2 class="sec-title pastel-yellow">{% trans "Vitals & Labs" %}</h2>
 
-    <div class="vitals-grid">
-      <div class="vital-card"><span class="vital-label">BP</span><span class="vital-val">{{ last_vitals.bp_systolic }}/{{ last_vitals.bp_diastolic }} mmHg</span></div>
-      <div class="vital-card"><span class="vital-label">Pulse</span><span class="vital-val">{{ last_vitals.pulse }} bpm</span></div>
-      <div class="vital-card"><span class="vital-label">Temp</span><span class="vital-val">{{ last_vitals.temp_c }} °C ({{ last_vitals.temp_f }} °F)</span></div>
-      <div class="vital-card"><span class="vital-label">SpO₂</span><span class="vital-val">{{ last_vitals.spo2 }} %</span></div>
-    </div>
+    {% if last_vitals %}
+      <div class="vitals-grid">
+        <div class="vital-card">
+          <span class="vital-label">BP</span>
+          <span class="vital-val">
+            {% firstof last_vitals.bp_systolic "—" %}/{% firstof last_vitals.bp_diastolic "—" %} mmHg
+          </span>
+        </div>
+
+        <div class="vital-card">
+          <span class="vital-label">{% trans "Pulse" %}</span>
+          <span class="vital-val">{% firstof last_vitals.pulse "—" %} bpm</span>
+        </div>
+
+        <div class="vital-card">
+          <span class="vital-label">{% trans "Temp" %}</span>
+          <span class="vital-val">{% firstof last_vitals.temp_c "—" %} °C</span>
+        </div>
+
+        <div class="vital-card">
+          <span class="vital-label">SpO₂</span>
+          <span class="vital-val">{% firstof last_vitals.spo2 "—" %} %</span>
+        </div>
+      </div>
+    {% else %}
+      <p class="no-data">{% trans "No vitals recorded in this period." %}</p>
+    {% endif %}
 
     <div class="table-responsive">
       <table class="labs-table">
         <thead>
           <tr>
-            <th>{% trans 'Test (LOINC)' %}</th><th>{% trans 'Result' %}</th>
-            <th>{% trans 'Units' %}</th><th>{% trans 'Date' %}</th>
+            <th>{% trans "Test" %}</th>
+            <th>{% trans "Result" %}</th>
+            <th>{% trans "Units" %}</th>
+            <th>{% trans "Date" %}</th>
           </tr>
         </thead>
         <tbody>
           {% for lab in recent_labs %}
-            <tr><td>{{ lab.test_name }} <small>{{ lab.loinc }}</small></td><td>{{ lab.value }}</td><td>{{ lab.units }}</td><td>{{ lab.date|date:'d M Y' }}</td></tr>
+            <tr>
+              <td>{{ lab.test_name|default:"—" }}{% if lab.loinc %} <small>{{ lab.loinc }}</small>{% endif %}</td>
+              <td>{{ lab.value|default:"—" }}</td>
+              <td>{{ lab.units|default:"—" }}</td>
+              <td>{% if lab.date %}{{ lab.date|date:"Y-m-d" }}{% else %}—{% endif %}</td>
+            </tr>
           {% empty %}
-            <tr><td colspan="4" class="no-data">{% trans 'No recent labs' %}</td></tr>
+            <tr><td colspan="4" class="no-data">{% trans "No labs in this period." %}</td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
   </section>
 
-  <!-- History -->
-  <section id="history" class="section">
-    <h2 class="sec-title pastel-peach">{% trans 'Medical History' %}</h2>
-    <div class="timeline">
-      {% for a in archives %}
-        <div class="tl-row">
-          <div class="tl-time">{{ a.created_at|date:"d M Y" }}</div>
-          <div class="tl-dot"></div>
-          <div class="tl-card">
-            <p><strong>{% trans 'Diagnosis' %}:</strong> {{ a.diagnosis|default:"—" }}</p>
-            <p><strong>{% trans 'Notes' %}:</strong> {{ a.notes|default:"—" }}</p>
-            <p class="tl-doc">{% trans 'Seen by' %}: {{ a.doctor.user.get_full_name }}</p>
-          </div>
-        </div>
-      {% empty %}<p class="no-data">{% trans 'No history in period' %}</p>{% endfor %}
-    </div>
-  </section>
+  <!-- Visits -->
+  <section class="section" id="history">
+    <h2 class="sec-title pastel-peach">{% trans "Visits / Medical History" %}</h2>
 
-  <!-- Prescriptions (table) -->
-  <section id="rx" class="section">
-    <h2 class="sec-title pastel-yellow">{% trans 'Active Prescriptions' %}</h2>
     <div class="table-responsive">
       <table class="table rx-table">
         <thead>
-          <tr><th>{% trans 'Medication (RxNorm)' %}</th><th>{% trans 'Dosage' %}</th>
-              <th>{% trans 'Freq.' %}</th><th>{% trans 'Duration' %}</th><th>{% trans 'Issued' %}</th></tr>
+          <tr>
+            <th>{% trans "Date" %}</th>
+            <th>{% trans "Diagnosis" %}</th>
+            <th>{% trans "Notes" %}</th>
+            <th>{% trans "Doctor" %}</th>
+          </tr>
         </thead>
         <tbody>
-          {% for p in prescriptions %}
+          {% for a in archives %}
+            {% firstof a.created_at a.created_on a.date a.created "" as a_dt %}
+            {% firstof a.diagnosis a.primary_diagnosis a.final_diagnosis a.disease a.condition a.complaint "—" as a_dx %}
+            {% firstof a.notes a.summary a.title a.description "—" as a_notes %}
             <tr>
-              <td>{{ p.medication.name }} <small>{{ p.medication.rxnorm }}</small></td>
-              <td>{{ p.dosage }}</td><td>{{ p.frequency }}</td>
-              <td>{{ p.duration }}</td><td>{{ p.date_issued|date:"d M Y" }}</td>
+              <td>{% if a_dt %}{{ a_dt|date:"Y-m-d" }}{% else %}—{% endif %}</td>
+              <td>{{ a_dx|default:"—" }}</td>
+              <td>{{ a_notes|default:"—"|linebreaksbr }}</td>
+              <td>{% firstof a.doctor.user.get_full_name a.doctor.user.username "—" %}</td>
             </tr>
-          {% empty %}<tr><td colspan="5" class="no-data">{% trans 'No active prescriptions' %}</td></tr>{% endfor %}
+          {% empty %}
+            <tr><td colspan="4" class="no-data">{% trans "No history in this period." %}</td></tr>
+          {% endfor %}
         </tbody>
       </table>
     </div>
   </section>
 
-  <!-- Signature -->
+  <!-- Prescriptions -->
+  <section class="section" id="rx">
+    <h2 class="sec-title pastel-yellow">{% trans "Prescriptions" %}</h2>
+
+    {% for p in prescriptions %}
+      {% firstof p.date_issued p.issued_at p.created_at p.date "" as rx_date %}
+      {% with meds=p.medications.all %}
+
+      <div class="clip-card border-yellow" style="margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;">
+          <div>
+            <h3 style="margin:0;">
+              {% trans "Prescription" %} #{{ p.pk }}
+            </h3>
+            <div class="text-muted small" style="margin-top:4px;">
+              {% trans "Issued" %}: {% if rx_date %}{{ rx_date|date:"Y-m-d" }}{% else %}—{% endif %}
+              · {% trans "Doctor" %}: {% firstof p.doctor_display_name p.doctor.user.get_full_name p.doctor.full_name p.doctor.user.username "—" %}
+              · {% trans "Status" %}: {{ p.get_status_display|default:p.status|default:"—" }}
+            </div>
+          </div>
+
+          <div class="no-print" style="display:flex;gap:8px;align-items:center;">
+            {% if p.pdf_file and p.pdf_file.url %}
+              <a class="btn btn-sm btn-outline-secondary" target="_blank" href="{{ p.pdf_file.url }}">
+                <i class="fa-regular fa-file-pdf"></i> {% trans "Rx PDF" %}
+              </a>
+            {% endif %}
+            {% if p.get_absolute_url %}
+              <a class="btn btn-sm btn-outline-primary" href="{{ p.get_absolute_url }}">
+                <i class="fa-solid fa-up-right-from-square"></i> {% trans "Open" %}
+              </a>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="info-grid" style="margin-top:12px;">
+          <div>
+            <label>{% trans "Diagnosis (Dx)" %}</label>
+            <p>{% firstof p.diagnosis "—" %}</p>
+          </div>
+          <div>
+            <label>{% trans "Instructions" %}</label>
+            <p>{{ p.instructions|default:"—"|linebreaksbr }}</p>
+          </div>
+        </div>
+
+        <div class="table-responsive" style="margin-top:10px;">
+          <table class="table rx-table">
+            <thead>
+              <tr>
+                <th>{% trans "Medication" %}</th>
+                <th>{% trans "Dosage" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for m in meds %}
+                <tr>
+                  <td>{{ m.name|default:"—" }}</td>
+                  <td>{{ m.dosage|default:"—" }}</td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="2" class="no-data">{% trans "No medications in this prescription." %}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {% endwith %}
+    {% empty %}
+      <p class="no-data">{% trans "No prescriptions in this period." %}</p>
+    {% endfor %}
+  </section>
+
+  <!-- Signature -->
   <section id="sign" class="rep-signature">
     <div class="sign-box">
-      <p>{% trans 'Digitally signed by' %}</p>
+      <p>{% trans "Digitally signed by" %}</p>
       <div class="sign-line"></div>
-      <p>Dr.&nbsp;{{ doctor.user.get_full_name }}</p>
-      <p>{{ doctor.specialty }}</p>
-      <p>{% trans 'License' %}: {{ doctor.medical_license|default:"—" }}</p>
+      <p><strong>Dr. {{ doctor_display }}</strong></p>
+      <p>{% firstof docobj.specialty docobj.specialization "—" %}</p>
+      <p>{% trans "License" %}: {% firstof docobj.medical_license docobj.license_number docobj.license "—" %}</p>
     </div>
+
     <div class="disclaimer">
-      {% trans 'This report contains confidential medical information. Unauthorized disclosure is prohibited. Valid only with digital verification seal.' %}
+      {% trans "Confidential medical information. Unauthorized disclosure is prohibited." %}
     </div>
   </section>
 
-</div>
+</div> {# end #rp2-report #}
+
+{# ✅ PDF Script (Front-end) #}
+<script>
+(function () {
+  const btn = document.getElementById('rp2PdfBtn');
+  const report = document.getElementById('rp2-report');
+  if (!btn || !report || !window.html2pdf) return;
+
+  btn.addEventListener('click', async function () {
+    report.classList.add('is-exporting');
+
+    const oldScroll = window.scrollY || 0;
+    window.scrollTo(0, 0);
+
+    const rid = report.dataset.reportId || 'report';
+    const filename = `patient-report-${rid}.pdf`;
+
+    const opt = {
+      margin:       [10, 10, 12, 10],
+      filename:     filename,
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        scrollY: 0
+      },
+      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pagebreak:    { mode: ['css', 'legacy'] }
+    };
+
+    try {
+      await html2pdf().set(opt).from(report).save();
+    } finally {
+      report.classList.remove('is-exporting');
+      window.scrollTo(0, oldScroll);
+    }
+  });
+})();
+</script>
+
+{% endwith %} {# report_id #}
+{% endwith %} {# df/dt/latest_visit/latest_rx #}
 {% endblock %}

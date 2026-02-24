@@ -1,397 +1,1157 @@
-// === Queue Display Enhanced Script (Hardened) ===
-class QueueSystem {
-  constructor() {
-    const cfg = window.APP_CONFIG || {};
-    this.config = {
-      QUEUE_API: cfg.QUEUE_API || '/appointments/queue-number-api/',
-      CALL_NEXT_API: cfg.CALL_NEXT_API || '/appointments/call-next/0/',
-      REFRESH_INTERVAL: cfg.REFRESH_INTERVAL || 15000,
-      NOW_SERVING_INTERVAL: cfg.NOW_SERVING_INTERVAL || 5000,
-    };
-    this.csrfToken = cfg.CSRF_TOKEN || this.getCookie('csrftoken') || '';
+// =======================
+// ClinicHub – Digital Queue (Real Data)
+// - SAFE AUTO MODE
+// - AUTO ANNOUNCE ON CHANGE (works even if secretary calls next from another page)
+// - Announces: current patient + doctor + (next patient) when available
+// - Sound unlock overlay يظهر مرة واحدة فقط (يحفظ في LocalStorage/SessionStorage)
+// File: static/js/appointments/queue_display.js
+// =======================
 
-    this.doctors = [];
-    this.filteredDoctors = [];
-    this.currentServingIndex = 0;
+(function () {
+  "use strict";
 
-    this._fetchController = null;
-    this._rotatorTimer = null;
-    this._refreshTimer = null;
-    this._clockTimer = null;
-    this._duringCall = new Set();
+  // ---------- Global config from Django ----------
+  const CONFIG = window.APP_CONFIG || {};
+  const IS_INTERNAL_USER = Boolean(CONFIG.IS_INTERNAL_USER);
 
-    this.dom = {
-      queueGrid:        document.getElementById('queue-grid'),
-      searchInput:      document.getElementById('search-input'),
-      doctorCount:      document.getElementById('doctor-count'),
-      currentTime:      document.getElementById('current-time'),
-      updateTime:       document.getElementById('update-time'),
-      emptyState:       document.getElementById('empty-state'),
-      refreshTimestamp: document.getElementById('refresh-timestamp'),
-      nowServing:       document.getElementById('now-serving-display'),
-      nowServingLive:   document.getElementById('now-serving-live')
-    };
+  const PUBLIC_QUEUE_API =
+    CONFIG.PUBLIC_QUEUE_API ||
+    CONFIG.QUEUE_PUBLIC_API ||
+    CONFIG.QUEUE_API_PUBLIC ||
+    "/appointments/public/queue-number-api/";
 
-    this.init();
+  const INTERNAL_QUEUE_API =
+    CONFIG.INTERNAL_QUEUE_API ||
+    CONFIG.QUEUE_INTERNAL_API ||
+    CONFIG.QUEUE_API_INTERNAL ||
+    CONFIG.QUEUE_API ||
+    "/appointments/queue-number-api/";
+
+  // ✅ Choose correct queue endpoint
+  const QUEUE_API = IS_INTERNAL_USER ? INTERNAL_QUEUE_API : PUBLIC_QUEUE_API;
+
+  const CALL_NEXT_API_TEMPLATE =
+    CONFIG.CALL_NEXT_API || "/appointments/secretary/queue/call-next/0/";
+
+  const REFRESH_INTERVAL = Number(CONFIG.REFRESH_INTERVAL || 10000);
+
+  const RAW_AUTO_CALL_INTERVAL = Number(CONFIG.NOW_SERVING_INTERVAL || 8000);
+  const AUTO_CALL_INTERVAL = Math.max(6000, RAW_AUTO_CALL_INTERVAL || 8000);
+
+  const CONFIG_CSRF = (CONFIG.CSRF_TOKEN || "").trim();
+
+  // ---------- Voice / Beep Settings ----------
+  const ENABLE_VOICE =
+    CONFIG.ENABLE_VOICE === undefined ? true : Boolean(CONFIG.ENABLE_VOICE);
+
+  const ENABLE_BEEP =
+    CONFIG.ENABLE_BEEP === undefined ? true : Boolean(CONFIG.ENABLE_BEEP);
+
+  const ANNOUNCE_WITH_PATIENT_NAME =
+    CONFIG.ANNOUNCE_WITH_PATIENT_NAME === undefined
+      ? true
+      : Boolean(CONFIG.ANNOUNCE_WITH_PATIENT_NAME);
+
+  // Public screen privacy: never announce patient name unless internal
+  const CAN_SAY_PATIENT_NAME = IS_INTERNAL_USER && ANNOUNCE_WITH_PATIENT_NAME;
+
+  const AUTO_ANNOUNCE_ON_CHANGE =
+    CONFIG.AUTO_ANNOUNCE_ON_CHANGE === undefined
+      ? true
+      : Boolean(CONFIG.AUTO_ANNOUNCE_ON_CHANGE);
+
+  const PER_DOCTOR_ANNOUNCE_COOLDOWN_MS = Number(
+    CONFIG.PER_DOCTOR_ANNOUNCE_COOLDOWN_MS || 12000
+  );
+
+  const ANNOUNCE_SEQUENCE =
+    Array.isArray(CONFIG.ANNOUNCE_SEQUENCE) && CONFIG.ANNOUNCE_SEQUENCE.length
+      ? CONFIG.ANNOUNCE_SEQUENCE
+      : ["ar", "en"];
+
+  const SPEECH_LANG_AR = String(CONFIG.SPEECH_LANG_AR || "ar-IQ");
+  const SPEECH_LANG_EN = String(CONFIG.SPEECH_LANG_EN || "en-US");
+
+  // ✅ الافتراضي: ما نوقف الإعلان إذا التب مخفي، لأن شاشة TV ممكن تكون hidden ببعض البيئات
+  const ANNOUNCE_REQUIRE_VISIBLE_TAB =
+    CONFIG.ANNOUNCE_REQUIRE_VISIBLE_TAB === undefined
+      ? false
+      : Boolean(CONFIG.ANNOUNCE_REQUIRE_VISIBLE_TAB);
+
+  const SHOW_SOUND_UNLOCK_OVERLAY =
+    CONFIG.SHOW_SOUND_UNLOCK_OVERLAY === undefined
+      ? true
+      : Boolean(CONFIG.SHOW_SOUND_UNLOCK_OVERLAY);
+
+  // ---------- Language & i18n ----------
+  let currentLang = "en";
+
+  const i18n = {
+    en: {
+      headerSubtitle: "Digital Queue Management – Powered by MisbahTech",
+      headerMessage:
+        "Please wait until your ticket and name appear on the screen.",
+      filterLabel: "Filter by doctor",
+      filterAll: "All doctors",
+      panelNowServing: "Now Serving",
+      panelDoctors: "Doctors & Rooms",
+      panelQueue: "Queue Overview",
+      btnAutoOn: "Start auto calling",
+      btnAutoOff: "Stop auto calling",
+      statusCalling: "Calling patient",
+      labelTicket: "Ticket",
+      labelCurrentTicket: "Current ticket:",
+      labelNone: "No active ticket",
+      labelWaitingForDoctor: "Waiting for this doctor",
+      labelNoQueue: "No one waiting",
+      labelNext: "Next:",
+      emptyTicket: "Waiting for the next patient…",
+      waitingWord: "waiting",
+      roomPrefix: "Room",
+      totalWord: "total",
+      errUnauthorized:
+        "Queue screen needs staff login to show private patient names.",
+      errGeneric: "Cannot load queue from server.",
+    },
+    ar: {
+      headerSubtitle: "نظام إدارة الطابور الرقمي – بدعم من MisbahTech",
+      headerMessage: "يرجى الانتظار حتى يظهر رقمك واسمك على الشاشة.",
+      filterLabel: "تصفية حسب الطبيب",
+      filterAll: "جميع الأطباء",
+      panelNowServing: "جاري خدمتكم الآن",
+      panelDoctors: "الأطباء والغرف",
+      panelQueue: "نظرة عامة على الطابور",
+      btnAutoOn: "تشغيل النداء التلقائي",
+      btnAutoOff: "إيقاف النداء التلقائي",
+      statusCalling: "يتم نداء المريض",
+      labelTicket: "رقم التذكرة",
+      labelCurrentTicket: "التذكرة الحالية:",
+      labelNone: "لا توجد تذكرة نشطة",
+      labelWaitingForDoctor: "عدد المنتظرين لهذا الطبيب",
+      labelNoQueue: "لا يوجد مرضى بانتظار الدور",
+      labelNext: "التالي:",
+      emptyTicket: "بانتظار المريض التالي…",
+      waitingWord: "منتظر",
+      roomPrefix: "غرفة",
+      totalWord: "إجمالي",
+      errUnauthorized: "هذه الشاشة تحتاج تسجيل دخول للموظف لعرض أسماء المرضى.",
+      errGeneric: "تعذر تحميل الطابور من السيرفر.",
+    },
+  };
+
+  function t(key) {
+    return (i18n[currentLang] && i18n[currentLang][key]) || key;
   }
 
-  // ------------- Utilities -------------
-  getCookie(name) {
-    const value = `; ${document.cookie}`;
-    const parts = value.split(`; ${name}=`);
-    if (parts.length === 2) return decodeURIComponent(parts.pop().split(';').shift());
-    return '';
+  // ---------- Safe HTML ----------
+  function escapeHTML(value) {
+    const s = String(value ?? "");
+    return s
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
   }
 
-  debounce(fn, delay) {
-    let t;
-    return (...args) => { clearTimeout(t); t = setTimeout(() => fn.apply(this, args), delay); };
-  }
+  // ---------- Dynamic ticker messages ----------
+  const tickerMessages = {
+    en: [
+      "ClinicHub Digital Queue System – Powered by MisbahTech.",
+      "Please keep your ticket ready and wait until your number and name appear on the screen.",
+      "Please keep noise to a minimum and respect patient privacy inside the clinic.",
+    ],
+    ar: [
+      "نظام إدارة الطابور ClinicHub – بدعم من MisbahTech.",
+      "يرجى الاحتفاظ برقم الدور لحين ظهور رقمك واسمك على الشاشة.",
+      "نرجو الحفاظ على الهدوء واحترام خصوصية المرضى داخل العيادة.",
+    ],
+  };
 
-  abortFetch() {
-    if (this._fetchController) {
-      this._fetchController.abort();
-      this._fetchController = null;
-    }
-  }
+  let tickerIndex = 0;
 
-  timeoutPromise(ms) {
-    return new Promise((_, rej) => setTimeout(() => rej(new Error('Request timed out')), ms));
-  }
+  // ---------- Data / State ----------
+  let doctors = [];
+  let activeDoctorId = null;
+  let autoCallTimer = null;
+  let callInFlight = false;
 
-  // ------------- Init -------------
-  init() {
-    if (!this.dom.queueGrid) {
-      console.warn('[QueueSystem] Missing DOM.');
-      return;
-    }
+  let loadInFlight = false;
+  let loadQueued = false;
 
-    if (!this.dom.nowServingLive) {
-      const live = document.createElement('div');
-      live.id = 'now-serving-live';
-      live.setAttribute('aria-live', 'polite');
-      live.setAttribute('aria-atomic', 'true');
-      live.style.position = 'absolute';
-      live.style.left = '-9999px';
-      document.body.appendChild(live);
-      this.dom.nowServingLive = live;
-    }
+  let lastCallAt = 0;
+  const MIN_CALL_GAP_MS = 2500;
 
-    this.dom.searchInput?.addEventListener('input', this.debounce(() => this.filterDoctors(), 300));
-
-    this.updateClock();
-    this._clockTimer = setInterval(() => this.updateClock(), 1000);
-
-    this.fetchQueueData({ showLoading: true });
-    this._refreshTimer = setInterval(() => this.fetchQueueData(), this.config.REFRESH_INTERVAL);
-    this._rotatorTimer  = setInterval(() => this.rotateNowServing(), this.config.NOW_SERVING_INTERVAL);
-
-    window.addEventListener('visibilitychange', () => {
-      if (document.hidden) this.abortFetch();
-      else this.fetchQueueData();
-    });
-  }
-
-  // ------------- Clock -------------
-  updateClock() {
-    if (!this.dom.currentTime) return;
+  // ==============
+  // CLOCK
+  // ==============
+  function updateClock() {
     const now = new Date();
-    window.requestAnimationFrame(() => {
-      this.dom.currentTime.textContent = now.toLocaleTimeString([], {
-        hour: '2-digit', minute: '2-digit', second: '2-digit'
-      });
+    const dateEl = document.getElementById("q-date");
+    const timeEl = document.getElementById("q-time");
+    if (!dateEl || !timeEl) return;
+
+    const dateOptions = {
+      weekday: "short",
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    };
+    dateEl.textContent = now.toLocaleDateString(undefined, dateOptions);
+    timeEl.textContent = now.toLocaleTimeString(undefined, {
+      hour: "2-digit",
+      minute: "2-digit",
     });
   }
 
-  // ------------- Data Fetch -------------
-  async fetchQueueData({ showLoading = false } = {}) {
-    if (showLoading) this.renderSkeleton();
-
-    this.abortFetch();
-    this._fetchController = new AbortController();
-    const { signal } = this._fetchController;
-
-    try {
-      const fetchPromise = fetch(this.config.QUEUE_API, { signal });
-      const res = await Promise.race([fetchPromise, this.timeoutPromise(10000)]);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-
-      // Normalize shape to what UI expects
-      this.doctors = (json.queues || []).map(item => {
-        const waiting_list = Array.isArray(item.waiting_list)
-          ? item.waiting_list
-          : (typeof item.waiting === 'number'
-              ? Array.from({ length: item.waiting }, (_, i) => ({ number: (item.next_queue || 0) + 1 + i }))
-              : []);
-        const current_patient = item.current_patient || (item.next_queue
-          ? { number: item.next_queue, patient_name: item.current_patient_name || '' }
-          : null);
-        return {
-          doctor_id: item.doctor_id ?? item.id ?? item.doctor ?? null,
-          doctor_name: item.doctor_name ?? item.name ?? 'Unknown',
-          doctor_specialty: item.doctor_specialty ?? item.specialty ?? 'General Practitioner',
-          status: item.status ?? (waiting_list.length ? 'available' : (current_patient ? 'busy' : 'available')),
-          waiting_list,
-          current_patient,
-          avg_time: item.avg_time ?? 0,
-        };
-      });
-
-      this.currentServingIndex = 0;
-      if (this.dom.doctorCount) this.dom.doctorCount.textContent = this.doctors.length;
-      this.filterDoctors();
-
-      const now = new Date();
-      this.dom.updateTime && (this.dom.updateTime.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-      this.dom.refreshTimestamp && (this.dom.refreshTimestamp.textContent = `Last refresh: ${now.toLocaleTimeString([], { hour: '2-digit' })}`);
-      this.updateNowServing();
-    } catch (err) {
-      if (err.name === 'AbortError') return;
-      console.error('Queue fetch error:', err);
-      this.showNotification('System Error', 'Failed to load queue data', 'critical');
-      if (this.dom.queueGrid && !this.doctors.length) {
-        this.dom.queueGrid.innerHTML =
-          `<div class="error-state"><p>⚠ Unable to load queue data. <button class="retry-btn">Retry</button></p></div>`;
-        this.dom.queueGrid.querySelector('.retry-btn')
-          ?.addEventListener('click', () => this.fetchQueueData({ showLoading: true }));
-      }
-    } finally {
-      this._fetchController = null;
+  // ==============
+  // HELPERS
+  // ==============
+  function getCookie(name) {
+    const cookies = document.cookie ? document.cookie.split(";") : [];
+    for (let c of cookies) {
+      c = c.trim();
+      if (c.startsWith(name + "=")) return c.substring((name + "=").length);
     }
+    return "";
   }
 
-  // ------------- Now Serving -------------
-  getServingPatients() {
-    const arr = this.doctors
-      .filter(d => d.current_patient)
-      .map(d => ({
-        doctor: d.doctor_name,
-        patient: d.current_patient.patient_name || '',
-        number: d.current_patient.number
-      }));
-    return arr.length ? arr : [{ doctor: '', patient: 'No active patients', number: '' }];
+  function getCsrfToken() {
+    return CONFIG_CSRF || getCookie("csrftoken") || "";
   }
 
-  rotateNowServing() {
-    const list = this.getServingPatients();
-    if (!list.length) return;
-    this.currentServingIndex = (list.length === 1) ? 0 : (this.currentServingIndex + 1) % list.length;
-    this.updateNowServing();
+  function buildCallNextUrl(doctorId) {
+    const tpl = String(CALL_NEXT_API_TEMPLATE || "");
+    if (!tpl) return null;
+
+    if (tpl.includes("__DOCTOR_ID__"))
+      return tpl.replace("__DOCTOR_ID__", String(doctorId));
+    if (/\/0\/?$/.test(tpl)) return tpl.replace(/\/0\/?$/, `/${doctorId}/`);
+    if (tpl.includes("/0/")) return tpl.replace("/0/", `/${doctorId}/`);
+    return tpl;
   }
 
-  updateNowServing() {
-    if (!this.dom.nowServing) return;
-    const patients = this.getServingPatients();
-    const cur = patients[this.currentServingIndex] || patients[0];
-    const text = (cur.patient === 'No active patients')
-      ? cur.patient
-      : `${cur.number ?? ''} - ${cur.patient} (${cur.doctor})`;
-    this.dom.nowServing.textContent = text;
-    this.dom.nowServingLive && (this.dom.nowServingLive.textContent = `Now serving: ${text}`);
+  function getDoctorById(id) {
+    return doctors.find((d) => d.id === String(id)) || null;
   }
 
-  // ------------- Filter & Render -------------
-  filterDoctors() {
-    const term = (this.dom.searchInput?.value || '').trim().toLowerCase();
-    this.filteredDoctors = this.doctors.filter(d =>
-      !term ||
-      (d.doctor_name && d.doctor_name.toLowerCase().includes(term)) ||
-      (d.doctor_specialty && d.doctor_specialty.toLowerCase().includes(term))
+  function firstDoctorWithQueue() {
+    return (
+      doctors.find((d) => Array.isArray(d.queue) && d.queue.length > 0) || null
     );
-    this.renderQueue();
   }
 
-  renderSkeleton(count = 4) {
-    if (!this.dom.queueGrid) return;
-    this.dom.queueGrid.innerHTML = '';
-    const frag = document.createDocumentFragment();
-    for (let i = 0; i < count; i++) {
-      const s = document.createElement('div');
-      s.className = 'queue-card skeleton';
-      s.innerHTML = `
-        <div class="queue-card-header">
-          <div class="doctor-avatar shimmer"></div>
-          <div class="doctor-info">
-            <div class="skeleton-line w-60 shimmer"></div>
-            <div class="skeleton-line w-40 shimmer mt-1"></div>
-          </div>
-          <div class="status-badge skeleton-badge shimmer"></div>
-        </div>
-        <div class="queue-card-body">
-          <div class="skeleton-line w-80 shimmer mb-2"></div>
-          <div class="skeleton-line w-50 shimmer mb-3"></div>
-          <div class="waiting-info">
-            <div class="info-box skeleton-box shimmer"></div>
-            <div class="info-box skeleton-box shimmer"></div>
-          </div>
-          <div class="skeleton-btn shimmer"></div>
-        </div>`;
-      frag.appendChild(s);
+  function getActiveDoctorIndex() {
+    if (!doctors.length) return 0;
+    if (activeDoctorId) {
+      const idx = doctors.findIndex((d) => d.id === String(activeDoctorId));
+      if (idx >= 0) return idx;
     }
-    this.dom.queueGrid.appendChild(frag);
-    this.dom.emptyState && (this.dom.emptyState.hidden = true);
+    return 0;
   }
 
-  renderQueue() {
-    if (!this.dom.queueGrid) return;
-    if (!this.filteredDoctors.length) {
-      this.dom.queueGrid.innerHTML = '';
-      this.dom.emptyState && (this.dom.emptyState.hidden = false);
+  function doctorHasWaiting(doctorId) {
+    const doc = getDoctorById(doctorId);
+    if (!doc || !Array.isArray(doc.queue)) return false;
+    return doc.queue.length > 1;
+  }
+
+  function ensureActiveDoctorForServing(filterValue) {
+    if (filterValue && filterValue !== "all") {
+      activeDoctorId = String(filterValue);
       return;
     }
-    this.dom.emptyState && (this.dom.emptyState.hidden = true);
-    const frag = document.createDocumentFragment();
-    this.filteredDoctors.forEach(d => frag.appendChild(this.createDoctorCard(d)));
-    this.dom.queueGrid.innerHTML = '';
-    this.dom.queueGrid.appendChild(frag);
-  }
 
-  buildStatus(d) {
-    if (d.status === 'available') return ['status-available', 'Available'];
-    if (d.status === 'busy') return ['status-busy', 'In Consultation'];
-    return ['status-offline', 'Offline'];
-  }
-
-  buildCurrentPatient(d) {
-    if (!d.current_patient) return `<div class="current-patient no-patient">No current patient</div>`;
-    const num = d.current_patient.number ?? '';
-    const name = d.current_patient.patient_name ?? '';
-    return `<div class="current-patient"><span class="patient-number">${num}</span><span class="patient-name">${name}</span></div>`;
-  }
-
-  buildWaitingStats(d) {
-    const waitingLen = Array.isArray(d.waiting_list) ? d.waiting_list.length : 0;
-    return `
-      <div class="waiting-info">
-        <div class="info-box" aria-label="Waiting count">
-          <div class="info-value">${waitingLen}</div>
-          <div class="info-label">Waiting</div>
-        </div>
-        <div class="info-box" aria-label="Average wait minutes">
-          <div class="info-value">${d.avg_time || 0}</div>
-          <div class="info-label">Avg. Wait (min)</div>
-        </div>
-      </div>`;
-  }
-
-  createDoctorCard(d) {
-    const [statusClass, statusLabel] = this.buildStatus(d);
-    const card = document.createElement('div');
-    card.className = 'queue-card';
-    card.setAttribute('role', 'article');
-    card.setAttribute(
-      'aria-label',
-      `Doctor ${d.doctor_name}${d.doctor_specialty ? ', ' + d.doctor_specialty : ''}`
-    );
-
-    const canCall = (Array.isArray(d.waiting_list) && d.waiting_list.length > 0 && d.status === 'available' && d.doctor_id);
-
-    card.innerHTML = `
-      <div class="queue-card-header">
-        <div class="doctor-avatar" aria-hidden="true">${(d.doctor_name || '?').charAt(0)}</div>
-        <div class="doctor-info">
-          <div class="doctor-name">${d.doctor_name || 'Unknown'}</div>
-          <div class="doctor-specialty">${d.doctor_specialty || 'General Practitioner'}</div>
-        </div>
-        <div class="status-badge ${statusClass}" aria-label="Status: ${statusLabel}">${statusLabel}</div>
-      </div>
-      <div class="queue-card-body">
-        <div class="section-title">Current Patient</div>
-        ${this.buildCurrentPatient(d)}
-        ${this.buildWaitingStats(d)}
-        <button class="call-next-btn" type="button"
-          ${canCall ? '' : 'disabled'}
-          aria-disabled="${canCall ? 'false' : 'true'}"
-          aria-label="Call next patient for ${d.doctor_name}"
-          data-doctor-id="${d.doctor_id ?? ''}">
-          ${canCall ? 'Call Next Patient' : 'Unavailable'}
-        </button>
-      </div>`;
-
-    const btn = card.querySelector('.call-next-btn');
-    if (btn && canCall) {
-      btn.addEventListener('click', () => this.callNextPatient(d.doctor_id, btn));
+    if (activeDoctorId) {
+      const activeDoc = getDoctorById(activeDoctorId);
+      if (
+        activeDoc &&
+        Array.isArray(activeDoc.queue) &&
+        activeDoc.queue.length > 0
+      )
+        return;
     }
-    return card;
+
+    const docWithQueue = firstDoctorWithQueue();
+    activeDoctorId = docWithQueue
+      ? docWithQueue.id
+      : doctors[0]
+      ? doctors[0].id
+      : null;
   }
 
-  // ------------- Call Next -------------
-  buildCallNextUrl(id) {
-    const tmpl = this.config.CALL_NEXT_API;
-    if (id === undefined || id === null) return tmpl;
+  // ==============
+  // MAP API → DOCTORS
+  // ==============
+  function mapQueuesToDoctorsFromSnapshot(rawQueues) {
+    const mapped = (rawQueues || []).map((q) => {
+      const doctorId = q.doctor_id ?? q.id ?? q.doctorId ?? "";
+      const doctorName = q.doctor_name ?? q.doctorName ?? "Doctor";
 
-    // 1) حالتك الشائعة: .../api/queue/0/next/
-    if (tmpl.includes('/0/next/')) {
-      return tmpl.replace('/0/next/', `/${id}/next/`);
-    }
-    // 2) حالة: .../call-next/0/
-    if (tmpl.includes('/0/')) {
-      return tmpl.replace('/0/', `/${id}/`);
-    }
-    // 3) احتياط: أول رقم بين شرطات
-    return tmpl.replace(/\/\d+(?=\/|$)/, `/${id}`);
+      const current = q.current_patient || q.current || null;
+      const waitingList = q.waiting_list || q.waiting || [];
+
+      const queueItems = [];
+
+      if (current) {
+        queueItems.push({
+          ticket: current.number || current.ticket || q.next_queue || "",
+          name: current.patient_name || current.patient || current.name || "",
+        });
+      } else if (q.next_queue && q.next_queue !== "No appointments") {
+        queueItems.push({ ticket: q.next_queue, name: "" });
+      }
+
+      if (Array.isArray(waitingList)) {
+        waitingList.forEach((w) => {
+          queueItems.push({
+            ticket: w.number || w.ticket || "",
+            name: w.patient_name || w.patient || w.name || "",
+          });
+        });
+      }
+
+      return {
+        id: String(doctorId),
+        name: doctorName,
+        specialty: q.specialty || "",
+        room: q.room || q.room_label || "",
+        queue: queueItems,
+      };
+    });
+
+    doctors = mapped;
   }
 
-  async callNextPatient(id, btnEl) {
-    if (this._duringCall.has(id)) return;
-    this._duringCall.add(id);
-    if (btnEl) {
-      btnEl.disabled = true;
-      btnEl.textContent = 'Calling...';
-      btnEl.classList.add('loading');
-    }
+  // ==============
+  // AUTO ANNOUNCER (ON CHANGE)
+  // ==============
+  const announceState = {}; // docId -> { ticket, lastAt }
+  let announceInFlight = false;
+
+  let audioCtx = null;
+  let audioUnlocked = false;
+
+  function getAudioCtx() {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    if (!audioCtx) audioCtx = new AC();
+    return audioCtx;
+  }
+
+  async function unlockAudio() {
+    const ctx = getAudioCtx();
+    try {
+      if (ctx && ctx.state === "suspended") await ctx.resume();
+    } catch (_) {}
+    audioUnlocked = true;
+  }
+
+  // ✅ Overlay يظهر مرة واحدة: Enable Sound (localStorage) / Later (sessionStorage)
+  function showSoundOverlayIfNeeded() {
+    if (!SHOW_SOUND_UNLOCK_OVERLAY) return;
+    if (!(ENABLE_VOICE || ENABLE_BEEP)) return;
+
+    const overlay = document.getElementById("sound-unlock");
+    const btn = document.getElementById("sound-unlock-btn");
+    const close = document.getElementById("sound-unlock-close");
+    if (!overlay || !btn || !close) return;
+
+    const LS_KEY = "ch_sound_enabled_v1";
+    const SS_KEY = "ch_sound_overlay_dismiss_v1";
 
     try {
-      const url = this.buildCallNextUrl(id);
-      const res = await fetch(url, {
-        method: 'POST',
-        credentials: 'same-origin', // لضمان إرسال كوكي csrftoken
-        headers: {
-          'X-CSRFToken': this.csrfToken,
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({})
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error || 'Unknown error');
+      // إذا تم تفعيل الصوت سابقاً → لا تظهر
+      if (localStorage.getItem(LS_KEY) === "1") return;
+      // إذا ضغط Later في نفس التب → لا تظهر بالرفريش
+      if (sessionStorage.getItem(SS_KEY) === "1") return;
+    } catch (_) {
+      // إذا التخزين ممنوع، نكمل بشكل طبيعي
+    }
 
-      this.doctors = json.queues || this.doctors;
-      this.currentServingIndex = 0;
-      this.filterDoctors();
-      this.updateNowServing();
-      this.showNotification('Success', 'Next patient called', 'success');
-    } catch (err) {
-      console.error('Call next error:', err);
-      this.showNotification('Error', 'Failed to call next', 'critical');
-      if (btnEl) {
-        btnEl.disabled = false;
-        btnEl.textContent = 'Call Next Patient';
-        btnEl.classList.remove('loading');
-      }
-    } finally {
-      this._duringCall.delete(id);
+    overlay.hidden = false;
+
+    close.addEventListener("click", () => {
+      overlay.hidden = true;
+      try {
+        sessionStorage.setItem(SS_KEY, "1");
+      } catch (_) {}
+    });
+
+    btn.addEventListener("click", async () => {
+      await unlockAudio();
+      overlay.hidden = true;
+      try {
+        localStorage.setItem(LS_KEY, "1");
+        sessionStorage.setItem(SS_KEY, "1");
+      } catch (_) {}
+      try {
+        await beep({ duration: 120, frequency: 880, volume: 0.06 });
+      } catch (_) {}
+    });
+  }
+
+  async function beep(opts = {}) {
+    if (!ENABLE_BEEP) return;
+    const ctx = getAudioCtx();
+    if (!ctx) return;
+
+    if (!audioUnlocked) await unlockAudio();
+
+    const duration = Number(opts.duration || 160);
+    const frequency = Number(opts.frequency || 880);
+    const volume = Number(opts.volume || 0.08);
+
+    try {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = "sine";
+      osc.frequency.value = frequency;
+
+      const now = ctx.currentTime;
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(
+        Math.max(0.0001, volume),
+        now + 0.02
+      );
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + duration / 1000);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + duration / 1000 + 0.02);
+    } catch (_) {}
+  }
+
+  function hasSpeech() {
+    return "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
+  }
+
+  function getLangTag(shortLang) {
+    return shortLang === "ar" ? SPEECH_LANG_AR : SPEECH_LANG_EN;
+  }
+
+  function pickBestVoice(langTag) {
+    try {
+      const voices = window.speechSynthesis.getVoices() || [];
+      if (!voices.length) return null;
+
+      const low = String(langTag || "").toLowerCase();
+      const exact = voices.find(
+        (v) => String(v.lang || "").toLowerCase() === low
+      );
+      if (exact) return exact;
+
+      const prefix = low.split("-")[0];
+      const pref = voices.find((v) =>
+        String(v.lang || "")
+          .toLowerCase()
+          .startsWith(prefix)
+      );
+      if (pref) return pref;
+
+      return voices[0] || null;
+    } catch (_) {
+      return null;
     }
   }
 
-  // ------------- Notifications -------------
-  showNotification(title, msg, type = 'info') {
-    // لاحقًا يمكن ربط Toast UI
-    console.log(`[${type.toUpperCase()}] ${title}: ${msg}`);
+  function speakOnce(text, shortLang) {
+    return new Promise((resolve) => {
+      if (!ENABLE_VOICE || !hasSpeech()) return resolve();
+
+      const cleaned = String(text || "").trim();
+      if (!cleaned) return resolve();
+
+      if (ANNOUNCE_REQUIRE_VISIBLE_TAB && document.hidden) return resolve();
+
+      try {
+        const u = new SpeechSynthesisUtterance(cleaned);
+
+        const langTag = getLangTag(shortLang);
+        u.lang = langTag;
+
+        const v = pickBestVoice(langTag);
+        if (v) u.voice = v;
+
+        u.rate = Number(CONFIG.SPEECH_RATE || 1.0);
+        u.pitch = Number(CONFIG.SPEECH_PITCH || 1.0);
+        u.volume = Number(CONFIG.SPEECH_VOLUME || 1.0);
+
+        u.onend = () => resolve();
+        u.onerror = () => resolve();
+
+        window.speechSynthesis.speak(u);
+
+        setTimeout(resolve, 9000);
+      } catch (_) {
+        resolve();
+      }
+    });
   }
 
-  // ------------- Cleanup -------------
-  destroy() {
-    this.abortFetch();
-    clearInterval(this._clockTimer);
-    clearInterval(this._refreshTimer);
-    clearInterval(this._rotatorTimer);
+  function stopSpeech() {
+    try {
+      if (hasSpeech()) window.speechSynthesis.cancel();
+    } catch (_) {}
   }
-}
 
-// تهيئة عند التحميل
-document.addEventListener('DOMContentLoaded', () => {
-  window.__queueSystemInstance = new QueueSystem();
-});
+  function toEasternDigits(s) {
+    const map = ["٠", "١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩"];
+    return String(s).replace(/\d/g, (d) => map[Number(d)]);
+  }
+
+  // ✅ Announces: current + doctor + (next) when available
+  function buildAnnouncementText(payload, shortLang) {
+    const number = String(payload.number || "").trim();
+    const patient = String(payload.patient || "").trim();
+    const doctor = String(payload.doctor || "").trim();
+
+    const nextNumber = String(payload.next_number || "").trim();
+    const nextPatient = String(payload.next_patient || "").trim();
+    const hasNext = Boolean(nextNumber);
+
+    if (shortLang === "ar") {
+      const n = toEasternDigits(number);
+
+      const nowPart =
+        CAN_SAY_PATIENT_NAME && patient
+          ? `المريض ${patient}. رقم ${n}. تفضل إلى عيادة الدكتور ${doctor}.`
+          : `رقم ${n}. تفضل إلى عيادة الدكتور ${doctor}.`;
+
+      if (!hasNext) return nowPart;
+
+      const nn = toEasternDigits(nextNumber);
+      const nextPart =
+        CAN_SAY_PATIENT_NAME && nextPatient
+          ? `التالي ${nextPatient}. رقم ${nn}.`
+          : `الرقم التالي ${nn}.`;
+
+      return `${nowPart} ${nextPart}`;
+    }
+
+    const nowPart =
+      CAN_SAY_PATIENT_NAME && patient
+        ? `Patient ${patient}. Ticket ${number}. Please proceed to Dr. ${doctor}.`
+        : `Ticket ${number}. Please proceed to Dr. ${doctor}.`;
+
+    if (!hasNext) return nowPart;
+
+    const nextPart =
+      CAN_SAY_PATIENT_NAME && nextPatient
+        ? `Next is ${nextPatient}. Ticket ${nextNumber}.`
+        : `Next ticket is ${nextNumber}.`;
+
+    return `${nowPart} ${nextPart}`;
+  }
+
+  async function playQueueAnnouncement(payload) {
+    if (!(ENABLE_BEEP || ENABLE_VOICE)) return;
+    if (!payload || !payload.number || !payload.doctor) return;
+
+    if (announceInFlight) return;
+    announceInFlight = true;
+
+    try {
+      void unlockAudio();
+      stopSpeech();
+
+      await beep({ duration: 160, frequency: 880, volume: 0.08 });
+      await beep({ duration: 120, frequency: 988, volume: 0.06 });
+
+      for (const lang of ANNOUNCE_SEQUENCE) {
+        if (lang !== "ar" && lang !== "en") continue;
+        const text = buildAnnouncementText(payload, lang);
+        await speakOnce(text, lang);
+        await new Promise((r) => setTimeout(r, 220));
+      }
+    } finally {
+      announceInFlight = false;
+    }
+  }
+
+  // نخليها متاحة لأي كود ثاني إذا احتجتي
+  window.playQueueAnnouncement = playQueueAnnouncement;
+
+  async function announceChangesIfAny() {
+    if (!AUTO_ANNOUNCE_ON_CHANGE) return;
+    if (!(ENABLE_BEEP || ENABLE_VOICE)) return;
+    if (ANNOUNCE_REQUIRE_VISIBLE_TAB && document.hidden) return;
+
+    const now = Date.now();
+    const toAnnounce = [];
+
+    doctors.forEach((doc) => {
+      const cur = doc.queue && doc.queue[0];
+      const ticket = cur && String(cur.ticket || "").trim();
+      if (!ticket) return;
+
+      const docId = String(doc.id);
+      const st = announceState[docId] || { ticket: null, lastAt: 0 };
+
+      const changed = st.ticket !== ticket;
+
+      // حدّث التذكرة دائماً حتى ما يكرر نفس الحالة
+      st.ticket = ticket;
+      announceState[docId] = st;
+
+      if (!changed) return;
+
+      const cooldownOk = now - st.lastAt >= PER_DOCTOR_ANNOUNCE_COOLDOWN_MS;
+      if (!cooldownOk) return;
+
+      st.lastAt = now;
+      announceState[docId] = st;
+
+      const next = doc.queue && doc.queue[1] ? doc.queue[1] : null;
+
+      toAnnounce.push({
+        number: ticket,
+        patient: cur.name || "",
+        doctor: doc.name || "",
+        next_number: next ? String(next.ticket || "").trim() : "",
+        next_patient: next ? String(next.name || "").trim() : "",
+      });
+    });
+
+    for (const p of toAnnounce) {
+      await playQueueAnnouncement(p);
+      await new Promise((r) => setTimeout(r, 350));
+    }
+  }
+
+  // ==============
+  // LOAD QUEUE
+  // ==============
+  async function loadQueues() {
+    if (loadInFlight) {
+      loadQueued = true;
+      return;
+    }
+    loadInFlight = true;
+
+    const previousFilter = (() => {
+      const sel = document.getElementById("doctor-filter");
+      return sel ? sel.value : "all";
+    })();
+
+    try {
+      const res = await fetch(QUEUE_API, {
+        method: "GET",
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+        credentials: "same-origin",
+      });
+
+      if (res.status === 401 || res.status === 403) {
+        if (window.onQueueFetchError)
+          window.onQueueFetchError(t("errUnauthorized"));
+        return;
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const payload = await res.json();
+
+      if (payload && Array.isArray(payload.doctors)) {
+        doctors = payload.doctors.map((d) => ({
+          id: String(d.id),
+          name: d.name || "Doctor",
+          specialty: d.specialty || "",
+          room: d.room || d.room_label || "",
+          queue: (d.queue || []).map((p) => ({
+            ticket: p.ticket || p.number || "",
+            name: p.patient || p.name || p.patient_name || "",
+          })),
+        }));
+      } else {
+        const rawQueues = (payload && payload.queues) || [];
+        mapQueuesToDoctorsFromSnapshot(rawQueues);
+      }
+
+      ensureActiveDoctorForServing(previousFilter);
+
+      renderDoctorFilterOptions(previousFilter);
+      renderAll();
+
+      // ✅ إعلان تلقائي إذا تغيّر الدور (حتى لو السكرتيرة نادت من تب ثاني)
+      void announceChangesIfAny();
+
+      if (window.onQueueFetchError) window.onQueueFetchError("");
+    } catch (err) {
+      console.error("Queue load error:", err);
+      if (window.onQueueFetchError) {
+        window.onQueueFetchError((err && err.message) || t("errGeneric"));
+      }
+    } finally {
+      loadInFlight = false;
+      if (loadQueued) {
+        loadQueued = false;
+        void loadQueues();
+      }
+    }
+  }
+
+  // ==============
+  // TICKER
+  // ==============
+  function updateTickerMessage() {
+    const tickerEl = document.querySelector(".q-ticker");
+    if (!tickerEl) return;
+
+    const arr = tickerMessages[currentLang] || tickerMessages.en;
+    if (!arr || !arr.length) return;
+
+    tickerEl.textContent = arr[tickerIndex];
+    tickerIndex = (tickerIndex + 1) % arr.length;
+  }
+
+  // ==============
+  // TICKETS & CURRENT
+  // ==============
+  function getAllTickets() {
+    const items = [];
+    doctors.forEach((doc) => {
+      (doc.queue || []).forEach((q, index) => {
+        items.push({
+          doctorId: doc.id,
+          doctorName: doc.name,
+          ticket: q.ticket,
+          patient: q.name,
+          position: index,
+        });
+      });
+    });
+    return items;
+  }
+
+  function getCurrentTicket() {
+    const select = document.getElementById("doctor-filter");
+    const filterValue = select ? select.value : "all";
+
+    ensureActiveDoctorForServing(filterValue);
+
+    if (!doctors.length) return null;
+
+    let doc = null;
+    if (filterValue && filterValue !== "all") {
+      doc = getDoctorById(filterValue);
+    } else {
+      doc = activeDoctorId ? getDoctorById(activeDoctorId) : null;
+      if (!doc || !doc.queue || doc.queue.length === 0) doc = firstDoctorWithQueue();
+    }
+
+    if (!doc || !doc.queue || doc.queue.length === 0) return null;
+
+    return {
+      doctorId: doc.id,
+      doctorName: doc.name,
+      room: doc.room || "",
+      specialty: doc.specialty || "",
+      ticket: doc.queue[0].ticket,
+      patient: doc.queue[0].name,
+      waitingCount: Math.max(doc.queue.length - 1, 0),
+    };
+  }
+
+  // ==============
+  // RENDER
+  // ==============
+  function renderNowServing() {
+    const panel = document.getElementById("now-serving");
+    if (!panel) return;
+
+    panel.innerHTML = "";
+    const current = getCurrentTicket();
+    const div = document.createElement("div");
+
+    if (!current) {
+      div.innerHTML = `
+        <div class="now-serving-label">${escapeHTML(t("labelNone"))}</div>
+        <div class="now-serving-patient">${escapeHTML(t("emptyTicket"))}</div>
+      `;
+      panel.appendChild(div);
+      return;
+    }
+
+    const roomLabel = current.room ? `${t("roomPrefix")} ${current.room}` : "";
+
+    div.innerHTML = `
+      <div class="now-serving-label">${escapeHTML(t("labelTicket"))}</div>
+      <div class="now-serving-ticket">${escapeHTML(current.ticket || "")}</div>
+      <div class="now-serving-patient">${escapeHTML(current.patient || "")}</div>
+
+      <div class="now-serving-meta">
+        <span class="chip"><i class="fa-solid fa-user-doctor"></i> ${escapeHTML(
+          current.doctorName || ""
+        )}</span>
+        <span class="chip"><i class="fa-solid fa-door-open"></i> ${escapeHTML(
+          roomLabel
+        )}</span>
+        <span class="chip">${escapeHTML(current.specialty || "")}</span>
+      </div>
+
+      <div class="now-serving-bottom">
+        <span>${escapeHTML(
+          t("labelWaitingForDoctor")
+        )}: <strong>${escapeHTML(String(current.waitingCount))}</strong></span>
+        <span class="status-pill">
+          <i class="fa-solid fa-volume-high"></i> ${escapeHTML(t("statusCalling"))}
+        </span>
+      </div>
+    `;
+
+    panel.appendChild(div);
+    panel.classList.remove("flash");
+    panel.offsetWidth;
+    panel.classList.add("flash");
+  }
+
+  function renderDoctorsGrid(filterDoctorId = "all") {
+    const container = document.getElementById("doctors-grid");
+    if (!container) return;
+
+    container.innerHTML = "";
+    const activeIdx = getActiveDoctorIndex();
+
+    doctors.forEach((doc, index) => {
+      if (filterDoctorId !== "all" && filterDoctorId !== doc.id) return;
+
+      const card = document.createElement("article");
+      card.className = "doctor-card";
+      if (index === activeIdx) card.classList.add("active");
+
+      const current = (doc.queue || [])[0];
+      const waitingCount = Math.max((doc.queue || []).length - 1, 0);
+      const nextPatients = (doc.queue || []).slice(1, 4);
+      const roomLabel = doc.room ? `${t("roomPrefix")} ${doc.room}` : "";
+
+      const nextListHTML =
+        nextPatients.length > 0
+          ? nextPatients
+              .map(
+                (p) =>
+                  `<li><span>${escapeHTML(t("labelNext"))}</span><span>${escapeHTML(
+                    (p.ticket || "") + " – " + (p.name || "")
+                  )}</span></li>`
+              )
+              .join("")
+          : `<li><span>${escapeHTML(t("labelNext"))}</span><span>${escapeHTML(
+              t("labelNoQueue")
+            )}</span></li>`;
+
+      card.innerHTML = `
+        <div class="doc-header">
+          <div>
+            <div class="doc-name">${escapeHTML(doc.name || "")}</div>
+            <div class="doc-specialty">${escapeHTML(doc.specialty || "")}</div>
+          </div>
+          <div class="doc-room-pill">${escapeHTML(roomLabel)}</div>
+        </div>
+
+        <div class="doc-current">
+          <span>${escapeHTML(t("labelCurrentTicket"))}</span>
+          <span>${
+            current
+              ? escapeHTML((current.ticket || "") + " – " + (current.name || ""))
+              : "—"
+          }</span>
+        </div>
+
+        <ul class="doc-next-list">${nextListHTML}</ul>
+
+        <div class="doc-footer">
+          <span class="badge-waiting">${escapeHTML(String(waitingCount))} ${escapeHTML(
+            t("waitingWord")
+          )}</span>
+          <span>${escapeHTML(String((doc.queue || []).length))} ${escapeHTML(
+            t("totalWord")
+          )}</span>
+        </div>
+      `;
+
+      container.appendChild(card);
+    });
+  }
+
+  function renderQueueOverview(filterDoctorId = "all") {
+    const list = document.getElementById("queue-overview");
+    if (!list) return;
+
+    list.innerHTML = "";
+
+    const tickets = getAllTickets().filter((item) =>
+      filterDoctorId === "all" ? true : item.doctorId === filterDoctorId
+    );
+
+    tickets.forEach((item) => {
+      const li = document.createElement("li");
+      li.className = "queue-overview-item";
+      li.innerHTML = `
+        <div class="queue-ticket">${escapeHTML(item.ticket || "")}</div>
+        <div class="queue-patient">${escapeHTML(item.patient || "")}</div>
+        <div class="queue-doctor">${escapeHTML(item.doctorName || "")}</div>
+      `;
+      list.appendChild(li);
+    });
+  }
+
+  function renderDoctorFilterOptions(preferredValue = "all") {
+    const select = document.getElementById("doctor-filter");
+    if (!select) return;
+
+    const keep = preferredValue || select.value || "all";
+
+    let allOpt = select.querySelector("option[value='all']");
+    if (!allOpt) {
+      allOpt = document.createElement("option");
+      allOpt.value = "all";
+      select.appendChild(allOpt);
+    }
+    allOpt.textContent = t("filterAll");
+
+    while (select.options.length > 1) select.remove(1);
+
+    doctors.forEach((doc) => {
+      const opt = document.createElement("option");
+      opt.value = doc.id;
+      opt.textContent = doc.name;
+      select.appendChild(opt);
+    });
+
+    const exists = Array.from(select.options).some((o) => o.value === keep);
+    select.value = exists ? keep : "all";
+  }
+
+  function applyLanguageStaticTexts() {
+    const subtitleEl = document.querySelector(".q-subtitle");
+    const msgEl = document.querySelector(".q-message");
+    const filterLabelEl = document.getElementById("filter-label-text");
+    const titleNowEl = document.getElementById("title-now");
+    const titleDocsEl = document.getElementById("title-docs");
+    const titleQueueEl = document.getElementById("title-queue");
+    const btn = document.getElementById("call-next-btn");
+
+    if (subtitleEl) subtitleEl.textContent = t("headerSubtitle");
+    if (msgEl) msgEl.textContent = t("headerMessage");
+    if (filterLabelEl) filterLabelEl.textContent = t("filterLabel");
+    if (titleNowEl) titleNowEl.textContent = t("panelNowServing");
+    if (titleDocsEl) titleDocsEl.textContent = t("panelDoctors");
+    if (titleQueueEl) titleQueueEl.textContent = t("panelQueue");
+
+    if (btn) {
+      if (!IS_INTERNAL_USER) {
+        btn.style.display = "none";
+      } else {
+        btn.style.display = "";
+        btn.textContent = autoCallTimer ? t("btnAutoOff") : t("btnAutoOn");
+      }
+    }
+
+    tickerIndex = 0;
+    updateTickerMessage();
+
+    if (currentLang === "ar") {
+      document.documentElement.classList.add("rtl");
+      document.documentElement.setAttribute("lang", "ar");
+    } else {
+      document.documentElement.classList.remove("rtl");
+      document.documentElement.setAttribute("lang", "en");
+    }
+  }
+
+  function renderAll() {
+    const select = document.getElementById("doctor-filter");
+    const filterValue = select ? select.value : "all";
+
+    ensureActiveDoctorForServing(filterValue);
+
+    renderNowServing();
+    renderDoctorsGrid(filterValue);
+    renderQueueOverview(filterValue);
+  }
+
+  // ==============
+  // CALL NEXT (INTERNAL BUTTON ON THIS SCREEN)
+  // ==============
+  async function callNextTicket() {
+    if (!IS_INTERNAL_USER) return;
+    if (!doctors.length) return;
+    if (callInFlight) return;
+
+    const now = Date.now();
+    if (now - lastCallAt < MIN_CALL_GAP_MS) return;
+    lastCallAt = now;
+
+    // gesture يساعد unlock
+    await unlockAudio();
+
+    const select = document.getElementById("doctor-filter");
+    const filterValue = select ? select.value : "all";
+    ensureActiveDoctorForServing(filterValue);
+
+    const targetDoctorId =
+      filterValue !== "all"
+        ? filterValue
+        : activeDoctorId || (doctors[0] && doctors[0].id);
+
+    if (!targetDoctorId) return;
+
+    // ✅ لا تحرك الدور إذا ماكو منتظرين
+    if (!doctorHasWaiting(targetDoctorId)) return;
+
+    const url = buildCallNextUrl(targetDoctorId);
+    if (!url) return;
+
+    callInFlight = true;
+
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": getCsrfToken(),
+          Accept: "application/json",
+        },
+        credentials: "same-origin",
+        body: JSON.stringify({}),
+      });
+
+      if (!res.ok) return;
+
+      activeDoctorId = String(targetDoctorId);
+
+      // يعتمد على auto announce داخل loadQueues
+      await loadQueues();
+    } catch (err) {
+      console.error("Error calling next ticket:", err);
+    } finally {
+      callInFlight = false;
+    }
+  }
+
+  async function autoTick() {
+    if (!autoCallTimer) return;
+    if (!IS_INTERNAL_USER) return;
+
+    const select = document.getElementById("doctor-filter");
+    const filterValue = select ? select.value : "all";
+
+    ensureActiveDoctorForServing(filterValue);
+
+    const targetDoctorId =
+      filterValue !== "all"
+        ? filterValue
+        : activeDoctorId || (doctors[0] && doctors[0].id);
+
+    if (!targetDoctorId) return;
+
+    // ✅ إذا ماكو منتظرين، أوقف الأوتو حتى ما يظل “يكنس”
+    if (!doctorHasWaiting(targetDoctorId)) {
+      stopAutoMode();
+      return;
+    }
+
+    await callNextTicket();
+
+    if (!doctorHasWaiting(targetDoctorId)) stopAutoMode();
+  }
+
+  async function startAutoMode() {
+    if (autoCallTimer) return;
+    if (!IS_INTERNAL_USER) return;
+
+    await unlockAudio();
+    await autoTick();
+
+    autoCallTimer = setInterval(() => {
+      void autoTick();
+    }, AUTO_CALL_INTERVAL);
+
+    applyLanguageStaticTexts();
+  }
+
+  function stopAutoMode() {
+    if (!autoCallTimer) return;
+    clearInterval(autoCallTimer);
+    autoCallTimer = null;
+    applyLanguageStaticTexts();
+  }
+
+  // ==============
+  // INIT
+  // ==============
+  document.addEventListener("DOMContentLoaded", () => {
+    updateClock();
+    setInterval(updateClock, 1000);
+
+    showSoundOverlayIfNeeded();
+
+    // ✅ Unlock audio on first user interaction (helps auto announce)
+    document.addEventListener(
+      "pointerdown",
+      () => {
+        void unlockAudio();
+      },
+      { once: true, passive: true }
+    );
+
+    document.querySelectorAll(".lang-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const lang = btn.dataset.lang || "en";
+        if (lang === currentLang) return;
+        currentLang = lang;
+
+        document
+          .querySelectorAll(".lang-btn")
+          .forEach((b) => b.classList.toggle("active", b === btn));
+
+        applyLanguageStaticTexts();
+
+        const sel = document.getElementById("doctor-filter");
+        const keep = sel ? sel.value : "all";
+        renderDoctorFilterOptions(keep);
+
+        renderAll();
+      });
+    });
+
+    const filterSelect = document.getElementById("doctor-filter");
+    if (filterSelect) {
+      filterSelect.addEventListener("change", () => {
+        renderAll();
+      });
+    }
+
+    const callNextBtn = document.getElementById("call-next-btn");
+    if (callNextBtn) {
+      if (!IS_INTERNAL_USER) {
+        callNextBtn.style.display = "none";
+      } else {
+        callNextBtn.addEventListener("click", () => {
+          if (!autoCallTimer) void startAutoMode();
+          else stopAutoMode();
+        });
+      }
+    }
+
+    applyLanguageStaticTexts();
+
+    void loadQueues();
+    setInterval(() => void loadQueues(), REFRESH_INTERVAL);
+
+    updateTickerMessage();
+    setInterval(updateTickerMessage, 15000);
+
+    window.__queueSystemInstance = {
+      getServingPatients() {
+        const cur = getCurrentTicket();
+        if (!cur) return [];
+        return [
+          { number: cur.ticket, patient: cur.patient, doctor: cur.doctorName },
+        ];
+      },
+    };
+  });
+})();

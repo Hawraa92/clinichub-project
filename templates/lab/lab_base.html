@@ -1,0 +1,22 @@
+{# lab/templates/lab/lab_base.html #}
+{% extends "base.html" %}
+{% load static %}
+
+{% block extra_head %}
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/lab/lab_base.css' %}">
+  {% block lab_extra_head %}{% endblock %}
+{% endblock %}
+
+{% block content %}
+<div class="labp">
+  <div class="page-bg">
+    <div class="dashboard-container">
+      {% include "lab/_lab_sidebar.html" %}
+      <main class="main-content">
+        {% block lab_content %}{% endblock %}
+      </main>
+    </div>
+  </div>
+</div>
+{% endblock %}

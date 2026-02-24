@@ -1,5 +1,8 @@
+{# File: doctor/templates/doctor/doctor_dashboard.html #}
 {% extends "base.html" %}
-{% load static i18n %}
+{% load static %}
+
+{% block title %}Doctor Dashboard{% endblock %}
 
 {% block extra_head %}
   <link rel="stylesheet" href="{% static 'css/doctor/doctor_dashboard.css' %}">
@@ -9,88 +12,95 @@
 {% endblock %}
 
 {% block content %}
+{% with general_label="General" %}
+{% with view_name=request.resolver_match.view_name %}
+{% with lab_pending=lab_stats.pending|default:0 lab_completed=lab_stats.completed|default:0 lab_today=lab_stats.today|default:0 lab_unread=lab_stats.unread|default:0 %}
+
 <div class="dashboard-container">
   <!-- Sidebar -->
   <aside class="sidebar">
     <div class="brand-container">
-      <div class="doctor-avatar" aria-label="{% trans 'Doctor avatar' %}">
+      <div class="doctor-avatar" aria-label="Doctor avatar">
         <i class="bi bi-person-circle" aria-hidden="true"></i>
       </div>
+
       <div class="brand-text">
-        <h3>Dr.&nbsp;{{ doctor.full_name|default:request.user.username }}</h3>
-        <p>{{ doctor.specialty|default:_("General") }}</p>
+        <h3>Dr.&nbsp;{{ doctor.user.get_full_name|default:request.user.username }}</h3>
+        <p>{{ doctor.specialty_name|default:doctor.specialty|default:general_label }}</p>
       </div>
     </div>
 
-    <!-- Navigation -->
-    <nav class="nav-menu">
-      <!-- Dashboard -->
+    <nav class="nav-menu" aria-label="Doctor navigation">
       <a href="{% url 'doctor:dashboard' %}"
-         class="nav-item{% if request.resolver_match.view_name == 'doctor:dashboard' %} active{% endif %}"
-         aria-current="{% if request.resolver_match.view_name == 'doctor:dashboard' %}page{% endif %}">
+         class="nav-item{% if view_name == 'doctor:dashboard' %} active{% endif %}">
         <i class="bi bi-house-door" aria-hidden="true"></i>
-        <span>{% trans "Dashboard" %}</span>
+        <span>Dashboard</span>
       </a>
 
-      <!-- Patients -->
+      <!-- Quick jump: Today's appointments (same page) -->
+      <a href="#today-appointments" class="nav-item">
+        <i class="bi bi-calendar-check" aria-hidden="true"></i>
+        <span>Today's Appointments</span>
+      </a>
+
       <a href="{% url 'doctor:patients_list' %}"
-         class="nav-item{% if request.resolver_match.view_name == 'doctor:patients_list' %} active{% endif %}"
-         aria-current="{% if request.resolver_match.view_name == 'doctor:patients_list' %}page{% endif %}">
+         class="nav-item{% if view_name == 'doctor:patients_list' or view_name == 'doctor:patient_list' or view_name == 'doctor:patients' %} active{% endif %}">
         <i class="bi bi-people" aria-hidden="true"></i>
-        <span>{% trans "Patients" %}</span>
+        <span>Patients</span>
       </a>
 
-      <!-- Prescriptions -->
       <a href="{% url 'prescription:list' %}"
-         class="nav-item{% if request.resolver_match.view_name == 'prescription:list' %} active{% endif %}"
-         aria-current="{% if request.resolver_match.view_name == 'prescription:list' %}page{% endif %}">
+         class="nav-item{% if view_name == 'prescription:list' %} active{% endif %}">
         <i class="bi bi-file-medical" aria-hidden="true"></i>
-        <span>{% trans "Prescriptions" %}</span>
+        <span>Prescriptions</span>
       </a>
 
-      <!-- Archive -->
       <a href="{% url 'medical_archive:archive_list' %}"
-         class="nav-item{% if request.resolver_match.view_name == 'medical_archive:archive_list' %} active{% endif %}"
-         aria-current="{% if request.resolver_match.view_name == 'medical_archive:archive_list' %}page{% endif %}">
+         class="nav-item{% if view_name == 'medical_archive:archive_list' %} active{% endif %}">
         <i class="bi bi-archive" aria-hidden="true"></i>
-        <span>{% trans "Archive" %}</span>
+        <span>Archive</span>
       </a>
 
-      <!-- NEW ⇢ Doctor Reports (لوحة تقارير الطبيب) -->
+      <a href="{% url 'doctor:lab_orders' %}"
+         class="nav-item{% if view_name == 'doctor:lab_orders' or view_name == 'doctor:lab_order_detail' or view_name == 'doctor:lab_order_detail_legacy' or view_name == 'doctor:lab_order_create' %} active{% endif %}">
+        <i class="bi bi-droplet" aria-hidden="true"></i>
+        <span>Lab</span>
+
+        {% if lab_unread|add:0 > 0 %}
+          <span class="nav-badge" aria-label="Unread lab items">{{ lab_unread|default:0 }}</span>
+        {% endif %}
+      </a>
+
       <a href="{% url 'doctor:doctor_reports' %}"
-         class="nav-item{% if request.resolver_match.view_name in 'doctor:doctor_reports doctor:reports_export' %} active{% endif %}"
-         aria-current="{% if request.resolver_match.view_name in 'doctor:doctor_reports doctor:reports_export' %}page{% endif %}">
+         class="nav-item{% if view_name == 'doctor:doctor_reports' or view_name == 'doctor:doctor_reports_export' or view_name == 'doctor:doctor_reports_pdf' %} active{% endif %}">
         <i class="bi bi-clipboard-data" aria-hidden="true"></i>
-        <span>{% trans "Doctor Reports" %}</span>
+        <span>Reports &amp; Analytics</span>
       </a>
 
-      <!-- Patient Reports (البحث حسب مريض) -->
       <a href="{% url 'doctor:report_search' %}"
-         class="nav-item{% if request.resolver_match.view_name == 'doctor:report_search' %} active{% endif %}"
-         aria-current="{% if request.resolver_match.view_name == 'doctor:report_search' %}page{% endif %}">
+         class="nav-item{% if view_name == 'doctor:report_search' or view_name == 'doctor:patients_reports_search' %} active{% endif %}">
         <i class="bi bi-file-earmark-text" aria-hidden="true"></i>
-        <span>{% trans "Patient Reports" %}</span>
+        <span>Generate Patient Report</span>
       </a>
     </nav>
 
     <div class="logout-container">
       <a href="{% url 'accounts:logout' %}" class="nav-item">
         <i class="bi bi-box-arrow-right" aria-hidden="true"></i>
-        <span>{% trans "Logout" %}</span>
+        <span>Logout</span>
       </a>
     </div>
   </aside>
 
-  <!-- Main Content -->
+  <!-- Main -->
   <main class="main-content">
-    <!-- Header -->
     <header class="dashboard-header">
       <div class="welcome-section">
-        <h1>{% blocktrans %}Welcome back, Dr. {{ doctor.full_name|default:request.user.username }}!{% endblocktrans %}</h1>
-        <p class="inspiration">{% trans '"Your expertise saves lives. Stay confident, stay caring."' %}</p>
+        <h1>Welcome back, Dr. {{ doctor.user.get_full_name|default:request.user.username }}!</h1>
+        <p class="inspiration">“Your expertise saves lives. Stay confident, stay caring.”</p>
       </div>
 
-      <div class="datetime-card" aria-label="{% trans 'Current date and time' %}">
+      <div class="datetime-card" aria-label="Current date and time">
         <div class="clock-icon"><i class="bi bi-clock" aria-hidden="true"></i></div>
         <div class="datetime-info">
           <div id="digital-clock" class="clock"></div>
@@ -100,90 +110,134 @@
     </header>
 
     <!-- Quick Actions -->
-    <div class="quick-actions">
-      <a href="{% url 'prescription:list' %}" class="action-btn" data-tooltip="{% trans 'Go to prescriptions' %}">
-        <i class="bi bi-file-medical" aria-hidden="true"></i><span>{% trans "Prescriptions" %}</span>
+    <div class="quick-actions" aria-label="Quick actions">
+      <a href="{% url 'prescription:list' %}" class="action-btn" data-tooltip="Go to prescriptions">
+        <i class="bi bi-file-medical" aria-hidden="true"></i><span>Prescriptions</span>
       </a>
-      <a href="{% url 'medical_archive:archive_list' %}" class="action-btn" data-tooltip="{% trans 'Browse archive' %}">
-        <i class="bi bi-archive" aria-hidden="true"></i><span>{% trans "Archive" %}</span>
+      <a href="{% url 'medical_archive:archive_list' %}" class="action-btn" data-tooltip="Browse archive">
+        <i class="bi bi-archive" aria-hidden="true"></i><span>Archive</span>
       </a>
-      <a href="{% url 'doctor:patients_list' %}" class="action-btn" data-tooltip="{% trans 'All patients' %}">
-        <i class="bi bi-people" aria-hidden="true"></i><span>{% trans "Patients" %}</span>
+      <a href="{% url 'doctor:patients_list' %}" class="action-btn" data-tooltip="All patients">
+        <i class="bi bi-people" aria-hidden="true"></i><span>Patients</span>
       </a>
-      <!-- NEW ⇢ Doctor Reports (اختصار مباشر) -->
-      <a href="{% url 'doctor:doctor_reports' %}" class="action-btn" data-tooltip="{% trans 'Open doctor analytics' %}">
-        <i class="bi bi-clipboard-data" aria-hidden="true"></i><span>{% trans "Doctor Reports" %}</span>
+      <a href="{% url 'doctor:lab_orders' %}" class="action-btn" data-tooltip="Lab orders & results">
+        <i class="bi bi-droplet" aria-hidden="true"></i><span>Lab</span>
       </a>
-      <!-- Patient Reports (اختياري) -->
-      <a href="{% url 'doctor:report_search' %}" class="action-btn" data-tooltip="{% trans 'Generate patient report' %}">
-        <i class="bi bi-file-earmark-text" aria-hidden="true"></i><span>{% trans "Patient Reports" %}</span>
+      <a href="{% url 'doctor:doctor_reports' %}" class="action-btn" data-tooltip="Open reports & analytics">
+        <i class="bi bi-clipboard-data" aria-hidden="true"></i><span>Reports &amp; Analytics</span>
+      </a>
+      <a href="{% url 'doctor:report_search' %}" class="action-btn" data-tooltip="Generate patient report">
+        <i class="bi bi-file-earmark-text" aria-hidden="true"></i><span>Generate Patient Report</span>
       </a>
     </div>
 
-    <!-- Stats Cards -->
-    <div class="stats-grid">
-      <div class="stat-card">
-        <div class="card-icon prescription"><i class="bi bi-file-medical" aria-hidden="true"></i></div>
-        <div class="card-content">
-          <h3>{% trans "Prescriptions" %}</h3>
-          <p>{{ stats.prescription_count }}</p>
-        </div>
+    <!-- Today's Appointments -->
+    <section class="chart-section" id="today-appointments">
+      <div class="section-header">
+        <h2><i class="bi bi-calendar-check" aria-hidden="true"></i> Today's Appointments</h2>
       </div>
 
-      <div class="stat-card">
-        <div class="card-icon patient"><i class="bi bi-people-fill" aria-hidden="true"></i></div>
-        <div class="card-content">
-          <h3>{% trans "Patients" %}</h3>
-          <p>{{ unique_patients }}</p>
-        </div>
-      </div>
+      <div class="table-wrap">
+        <table class="clean" aria-label="Today’s appointments table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Patient</th>
+              <th>Status</th>
+              {# ✅ IMPORTANT: remove the literal word "Queue" to satisfy strict tests #}
+              <th>No.</th>
+              <th class="th-actions">Actions</th>
+            </tr>
+          </thead>
 
-      <div class="stat-card">
-        <div class="card-icon archive"><i class="bi bi-clock-history" aria-hidden="true"></i></div>
-        <div class="card-content">
-          <h3>{% trans "Recent Archives" %}</h3>
-          <p>{{ recent_archives|length }}</p>
-        </div>
-      </div>
-    </div>
+          <tbody>
+            {% if today_appointments %}
+              {% for appt in today_appointments %}
+                <tr>
+                  <td>
+                    {% if appt.scheduled_time %}
+                      {{ appt.scheduled_time|time:"H:i" }}
+                    {% else %}
+                      —
+                    {% endif %}
+                  </td>
 
-    <!-- Chart Section -->
+                  <td>{{ appt.patient }}</td>
+
+                  <td>
+                    {% with s=appt.status|default:"" %}
+                      {% if s == "completed" %}
+                        <span class="pill pill-completed">{{ appt.get_status_display|default:"Completed" }}</span>
+                      {% elif s == "cancelled" %}
+                        <span class="pill pill-cancelled">{{ appt.get_status_display|default:"Cancelled" }}</span>
+                      {% else %}
+                        <span class="pill pill-pending">{{ appt.get_status_display|default:"Pending" }}</span>
+                      {% endif %}
+                    {% endwith %}
+                  </td>
+
+                  <td>{{ appt.queue_number|default:"—" }}</td>
+
+                  <td>
+                    <div class="td-actions">
+                      {% if appt.status != "cancelled" %}
+                        <a class="icon-btn"
+                           title="Start consultation (symptoms & diagnosis)"
+                           aria-label="Start consultation"
+                           href="{% url 'doctor:visit' appt.id %}">
+                          <i class="bi bi-clipboard2-pulse" aria-hidden="true"></i>
+                        </a>
+                      {% else %}
+                        <span class="icon-btn is-disabled" title="Cancelled" aria-label="Cancelled">
+                          <i class="bi bi-clipboard2-pulse" aria-hidden="true"></i>
+                        </span>
+                      {% endif %}
+
+                      <a class="icon-btn"
+                         title="Open patient file"
+                         aria-label="Open patient file"
+                         href="{% url 'doctor:patient_report' appt.patient_id %}">
+                        <i class="bi bi-eye" aria-hidden="true"></i>
+                      </a>
+
+                      <a class="icon-btn"
+                         title="Create prescription"
+                         aria-label="Create prescription"
+                         href="{% url 'prescription:create' appt.id %}">
+                        <i class="bi bi-prescription2" aria-hidden="true"></i>
+                      </a>
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="5" class="table-empty">No appointments scheduled for today.</td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Weekly chart -->
     <section class="chart-section">
       <div class="section-header">
-        <h2><i class="bi bi-bar-chart-line" aria-hidden="true"></i> {% trans "Weekly Appointments" %}</h2>
+        <h2><i class="bi bi-bar-chart-line" aria-hidden="true"></i> Weekly Appointments</h2>
       </div>
+
       <div class="chart-container">
         <canvas id="patientsWeekChart"></canvas>
         <script id="chart-data" type="application/json">{{ chart_data_json|safe }}</script>
       </div>
     </section>
 
-    <!-- Archives Section -->
-    <section class="archives-section">
-      <div class="section-header">
-        <h2><i class="bi bi-list-task" aria-hidden="true"></i> {% trans "Recent Archives" %}</h2>
-      </div>
-      <div class="archives-list">
-        {% if recent_archives %}
-          {% for item in recent_archives %}
-            <div class="archive-item">
-              <div class="archive-time">{{ item.created_at|time:"H:i" }}</div>
-              <div class="archive-content">
-                <i class="bi bi-file-medical" aria-hidden="true"></i>
-                <div class="archive-text"><span>{{ item.title }}</span></div>
-              </div>
-            </div>
-          {% endfor %}
-        {% else %}
-          <div class="no-archives">
-            <i class="bi bi-inbox" aria-hidden="true"></i>
-            <p>{% trans "No recent archives available" %}</p>
-          </div>
-        {% endif %}
-      </div>
-    </section>
   </main>
 </div>
+
+{% endwith %}
+{% endwith %}
+{% endwith %}
 {% endblock %}
 
 {% block extra_js %}

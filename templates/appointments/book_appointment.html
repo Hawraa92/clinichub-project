@@ -10,6 +10,7 @@
 {% endblock %}
 
 {% block content %}
+{% with doctor_obj=doctor_instance|default:doctor %}
 <div class="booking-page" dir="rtl">
   <div class="booking-container">
     <div class="booking-card">
@@ -28,8 +29,8 @@
         </div>
       {% endif %}
 
-      {# أخطاء عامة #}
-      {% if form.non_field_errors %}
+      {# أخطاء عامة (إذا كان عندك Form) #}
+      {% if form and form.non_field_errors %}
         <div class="alert alert-danger mb-3">
           {% for err in form.non_field_errors %}
             <div>{{ err }}</div>
@@ -40,72 +41,123 @@
       <form method="post" novalidate id="bookApptForm">
         {% csrf_token %}
 
-        {# ----------- حقل الطبيب ----------- #}
-        {% if doctor_instance %}
+        {# ===================== الطبيب ===================== #}
+        {% if doctor_obj %}
           <div class="form-group">
             <label class="form-label">الطبيب</label>
-            {# «disabled» مطلوب كى ينجح الاختبار #}
-            <input type="text" class="form-control"
-                   value="د. {{ doctor_instance.full_name }}"
-                   readonly disabled aria-readonly="true">
-            <input type="hidden" name="doctor" value="{{ doctor_instance.id }}">
+
+            {# وجود disabled مطلوب لنجاح الاختبار #}
+            <input
+              type="text"
+              class="form-control"
+              value="د. {{ doctor_obj }}"
+              readonly
+              disabled
+              aria-readonly="true"
+            >
+
+            {# hidden doctor لازم ينرسل دائماً #}
+            <input type="hidden" name="doctor" value="{{ doctor_obj.id }}">
           </div>
+
         {% else %}
           <div class="form-group">
-            {{ form.doctor.label_tag }}
-            {{ form.doctor }}
-            {% if form.doctor.errors %}
-              <div class="field-errors">
-                {% for e in form.doctor.errors %}<div class="err">{{ e }}</div>{% endfor %}
-              </div>
+            {% if form and form.doctor %}
+              {{ form.doctor.label_tag }}
+              {{ form.doctor }}
+              {% if form.doctor.errors %}
+                <div class="field-errors">
+                  {% for e in form.doctor.errors %}<div class="err">{{ e }}</div>{% endfor %}
+                </div>
+              {% endif %}
+            {% else %}
+              {# fallback إذا ماكو form: نرسم select من doctors اللي يجي من view_public #}
+              <label class="form-label" for="id_doctor_select">الطبيب</label>
+              <select name="doctor" id="id_doctor_select" class="form-control">
+                <option value="">---------</option>
+                {% for d in doctors %}
+                  <option value="{{ d.id }}">د. {{ d }}</option>
+                {% endfor %}
+              </select>
             {% endif %}
           </div>
         {% endif %}
 
-        {# ----------- الوقت ----------- #}
+        {# ===================== الوقت ===================== #}
         <div class="form-group">
-          {{ form.scheduled_time.label_tag }}
-          {{ form.scheduled_time }}
-          {% if form.scheduled_time.errors %}
-            <div class="field-errors">
-              {% for e in form.scheduled_time.errors %}<div class="err">{{ e }}</div>{% endfor %}
-            </div>
+          {% if form and form.scheduled_time %}
+            {{ form.scheduled_time.label_tag }}
+            {{ form.scheduled_time }}
+            {% if form.scheduled_time.errors %}
+              <div class="field-errors">
+                {% for e in form.scheduled_time.errors %}<div class="err">{{ e }}</div>{% endfor %}
+              </div>
+            {% endif %}
+          {% else %}
+            <label class="form-label" for="id_scheduled_time">الوقت</label>
+            <input type="datetime-local" name="scheduled_time" id="id_scheduled_time" class="form-control">
           {% endif %}
           <small class="hint">اختر الوقت المناسب (يجب أن يكون مستقبلاً).</small>
         </div>
 
-        {# ----------- بيانات المريض ----------- #}
+        {# ===================== الاسم الكامل ===================== #}
         <div class="form-group">
-          {{ form.full_name.label_tag }}
-          {{ form.full_name }}
-          {% if form.full_name.errors %}
-            <div class="field-errors">
-              {% for e in form.full_name.errors %}<div class="err">{{ e }}</div>{% endfor %}
-            </div>
+          {% if form and form.full_name %}
+            {{ form.full_name.label_tag }}
+            {{ form.full_name }}
+            {% if form.full_name.errors %}
+              <div class="field-errors">
+                {% for e in form.full_name.errors %}<div class="err">{{ e }}</div>{% endfor %}
+              </div>
+            {% endif %}
+          {% else %}
+            <label class="form-label" for="id_full_name">الاسم الكامل</label>
+            <input type="text" name="full_name" id="id_full_name" class="form-control">
           {% endif %}
         </div>
 
+        {# ===================== معلومات التواصل ===================== #}
         <div class="form-group">
-          {{ form.contact_info.label_tag }}
-          {{ form.contact_info }}
-          {% if form.contact_info.errors %}
-            <div class="field-errors">
-              {% for e in form.contact_info.errors %}<div class="err">{{ e }}</div>{% endfor %}
-            </div>
+          {% if form and form.contact_info %}
+            {{ form.contact_info.label_tag }}
+            {{ form.contact_info }}
+            {% if form.contact_info.errors %}
+              <div class="field-errors">
+                {% for e in form.contact_info.errors %}<div class="err">{{ e }}</div>{% endfor %}
+              </div>
+            {% endif %}
+          {% elif form and form.phone %}
+            {{ form.phone.label_tag }}
+            {{ form.phone }}
+            {% if form.phone.errors %}
+              <div class="field-errors">
+                {% for e in form.phone.errors %}<div class="err">{{ e }}</div>{% endfor %}
+              </div>
+            {% endif %}
+          {% else %}
+            {# fallback: نستخدم phone لأن view_public يقرأ phone أو contact_info #}
+            <label class="form-label" for="id_phone">رقم الهاتف / معلومات التواصل</label>
+            <input type="text" name="phone" id="id_phone" class="form-control">
           {% endif %}
         </div>
 
+        {# ===================== تاريخ الميلاد (اختياري) ===================== #}
         <div class="form-group">
-          {{ form.date_of_birth.label_tag }}
-          {{ form.date_of_birth }}
-          {% if form.date_of_birth.errors %}
-            <div class="field-errors">
-              {% for e in form.date_of_birth.errors %}<div class="err">{{ e }}</div>{% endfor %}
-            </div>
+          {% if form and form.date_of_birth %}
+            {{ form.date_of_birth.label_tag }}
+            {{ form.date_of_birth }}
+            {% if form.date_of_birth.errors %}
+              <div class="field-errors">
+                {% for e in form.date_of_birth.errors %}<div class="err">{{ e }}</div>{% endfor %}
+              </div>
+            {% endif %}
+          {% else %}
+            <label class="form-label" for="id_dob">تاريخ الميلاد (اختياري)</label>
+            <input type="date" name="date_of_birth" id="id_dob" class="form-control">
           {% endif %}
         </div>
 
-        {# ----------- honeypot ----------- #}
+        {# ===================== honeypot ===================== #}
         <div class="hp-wrapper" aria-hidden="true" style="display:none;">
           <label for="hp_field">لا تملأ هذا الحقل</label>
           <input type="text" id="hp_field" name="hp_field" autocomplete="off">
@@ -123,4 +175,5 @@
     </div>
   </div>
 </div>
+{% endwith %}
 {% endblock %}

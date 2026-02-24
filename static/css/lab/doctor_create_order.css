@@ -1,0 +1,78 @@
+/* =========================================================
+   File: static/css/lab/doctor_create_order.css
+   Page: Doctor Create Lab Order
+========================================================= */
+
+.labp .create-order-wrap{
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    padding: 18px;
+  }
+  
+  .labp .create-order-title{
+    font-size: 22px;
+    font-weight: 900;
+    margin: 0 0 6px;
+  }
+  
+  .labp .create-order-sub{
+    color: var(--dark-gray);
+    margin: 0 0 14px;
+    font-weight: 700;
+  }
+  
+  /* Django form.as_p */
+  .labp .create-order-wrap form p{ margin: 0 0 12px; }
+  
+  .labp .create-order-wrap label{
+    display:block;
+    font-weight: 900;
+    font-size: 13px;
+    color: var(--dark-gray);
+    margin-bottom: 6px;
+  }
+  
+  .labp .create-order-wrap input[type="text"],
+  .labp .create-order-wrap input[type="number"],
+  .labp .create-order-wrap input[type="email"],
+  .labp .create-order-wrap select,
+  .labp .create-order-wrap textarea{
+    width: 100%;
+    border-radius: 14px;
+    border: 1px solid rgba(0,0,0,.10);
+    background:#fff;
+    padding: 10px 12px;
+    height: var(--control-h);
+    outline:none;
+    transition: .2s ease;
+  }
+  
+  .labp .create-order-wrap textarea{
+    height: auto;
+    min-height: 150px;
+    padding-top: 12px;
+  }
+  
+  .labp .create-order-wrap input:focus,
+  .labp .create-order-wrap select:focus,
+  .labp .create-order-wrap textarea:focus{
+    border-color: rgba(33, 158, 188, .55);
+    box-shadow: 0 0 0 4px rgba(142, 202, 230, .28);
+  }
+  
+  .labp .create-order-actions{
+    display:flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+  }
+  
+  @media (max-width: 620px){
+    .labp .create-order-actions .labd-btn{
+      width: 100%;
+      justify-content: center;
+    }
+  }
+  

@@ -14,7 +14,7 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
-# clinichub/urls.py
+
 
 """
 URL configuration for ClinicHub project.
@@ -25,35 +25,52 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 
+from django.views.generic import RedirectView
+from django.templatetags.static import static as static_url
+from django.contrib.staticfiles.urls import staticfiles_urlpatterns
+
+
 urlpatterns = [
-    # 🏠 Home app
-    path('', include('home.urls', namespace='home')),
+    # ✅ Favicon (المتصفح يطلب /favicon.ico تلقائياً)
+    path(
+        "favicon.ico",
+        RedirectView.as_view(url=static_url("images/favicon.png"), permanent=False),
+        name="favicon",
+    ),
 
-    # 🔧 Admin site
-    path('admin/', admin.site.urls),
+    # 🏠 Home
+    path("", include(("home.urls", "home"), namespace="home")),
 
-    # 🗄️ Medical Archive
-    path('archive/', include('medical_archive.urls', namespace='medical_archive')),
+    # 🔧 Admin
+    path("admin/", admin.site.urls),
 
-    # 👨‍⚕️ Doctor app
-    path('doctor/', include('doctor.urls', namespace='doctor')),
+    # 👥 Accounts
+    path("accounts/", include(("accounts.urls", "accounts"), namespace="accounts")),
+
+    # 👨‍⚕️ Doctor
+    path("doctor/", include(("doctor.urls", "doctor"), namespace="doctor")),
 
     # 📅 Appointments
-    path('appointments/', include('appointments.urls', namespace='appointments')),
+    path("appointments/", include(("appointments.urls", "appointments"), namespace="appointments")),
 
     # 💊 Prescriptions
-    path('prescription/', include('prescription.urls', namespace='prescription')),
+    path("prescription/", include(("prescription.urls", "prescription"), namespace="prescription")),
 
     # 🧑‍🤝‍🧑 Patients
-    path('patient/', include('patient.urls', namespace='patient')),
+    path("patient/", include(("patient.urls", "patient"), namespace="patient")),
 
-    # 👥 Accounts (authentication)
-    path('accounts/', include('accounts.urls', namespace='accounts')),
+    # 🗄️ Medical Archive
+    path("archive/", include(("medical_archive.urls", "medical_archive"), namespace="medical_archive")),
 
-
+    # 🧪 Lab  ✅ (أضفنا namespace حتى يصير consistent)
+    path("lab/", include(("lab.urls", "lab"), namespace="lab")),
 ]
 
-# Serve media and static files in development
-urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 
+# ✅ Serve MEDIA in dev (أو إذا محددة SERVE_MEDIA=True)
+if settings.DEBUG or getattr(settings, "SERVE_MEDIA", False):
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+# ✅ Serve STATIC in dev (أفضل من static(..., STATIC_ROOT) أثناء التطوير)
+if settings.DEBUG:
+    urlpatterns += staticfiles_urlpatterns()

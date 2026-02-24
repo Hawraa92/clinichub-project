@@ -1,282 +1,480 @@
+{# File: templates/medical_archive/archive_detail.html #}
 {% extends "base.html" %}
 {% load static %}
+
+{% block title %}Medical Record Details{% endblock %}
 
 {% block extra_head %}
   <link rel="stylesheet" href="{% static 'css/medical_archive/archive_detail.css' %}">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/lightbox2/2.11.3/css/lightbox.min.css" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
 {% endblock %}
 
 {% block content %}
-<div class="archive-detail-container">
-  <div class="archive-card">
-    <!-- Header Section -->
-    <div class="card-header">
-      <div class="header-icon animate__animated animate__pulse">
-        <i class="fas fa-file-medical-alt"></i>
-      </div>
-      <h2>Medical Record Details</h2>
-      <div class="status-badge {% if archive.is_critical %}critical{% else %}normal{% endif %}">
+<div class="medical-record-container"
+     data-record-id="{{ archive.id }}"
+     data-list-url="{% url 'medical_archive:archive_list' %}"
+     data-export-url="{% url 'medical_archive:export_archive_pdf' archive.id %}">
+
+  <!-- Floating Header -->
+  <div class="record-header" role="banner">
+    <div class="header-left">
+      <button class="back-btn" type="button" id="backBtn" aria-label="Go back">
+        <i class="fas fa-chevron-left" aria-hidden="true"></i>
+      </button>
+
+      <h1 class="record-title">
+        <i class="fas fa-file-medical-alt" aria-hidden="true"></i>
+        Medical Record
+        <span class="record-id" aria-label="Record number">#{{ archive.id|stringformat:"04d" }}</span>
+      </h1>
+    </div>
+
+    <div class="header-actions">
+      <span class="status-tag {% if archive.is_critical %}critical{% else %}normal{% endif %}" aria-label="Critical status">
         {{ archive.is_critical|yesno:"CRITICAL,NORMAL" }}
-      </div>
-    </div>
+      </span>
 
-    <!-- Main Content Tabs -->
-    <div class="tab-container">
-      <ul class="nav nav-tabs" id="archiveTabs" role="tablist">
-        <li class="nav-item" role="presentation">
-          <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" 
-                  data-bs-target="#overview" type="button" role="tab">
-            <i class="fas fa-info-circle me-2"></i>Overview
-          </button>
-        </li>
-        <li class="nav-item" role="presentation">
-          <button class="nav-link" id="attachments-tab" data-bs-toggle="tab" 
-                  data-bs-target="#attachments" type="button" role="tab">
-            <i class="fas fa-paperclip me-2"></i>Attachments
-          </button>
-        </li>
-        <li class="nav-item" role="presentation">
-          <button class="nav-link" id="timeline-tab" data-bs-toggle="tab" 
-                  data-bs-target="#timeline" type="button" role="tab">
-            <i class="fas fa-history me-2"></i>Timeline
-          </button>
-        </li>
-      </ul>
+      <button class="action-btn print-btn" type="button" id="printBtn" aria-label="Print">
+        <i class="fas fa-print" aria-hidden="true"></i>
+      </button>
 
-      <div class="tab-content" id="archiveTabsContent">
-        <!-- Overview Tab -->
-        <div class="tab-pane fade show active" id="overview" role="tabpanel">
-          <div class="row g-4">
-            <!-- Patient Information -->
-            <div class="col-md-6">
-              <div class="info-card patient-card">
-                <div class="card-icon">
-                  <i class="fas fa-user-injured"></i>
-                </div>
-                <h3>Patient Information</h3>
-                <div class="info-grid">
-                  <div><strong>Full Name:</strong></div>
-                  <div>
-                    {% if archive.patient %}{{ archive.patient.full_name|default:"—" }}{% else %}—{% endif %}
-                  </div>
-                  
-                  <div><strong>ID:</strong></div>
-                  <div>
-                    {% if archive.patient %}MED-{{ archive.patient.id|stringformat:"05d" }}{% else %}—{% endif %}
-                  </div>
-                  
-                  <div><strong>Age:</strong></div>
-                  <div>
-                    {% if archive.patient %}{{ archive.patient.age|default:"—" }} years{% else %}—{% endif %}
-                  </div>
-                  
-                  <div><strong>Last Visit:</strong></div>
-                  <div>
-                    {% if archive.patient and archive.patient.last_visit %}
-                      {{ archive.patient.last_visit|date:"M d, Y" }}
-                    {% else %}
-                      —
-                    {% endif %}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Doctor Information -->
-            <div class="col-md-6">
-              <div class="info-card doctor-card">
-                <div class="card-icon">
-                  <i class="fas fa-user-md"></i>
-                </div>
-                <h3>Medical Professional</h3>
-                <div class="info-grid">
-                  <div><strong>Name:</strong></div>
-                  <div>
-                    {% if archive.doctor %}Dr. {{ archive.doctor.user.get_full_name|default:"—" }}{% else %}—{% endif %}
-                  </div>
-                  
-                  <div><strong>Specialty:</strong></div>
-                  <div>
-                    {% if archive.doctor %}{{ archive.doctor.specialty|default:"—" }}{% else %}—{% endif %}
-                  </div>
-                  
-                  <div><strong>Contact:</strong></div>
-                  <div>
-                    {% if archive.doctor %}{{ archive.doctor.user.email|default:"—" }}{% else %}—{% endif %}
-                  </div>
-                  
-                  <div><strong>License:</strong></div>
-                  <div>
-                    {% if archive.doctor %}{{ archive.doctor.medical_license|default:"—" }}{% else %}—{% endif %}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Record Details -->
-            <div class="col-12">
-              <div class="info-card record-details">
-                <h3><i class="fas fa-file-medical me-2"></i>Record Details</h3>
-                <div class="detail-grid">
-                  <div><strong>Record ID:</strong></div>
-                  <div>ARCH-{{ archive.id|stringformat:"04d" }}</div>
-                  
-                  <div><strong>Title:</strong></div>
-                  <div>{{ archive.title|default:"—" }}</div>
-                  
-                  <div><strong>Type:</strong></div>
-                  <div>
-                    <span class="record-type-badge">
-                      {{ archive.get_archive_type_display }}
-                    </span>
-                  </div>
-                  
-                  <div><strong>Created:</strong></div>
-                  <div>{{ archive.created_at|date:"F j, Y, g:i a" }}</div>
-                  
-                  <div><strong>Last Updated:</strong></div>
-                  <div>{{ archive.updated_at|date:"F j, Y, g:i a" }}</div>
-                </div>
-                
-                <div class="notes-section">
-                  <h4><i class="fas fa-notes-medical me-2"></i>Medical Notes</h4>
-                  <div class="notes-content">
-                    {{ archive.notes|linebreaks|default:"—" }}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Attachments Tab -->
-        <div class="tab-pane fade" id="attachments" role="tabpanel">
-          <div class="attachments-section">
-            <div class="section-header">
-              <h3><i class="fas fa-paperclip"></i> Attached Files</h3>
-              <div class="file-counter">
-                {{ attachments|length }} file{{ attachments|pluralize }}
-              </div>
-            </div>
-            
-            {% if attachments %}
-            <div class="attachment-grid">
-              {% for attach in attachments %}
-                <div class="attachment-card">
-                  <div class="file-preview">
-                    {% if attach.is_image %}
-                      <a href="{{ attach.file.url }}" data-lightbox="archive-gallery" 
-                         data-title="{{ attach.file.name|cut:'attachments/' }}">
-                        <img src="{{ attach.file.url }}" 
-                             alt="{{ attach.file.name|cut:'attachments/' }}" 
-                             class="img-fluid preview-image">
-                      </a>
-                    {% elif attach.is_pdf %}
-                      <div class="file-icon pdf">
-                        <i class="fas fa-file-pdf fa-4x"></i>
-                      </div>
-                    {% else %}
-                      <div class="file-icon generic">
-                        <i class="fas fa-file-medical-alt fa-4x"></i>
-                      </div>
-                    {% endif %}
-                  </div>
-                  
-                  <div class="file-info">
-                    <div class="file-name" title="{{ attach.file.name|cut:'attachments/' }}">
-                      {{ attach.file.name|cut:"attachments/"|truncatechars:20 }}
-                    </div>
-                    <div class="file-meta">
-                      <span class="file-size">
-                        {{ attach.file.size|filesizeformat }}
-                      </span>
-                      <span class="file-date">
-                        {{ attach.uploaded_at|date:"M d, Y" }}
-                      </span>
-                    </div>
-                    <a href="{{ attach.file.url }}" 
-                       target="_blank" 
-                       class="btn-download">
-                      <i class="fas fa-download me-1"></i> Download
-                    </a>
-                  </div>
-                </div>
-              {% endfor %}
-            </div>
-            {% else %}
-              <div class="no-attachments">
-                <i class="fas fa-inbox fa-3x"></i>
-                <p>No attachments found for this record</p>
-              </div>
-            {% endif %}
-          </div>
-        </div>
-
-        <!-- Timeline Tab -->
-        <div class="tab-pane fade" id="timeline" role="tabpanel">
-          <div class="timeline-section">
-            <h3><i class="fas fa-history me-2"></i>Record History</h3>
-            <div class="timeline">
-              <div class="timeline-item">
-                <div class="timeline-point success"></div>
-                <div class="timeline-content">
-                  <h5>Record Created</h5>
-                  <div class="timeline-date">
-                    <i class="fas fa-calendar-alt me-1"></i>
-                    {{ archive.created_at|date:"F j, Y" }}
-                  </div>
-                  <p>Initial medical record created by Dr. 
-                    {% if archive.doctor %}{{ archive.doctor.user.get_full_name|default:"—" }}{% else %}—{% endif %}
-                  </p>
-                </div>
-              </div>
-              <div class="timeline-item">
-                <div class="timeline-point warning"></div>
-                <div class="timeline-content">
-                  <h5>Diagnosis Updated</h5>
-                  <div class="timeline-date">
-                    <i class="fas fa-calendar-alt me-1"></i>
-                    {{ archive.updated_at|date:"F j, Y" }}
-                  </div>
-                  <p>Added new test results and updated treatment plan</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Actions -->
-    <div class="form-actions">
-      <a href="{% url 'medical_archive:archive_list' %}" class="btn btn-back">
-        <i class="fas fa-arrow-left me-2"></i> Back to Records
-      </a>
-      <div class="action-buttons">
-        <a href="{% url 'medical_archive:edit_archive' archive.id %}" class="btn btn-edit">
-          <i class="fas fa-edit me-2"></i> Edit Record
+      {% if request.user.is_superuser or request.user.role == "admin" or request.user.role == "secretary" %}
+        <a href="{% url 'medical_archive:edit_archive' archive.id %}" class="action-btn edit-btn" aria-label="Edit">
+          <i class="fas fa-edit" aria-hidden="true"></i>
         </a>
-        <button class="btn btn-print" type="button">
-          <i class="fas fa-print me-2"></i> Print
-        </button>
+      {% elif request.user.role == "doctor" and archive.doctor and archive.doctor.user_id == request.user.id %}
+        <a href="{% url 'medical_archive:edit_archive' archive.id %}" class="action-btn edit-btn" aria-label="Edit">
+          <i class="fas fa-edit" aria-hidden="true"></i>
+        </a>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Quick Stats -->
+  <div class="stats-grid" aria-label="Record summary cards">
+    <div class="stat-card">
+      <div class="stat-icon patient" aria-hidden="true"><i class="fas fa-user-injured"></i></div>
+      <div class="stat-info">
+        <span class="stat-label">Patient</span>
+        <h3>
+          {% if archive.patient %}{{ archive.patient.full_name|default:"—" }}{% else %}—{% endif %}
+        </h3>
+        <span class="stat-sub">
+          {% if archive.patient %}ID: MED-{{ archive.patient.id|stringformat:"05d" }}{% else %}ID: —{% endif %}
+        </span>
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-icon doctor" aria-hidden="true"><i class="fas fa-user-md"></i></div>
+      <div class="stat-info">
+        <span class="stat-label">Doctor</span>
+        <h3>
+          {% if archive.doctor %}
+            Dr. {{ archive.doctor.user.get_full_name|default:archive.doctor.user.username }}
+          {% else %}
+            —
+          {% endif %}
+        </h3>
+        <span class="stat-sub">
+          {% if archive.doctor %}{{ archive.doctor.specialty|default:"—" }}{% else %}—{% endif %}
+        </span>
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-icon date" aria-hidden="true"><i class="fas fa-calendar-alt"></i></div>
+      <div class="stat-info">
+        <span class="stat-label">Created</span>
+        <h3>{{ archive.created_at|date:"M d, Y" }}</h3>
+        <span class="stat-sub">{{ archive.created_at|date:"g:i A" }}</span>
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-icon type" aria-hidden="true"><i class="fas fa-stethoscope"></i></div>
+      <div class="stat-info">
+        <span class="stat-label">Type</span>
+        <h3>{{ archive.get_archive_type_display }}</h3>
+        <span class="stat-sub status-{{ archive.status|lower }}">{{ archive.get_status_display }}</span>
       </div>
     </div>
   </div>
+
+  <!-- Tabs -->
+  <div class="tab-navigation" role="tablist" aria-label="Record sections">
+    <button class="tab-btn active"
+            type="button"
+            role="tab"
+            aria-selected="true"
+            aria-controls="overview-tab"
+            id="tab-overview"
+            data-tab="overview"
+            tabindex="0">
+      <i class="fas fa-info-circle" aria-hidden="true"></i><span>Overview</span>
+    </button>
+
+    {% with att_count=attachments|length voice_count=voice_notes|length %}
+      <button class="tab-btn"
+              type="button"
+              role="tab"
+              aria-selected="false"
+              aria-controls="attachments-tab"
+              id="tab-attachments"
+              data-tab="attachments"
+              tabindex="-1">
+        <i class="fas fa-paperclip" aria-hidden="true"></i><span>Attachments</span>
+        {% if att_count or voice_count %}
+          <span class="badge" aria-label="Total attachments">{{ att_count|add:voice_count }}</span>
+        {% endif %}
+      </button>
+    {% endwith %}
+
+    <button class="tab-btn"
+            type="button"
+            role="tab"
+            aria-selected="false"
+            aria-controls="notes-tab"
+            id="tab-notes"
+            data-tab="notes"
+            tabindex="-1">
+      <i class="fas fa-notes-medical" aria-hidden="true"></i><span>Notes</span>
+    </button>
+
+    <button class="tab-btn"
+            type="button"
+            role="tab"
+            aria-selected="false"
+            aria-controls="timeline-tab"
+            id="tab-timeline"
+            data-tab="timeline"
+            tabindex="-1">
+      <i class="fas fa-history" aria-hidden="true"></i><span>Timeline</span>
+    </button>
+  </div>
+
+  <!-- Tab Content -->
+  <div class="tab-content">
+    <!-- Overview -->
+    <div class="tab-pane active" id="overview-tab" role="tabpanel" aria-labelledby="tab-overview">
+      <div class="detail-section">
+        <div class="section-header">
+          <h3><i class="fas fa-clipboard-list" aria-hidden="true"></i> Record Details</h3>
+        </div>
+
+        <div class="detail-grid">
+          <div class="detail-item">
+            <span class="detail-label">Title</span>
+            <span class="detail-value">{{ archive.title|default:"—" }}</span>
+          </div>
+
+          <div class="detail-item">
+            <span class="detail-label">Priority</span>
+            <span class="detail-value priority-{{ archive.is_critical|yesno:'critical,normal' }}">
+              {{ archive.is_critical|yesno:"Critical,Normal" }}
+            </span>
+          </div>
+
+          <div class="detail-item">
+            <span class="detail-label">Created By</span>
+            <span class="detail-value">
+              {# ✅ Prefer created_by if you use it, fallback to doctor #}
+              {% if archive.created_by %}
+                {{ archive.created_by.get_full_name|default:archive.created_by.username }}
+              {% elif archive.doctor %}
+                Dr. {{ archive.doctor.user.get_full_name|default:archive.doctor.user.username }}
+              {% else %}
+                —
+              {% endif %}
+            </span>
+          </div>
+
+          <div class="detail-item">
+            <span class="detail-label">Last Updated</span>
+            <span class="detail-value">{{ archive.updated_at|date:"M d, Y g:i A" }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <div class="section-header">
+          <h3><i class="fas fa-user-injured" aria-hidden="true"></i> Patient Information</h3>
+        </div>
+        <div class="detail-grid">
+          <div class="detail-item">
+            <span class="detail-label">Full Name</span>
+            <span class="detail-value">
+              {% if archive.patient %}{{ archive.patient.full_name|default:"—" }}{% else %}—{% endif %}
+            </span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Age</span>
+            <span class="detail-value">
+              {% if archive.patient and archive.patient.age %}{{ archive.patient.age }} years{% else %}—{% endif %}
+            </span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Last Visit</span>
+            <span class="detail-value">
+              {% if archive.patient and archive.patient.last_visit %}{{ archive.patient.last_visit|date:"M d, Y" }}{% else %}—{% endif %}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <div class="section-header">
+          <h3><i class="fas fa-user-md" aria-hidden="true"></i> Medical Professional</h3>
+        </div>
+        <div class="detail-grid">
+          <div class="detail-item">
+            <span class="detail-label">Name</span>
+            <span class="detail-value">
+              {% if archive.doctor %}
+                Dr. {{ archive.doctor.user.get_full_name|default:archive.doctor.user.username }}
+              {% else %}
+                —
+              {% endif %}
+            </span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Specialty</span>
+            <span class="detail-value">
+              {% if archive.doctor %}{{ archive.doctor.specialty|default:"—" }}{% else %}—{% endif %}
+            </span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Contact</span>
+            <span class="detail-value">
+              {% if archive.doctor %}{{ archive.doctor.user.email|default:"—" }}{% else %}—{% endif %}
+            </span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">License</span>
+            <span class="detail-value">
+              {% if archive.doctor %}{{ archive.doctor.medical_license|default:"—" }}{% else %}—{% endif %}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Attachments -->
+    <div class="tab-pane" id="attachments-tab" role="tabpanel" aria-labelledby="tab-attachments" hidden>
+      {% if voice_notes %}
+        <div class="detail-section">
+          <div class="section-header">
+            <h3><i class="fas fa-microphone" aria-hidden="true"></i> Voice Notes ({{ voice_notes|length }})</h3>
+          </div>
+
+          <div class="voice-grid">
+            {% for voice in voice_notes %}
+              <div class="voice-card">
+                <div class="voice-header">
+                  <i class="fas fa-wave-square" aria-hidden="true"></i>
+                  <div>
+                    <h4>{{ voice.title|default:"Voice Note" }}</h4>
+                    <span class="voice-meta">
+                      {{ voice.recorded_at|date:"M d, Y" }}
+                      {% if voice.duration_seconds %} • {{ voice.duration_seconds }}s{% endif %}
+                    </span>
+                  </div>
+                </div>
+
+                {% if voice.audio %}
+                  <audio controls class="voice-player" preload="metadata">
+                    <source src="{{ voice.audio.url }}">
+                    Your browser does not support audio playback.
+                  </audio>
+
+                  <a href="{% url 'medical_archive:download_voice_note' voice.id %}" class="download-btn">
+                    <i class="fas fa-download" aria-hidden="true"></i> Download
+                  </a>
+                {% else %}
+                  <div class="empty-state" style="padding:16px 0;">
+                    <p>—</p>
+                  </div>
+                {% endif %}
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
+
+      {% if attachments %}
+        <div class="detail-section">
+          <div class="section-header">
+            <h3><i class="fas fa-file-alt" aria-hidden="true"></i> Files ({{ attachments|length }})</h3>
+          </div>
+
+          <div class="file-grid">
+            {% for attach in attachments %}
+              <div class="file-card">
+                <div class="file-preview">
+                  {% if attach.is_image and attach.file %}
+                    <a href="{{ attach.file.url }}"
+                       data-lightbox="gallery-{{ archive.id }}"
+                       data-title="{{ attach.description|default:attach.file.name|escape }}">
+                      <img src="{{ attach.file.url }}"
+                           alt="{{ attach.description|default:'Attachment'|escape }}"
+                           loading="lazy">
+                    </a>
+                  {% elif attach.is_pdf %}
+                    <div class="file-icon pdf" aria-hidden="true"><i class="fas fa-file-pdf"></i></div>
+                  {% else %}
+                    <div class="file-icon" aria-hidden="true"><i class="fas fa-file-medical-alt"></i></div>
+                  {% endif %}
+                </div>
+
+                <div class="file-info">
+                  <h4 title="{{ attach.description|default:attach.file.name|escape }}">
+                    {{ attach.description|default:attach.file.name|truncatechars:30 }}
+                  </h4>
+
+                  <div class="file-meta">
+                    <span>{{ attach.uploaded_at|date:"M d, Y" }}</span>
+                    <span>{{ attach.file_size|default:"—" }}</span>
+                  </div>
+
+                  <a href="{% url 'medical_archive:download_attachment' attach.id %}" class="download-btn">
+                    <i class="fas fa-download" aria-hidden="true"></i> Download
+                  </a>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
+
+      {% if not voice_notes and not attachments %}
+        <div class="empty-state">
+          <i class="fas fa-inbox" aria-hidden="true"></i>
+          <h3>No attachments</h3>
+          <p>No files or voice notes attached to this record</p>
+        </div>
+      {% endif %}
+    </div>
+
+    <!-- Notes -->
+    <div class="tab-pane" id="notes-tab" role="tabpanel" aria-labelledby="tab-notes" hidden>
+      <div class="detail-section">
+        <div class="section-header">
+          <h3><i class="fas fa-notes-medical" aria-hidden="true"></i> Medical Notes</h3>
+        </div>
+
+        <div class="notes-content">
+          {% if archive.notes %}
+            {{ archive.notes|safe }}
+          {% else %}
+            <div class="empty-state">
+              <i class="fas fa-sticky-note" aria-hidden="true"></i>
+              <h3>No notes available</h3>
+              <p>No medical notes have been recorded for this patient</p>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Timeline -->
+    <div class="tab-pane" id="timeline-tab" role="tabpanel" aria-labelledby="tab-timeline" hidden>
+      <div class="detail-section">
+        <div class="section-header">
+          <h3><i class="fas fa-history" aria-hidden="true"></i> Record Timeline</h3>
+        </div>
+
+        <div class="timeline">
+          <div class="timeline-item">
+            <div class="timeline-marker success" aria-hidden="true"></div>
+            <div class="timeline-content">
+              <h4>Record Created</h4>
+              <span class="timeline-date">{{ archive.created_at|date:"F j, Y, g:i A" }}</span>
+              <p>
+                Medical record created by
+                {% if archive.doctor %}
+                  Dr. {{ archive.doctor.user.get_full_name|default:archive.doctor.user.username }}
+                {% elif archive.created_by %}
+                  {{ archive.created_by.get_full_name|default:archive.created_by.username }}
+                {% else %}
+                  —
+                {% endif %}
+              </p>
+            </div>
+          </div>
+
+          <div class="timeline-item">
+            <div class="timeline-marker warning" aria-hidden="true"></div>
+            <div class="timeline-content">
+              <h4>Record Updated</h4>
+              <span class="timeline-date">{{ archive.updated_at|date:"F j, Y, g:i A" }}</span>
+              <p>Record information was updated.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Bottom Action Bar -->
+  <div class="action-bar" role="contentinfo">
+    <a href="{% url 'medical_archive:archive_list' %}" class="action-btn back">
+      <i class="fas fa-list" aria-hidden="true"></i><span>All Records</span>
+    </a>
+
+    <div class="action-group">
+      <button class="action-btn share" type="button" id="shareBtn">
+        <i class="fas fa-share-alt" aria-hidden="true"></i><span>Share</span>
+      </button>
+
+      {# ✅ Export PDF endpoint (works even without JS) #}
+      <a class="action-btn export"
+         id="exportBtn"
+         data-export-url="{% url 'medical_archive:export_archive_pdf' archive.id %}"
+         href="{% url 'medical_archive:export_archive_pdf' archive.id %}">
+        <i class="fas fa-file-export" aria-hidden="true"></i><span>Export</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- Messages Toasts -->
+  {% if messages %}
+    <div class="messages-modal" aria-live="polite" aria-atomic="true">
+      {% for message in messages %}
+        {% if "error" in message.tags %}
+          <div class="message-alert danger" role="alert">
+            <i class="fas fa-exclamation-circle" aria-hidden="true"></i>
+            <span>{{ message }}</span>
+            <button class="close-message" type="button" aria-label="Close">&times;</button>
+          </div>
+        {% elif "success" in message.tags %}
+          <div class="message-alert success" role="alert">
+            <i class="fas fa-check-circle" aria-hidden="true"></i>
+            <span>{{ message }}</span>
+            <button class="close-message" type="button" aria-label="Close">&times;</button>
+          </div>
+        {% elif "warning" in message.tags %}
+          <div class="message-alert warning" role="alert">
+            <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
+            <span>{{ message }}</span>
+            <button class="close-message" type="button" aria-label="Close">&times;</button>
+          </div>
+        {% else %}
+          <div class="message-alert info" role="alert">
+            <i class="fas fa-info-circle" aria-hidden="true"></i>
+            <span>{{ message }}</span>
+            <button class="close-message" type="button" aria-label="Close">&times;</button>
+          </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+  {% endif %}
+
 </div>
 {% endblock %}
 
 {% block extra_js %}
   <script src="https://cdnjs.cloudflare.com/ajax/libs/lightbox2/2.11.3/js/lightbox.min.js"></script>
-  <script>
-    lightbox.option({
-      'resizeDuration': 200,
-      'wrapAround': true,
-      'albumLabel': 'Attachment %1 of %2'
-    });
-    document.querySelector('.btn-print').addEventListener('click', function() {
-      window.print();
-    });
-  </script>
+  <script src="{% static 'js/medical_archive/archive_detail.js' %}"></script>
 {% endblock %}

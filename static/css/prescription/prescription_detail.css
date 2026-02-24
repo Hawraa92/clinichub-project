@@ -1,341 +1,811 @@
-/* =================== Base Layout =================== */
-:root {
-  --primary-color: #00796b;
-  --secondary-color: #00bcd4;
-  --accent-gradient: linear-gradient(to right, var(--primary-color), var(--secondary-color));
-  --text-color: #444;
-  --light-bg: #f3f4f6;
-  --card-bg: #fff;
-  --border-radius: 16px;
-  --box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
-  --header-text: #fff;
-  --header-subtext: #e1f5fe;
+/* =========================================================
+   File: static/css/prescription/prescription_detail.css
+   RX - Clean White Paper (No Boxes) + Watermark (Image + Doctor Name)
+   Prefix: rxp-
+   PDF/Print Friendly (html2pdf safe)
+
+   ✅ Goals NOW:
+   - A5 Portrait
+   - صفحة وحدة قدر الإمكان (حتى على Scale 100%)
+   - Header WHITE + Doctor name BLACK
+   - Shadow واضح تحت الهيدر (screen + print-safe)
+   - تقليل الهوامش/الخطوط بالطباعة حتى ما يعبر للصفحة الثانية
+========================================================= */
+
+.rxp, .rxp * , .rxp *::before, .rxp *::after{ box-sizing: border-box; }
+
+.rxp{
+  font-family: "Cairo", system-ui, -apple-system, Segoe UI, Arial, sans-serif;
+  background: #f4f7ff;
+  padding: 22px 0;
+  color: #0f172a;
+
+  direction: rtl;
+  text-align: right;
+
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
 }
 
-@page {
-  size: A5 portrait;
-  margin: 0;
-}
-
-body {
-  background: var(--light-bg);
-  font-family: 'Arial', sans-serif;
-  font-size: 14px;
-  margin: 0;
-  color: var(--text-color);
-  line-height: 1.6;
-}
-
-/* =================== Prescription Container =================== */
-.prescription-container.colorful-style {
-  position: relative;
-  padding: 30px;
-  background: var(--card-bg);
-  border-radius: var(--border-radius);
-  box-shadow: var(--box-shadow);
-  overflow: hidden;
-  max-width: 700px;
-  margin: 20px auto;
-}
-
-/* =================== Watermark =================== */
-.watermark {
-  position: absolute;
-  top: 15%;
-  left: 50%;
-  transform: translateX(-50%);
-  height: 120px;
-  opacity: 0.1;
-  z-index: 0;
-  pointer-events: none;
+.rxp-stage{
+  width: 100%;
   display: flex;
   justify-content: center;
-  align-items: center;
+  padding: 0 12px;
 }
 
-.watermark img {
-  height: 100%;
-  object-fit: contain;
-  filter: grayscale(100%);
-}
+/* =========================================================
+   Paper (Screen base)
+   ✅ خلي العرض A5 حتى تكون المعاينة مثل الطباعة
+========================================================= */
 
-/* =================== Header Section =================== */
-.doctor-header-vibrant {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: var(--accent-gradient);
-  padding: 25px;
-  border-radius: var(--border-radius);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  position: relative;
-  z-index: 1;
-  color: var(--header-text);
-}
+.rxp-paper{
+  /* per-doctor tokens (يمكن override من template عبر style="--var: ...") */
+  --rx-primary: #111827;
+  --rx-accent:  #C9A227;
 
-.logo-box-rounded {
-  background: var(--card-bg);
-  padding: 12px;
-  border-radius: 50%;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  flex-shrink: 0;
-}
+  /* Header (requested: WHITE + BLACK) */
+  --rx-header-bg: #ffffff;
+  --rx-header-text: #000000;            /* ✅ اسم الطبيب/الدكتور */
+  --rx-header-subtext: #334155;         /* ✅ الاختصاص تحت الخط */
+  --rx-header-line: var(--rx-accent);   /* ✅ لون خط اسم الطبيب */
 
-.heart-logo {
-  height: 80px;
-  width: 80px;
-  object-fit: contain;
-}
+  /* Patient row colors (اختياري للثيم) */
+  --rx-patient-k: #64748b;              /* labels */
+  --rx-patient-v: #0f172a;              /* values */
 
-.dna-badge {
-  font-size: 32px;
-  color: var(--header-text);
-}
+  /* Shadow under header (print-safe-ish) */
+  --rx-header-shadow:
+    0 12px 22px rgba(2, 6, 23, .18),
+    0 2px 0 rgba(255,255,255,.70) inset,
+    0 -10px 18px rgba(2,6,23,.05) inset;
 
-.doctor-info {
-  flex: 1;
-  text-align: center;
-  padding: 0 20px;
-}
+  --rx-header-edge: linear-gradient(90deg,
+    rgba(17,24,39,0),
+    rgba(17,24,39,.16),
+    rgba(17,24,39,0)
+  );
 
-.doctor-name {
-  font-size: 22px;
-  font-weight: bold;
-  margin: 0;
-  letter-spacing: 0.5px;
-}
+  /* Paper */
+  --rx-paper-bg: #FFFCF8;
+  --rx-paper-border: rgba(15, 23, 42, .14);
 
-.doctor-name-en {
-  font-size: 14px;
-  color: var(--header-subtext);
-  margin-bottom: 5px;
-  opacity: 0.9;
-}
+  --rx-accent-soft: rgba(201,162,39,.12);
+  --rx-accent-soft-2: rgba(201,162,39,.18);
 
-.degree {
-  font-size: 12px;
-  color: var(--header-subtext);
-  font-weight: 500;
-  letter-spacing: 0.5px;
-}
+  --rx-ink: #0f172a;
+  --rx-muted: #64748b;
+  --rx-line: rgba(15, 23, 42, .12);
 
-.specialization {
-  font-size: 12px;
-  line-height: 1.5;
-  margin: 8px 0;
-  opacity: 0.9;
-}
-
-.membership {
-  font-size: 10px;
-  margin-top: 10px;
-  opacity: 0.8;
-}
-
-/* =================== Patient Information =================== */
-.info-line {
-  display: flex;
-  justify-content: space-between;
-  border-bottom: 1px solid #eee;
-  padding: 12px 0;
-  font-size: 14px;
-  position: relative;
-  z-index: 1;
-}
-
-.info-line strong {
-  color: var(--primary-color);
-}
-
-/* =================== Prescription Card =================== */
-.prescription-card {
-  background: #f9f9f9;
-  border-left: 4px solid var(--primary-color);
-  padding: 18px;
-  margin-top: 20px;
-  border-radius: 12px;
-  box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.05);
-  position: relative;
-  z-index: 1;
-}
-
-.prescription-card h3 {
-  margin-top: 0;
-  margin-bottom: 15px;
-}
-
-.text-gradient {
-  background: var(--accent-gradient);
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  font-weight: bold;
-  font-size: 20px;
-}
-
-/* =================== Audio Section =================== */
-.audio-section {
-  direction: ltr;
-  text-align: left;
-  margin-top: 20px;
-  font-size: 14px;
-}
-
-.custom-audio-player audio {
   width: 100%;
-  border-radius: 8px;
-  background-color: #e0f2f1;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  outline: none;
-}
+  max-width: 148mm;          /* ✅ A5 width */
+  min-height: 210mm;         /* ✅ A5 height */
 
-.custom-audio-player audio::-webkit-media-controls-panel {
-  background: var(--primary-color);
-  border-radius: 20px;
-}
+  background: var(--rx-paper-bg);
+  border: 2px solid var(--rx-paper-border);
+  border-radius: 16px;
 
-/* =================== Signature & Footer =================== */
-.signature-area {
-  text-align: center;
-  margin-top: 25px;
   position: relative;
+  overflow: hidden;
+  box-shadow: 0 16px 40px rgba(2, 6, 23, .10);
+
+  /* screen padding */
+  padding: 12mm 12mm 10mm;
+
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.rxp-content{
+  position: relative;
+  z-index: 2;
+  background: transparent;
+}
+
+/* =========================================================
+   Watermark (Centered + No Tilt) - PDF SAFE
+========================================================= */
+
+.rxp-watermark{
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
   z-index: 1;
+  display: grid;
+  place-items: center;
 }
 
-.signature-area img {
-  max-height: 80px;
-  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+.rxp-wm-imgwrap{
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 0 10mm;
 }
 
-.stamp-img {
-  max-height: 70px;
-  margin-top: 5px;
+.rxp-wm-img{
+  width: 560px;
+  height: 560px;
+  max-width: 72%;
+  max-height: 72%;
+  object-fit: contain;
+  object-position: center;
+  opacity: .12;
+  filter: none;
+  transform: none;
 }
 
-.footer-contact {
+.rxp-wm-text{
+  position: absolute;
+  left: 50%;
+  top: 68%;
+  transform: translateX(-50%);
+  max-width: 92%;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+
+  color: var(--rx-primary);
+  opacity: .12;
+  font-weight: 900;
+  letter-spacing: .3px;
+  white-space: nowrap;
+
+  direction: ltr;
+  justify-content: center;
+}
+
+.rxp-wm-prefix{ font-size: 34px; }
+
+.rxp-wm-name{
+  font-size: 38px;
+  direction: auto;
+  unicode-bidi: plaintext;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pdf-export .rxp-wm-img{ opacity: .13; }
+.pdf-export .rxp-wm-text{ opacity: .13; }
+
+/* =========================================================
+   Header (WHITE + Black Text + Shadow)
+========================================================= */
+
+.rxp-header{
+  position: relative;
+  z-index: 2;
   text-align: center;
+
+  padding: 14px 14px 16px;
+  border-radius: 18px;
+
+  background:
+    linear-gradient(to bottom,
+      rgba(255,255,255,.96),
+      rgba(255,255,255,0) 62%
+    ) top/100% 70% no-repeat,
+    linear-gradient(to top,
+      rgba(17,24,39,.10),
+      rgba(17,24,39,0) 62%
+    ) bottom/100% 70% no-repeat,
+    var(--rx-header-edge) bottom / 100% 3px no-repeat,
+    var(--rx-header-bg);
+
+  border: 1px solid rgba(17,24,39,.10);
+  outline: 1px solid rgba(255,255,255,.72);
+  outline-offset: -2px;
+
+  box-shadow: var(--rx-header-shadow);
+
+  margin-bottom: 18px;
+
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.rxp-header::before{
+  content:"";
+  position:absolute;
+  left:-12%;
+  right:-12%;
+  top:-46%;
+  height: 110%;
+  transform: rotate(-8deg);
+  pointer-events:none;
+  opacity: .65;
+  background: linear-gradient(to bottom,
+    rgba(255,255,255,.70),
+    rgba(255,255,255,.22) 55%,
+    rgba(255,255,255,0) 100%
+  );
+}
+
+.rxp-header::after{
+  content:"";
+  position:absolute;
+  inset:-70% -80%;
+  transform: rotate(12deg);
+  pointer-events:none;
+  opacity:.20;
+  background: linear-gradient(110deg,
+    rgba(255,255,255,0) 40%,
+    rgba(17,24,39,.10) 50%,
+    rgba(255,255,255,0) 60%
+  );
+}
+
+.rxp-doctor{
+  font-weight: 900;
+  font-size: 24px;
+  color: var(--rx-header-text);
+
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.rxp-docword{ font-weight: 900; color: var(--rx-header-text) !important; }
+
+.rxp-docname{
+  direction: auto;
+  unicode-bidi: plaintext;
+  font-weight: 900;
+  color: var(--rx-header-text);
+}
+
+.rxp-name-line,
+.rxp-header-line{
+  height: 5px;
+  width: clamp(180px, 55%, 560px);
+  margin: 10px auto 8px;
+  border-radius: 999px;
+
+  background: linear-gradient(90deg,
+    rgba(0,0,0,0),
+    var(--rx-header-line),
+    rgba(0,0,0,0)
+  );
+  box-shadow: 0 8px 14px rgba(2,6,23,.10);
+}
+
+.rxp-specialty{
+  font-weight: 800;
+  color: var(--rx-header-subtext);
+  font-size: 15.5px;
+  line-height: 1.7;
+  margin: 0;
+}
+
+/* =========================================================
+   Patient row
+========================================================= */
+
+.rxp-row{
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: 1.6fr .7fr .8fr .6fr;
+  gap: 14px;
+  padding: 10px 0;
+  margin-top: 0;
+
+  direction: rtl;
+  text-align: right;
+}
+
+.rxp-item{ min-width: 0; }
+
+.rxp-item .k{
   font-size: 12px;
-  color: #666;
-  margin-top: 20px;
+  color: var(--rx-patient-k);
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+
+.rxp-item .v{
+  font-size: 15px;
+  font-weight: 900;
+  color: var(--rx-patient-v);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  direction: auto;
+  unicode-bidi: plaintext;
+}
+
+.rxp-sep,
+.rxp-rule{
   position: relative;
-  z-index: 1;
+  z-index: 2;
+  height: 1px;
+  background: var(--rx-line);
+  margin: 10px 0;
 }
 
-.footer-contact p {
-  margin: 5px 0;
+.rxp-main{ position: relative; z-index: 2; }
+
+/* =========================================================
+   Blocks (Dx/Rx/Note…)
+========================================================= */
+
+.rxp-block{ break-inside: avoid; page-break-inside: avoid; }
+
+.rxp-block-title,
+.rxp-title{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 900;
+  color: var(--rx-ink);
+  margin: 6px 0 10px;
+  width: 100%;
 }
 
-/* =================== Buttons =================== */
-.btn {
-  padding: 12px 28px;
-  font-size: 16px;
-  font-weight: bold;
-  border-radius: 25px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  transition: all 0.3s ease;
-  background: var(--accent-gradient);
-  color: white;
-  border: none;
-  cursor: pointer;
+.rxp-block-title--simple{
+  direction: ltr;
+  justify-content: flex-start;
+  text-align: left;
 }
 
-.btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
-  opacity: 0.9;
+.rxp-block-title:not(.rxp-block-title--simple){
+  direction: rtl;
+  justify-content: flex-start;
 }
 
-/* =================== Follow-up Note =================== */
-.follow-up-note {
+.rxp-block-title--simple > span:not(.rxp-dot):not(.rxp-chip){ display: none; }
+
+.rxp-dot{
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--rx-accent);
+}
+
+.rxp-chip{
+  font-size: 12px;
+  font-weight: 900;
+  padding: 4px 10px;
+  border-radius: 999px;
+  color: var(--rx-primary);
+  background: var(--rx-accent-soft);
+  border: 1px solid var(--rx-accent-soft-2);
+  margin: 0 !important;
+  flex: 0 0 auto;
+}
+
+.rxp-block-title--simple .rxp-chip{ order: -1; }
+
+/* =========================================================
+   Bodies
+========================================================= */
+
+.rxp-block-body,
+.rxp-body{
   font-size: 14px;
-  margin-top: 25px;
-  padding: 15px;
-  background-color: #f0f7f6;
-  border-radius: 8px;
-  border-left: 4px solid var(--secondary-color);
+  line-height: 1.9;
+  color: var(--rx-ink);
+
+  text-align: right;
+  direction: auto;
+  unicode-bidi: plaintext;
 }
 
-/* =================== Print Styles =================== */
-@media print {
-  nav, header, footer, .d-print-none, .audio-section {
-    display: none !important;
+.rxp-rx .rxp-block-body{ text-align: left; }
+
+.rxp-dx .rxp-block-body,
+.rxp-dx .rxp-body{
+  text-align: left !important;
+  direction: ltr !important;
+  unicode-bidi: plaintext;
+  font-weight: 800;
+}
+
+.rxp-note .rxp-block-title{
+  direction: ltr !important;
+  justify-content: flex-start !important;
+  text-align: left !important;
+  align-items: center !important;
+  gap: 10px !important;
+}
+
+.rxp-note .rxp-block-body{
+  text-align: left !important;
+  direction: ltr !important;
+  unicode-bidi: plaintext;
+  font-weight: 900 !important;
+}
+
+.rxp-strong{ font-weight: 900; color: var(--rx-ink); }
+.rxp-sub{ font-size: 12.5px; color: var(--rx-muted); line-height: 1.6; }
+
+/* =========================================================
+   Table (Rx)
+========================================================= */
+
+.rxp-table{
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rxp-table thead{ display:none; }
+
+.rxp-table tbody td{
+  padding: 10px 8px;
+  border-bottom: 1px solid rgba(15,23,42,.08);
+  vertical-align: top;
+  font-size: 13.5px;
+
+  direction: auto;
+  unicode-bidi: plaintext;
+
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.rxp-table tbody tr{
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.rxp-table tbody tr:last-child td{ border-bottom: 0; }
+
+.col-n{
+  width: 38px;
+  text-align: center;
+  font-weight: 900;
+}
+
+.rxp-empty{
+  text-align:center;
+  color: var(--rx-muted);
+  font-weight: 900;
+  padding: 14px 8px !important;
+}
+
+/* =========================================================
+   QR
+========================================================= */
+
+.rxp-qr,
+.rxp-qr-mini{
+  width: 70px;
+  height: 70px;
+  border: 1px solid rgba(15,23,42,.12);
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #fff;
+  flex: 0 0 auto;
+}
+
+.rxp-qr img,
+.rxp-qr-mini img{
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain;
+  max-width: 70px !important;
+  max-height: 70px !important;
+}
+
+img[alt="QR"]{
+  width: 70px !important;
+  height: 70px !important;
+  max-width: 70px !important;
+  max-height: 70px !important;
+}
+
+.rxp-voice{ display:none !important; }
+
+/* Buttons */
+.rxp-actions{
+  position: relative;
+  z-index: 2;
+  margin-top: 12px;
+  display:flex;
+  justify-content:flex-end;
+  gap: 10px;
+}
+
+.rxp-btn{
+  border: 0;
+  border-radius: 14px;
+  padding: 10px 14px;
+  font-weight: 900;
+  cursor:pointer;
+  display:inline-flex;
+  align-items:center;
+  gap: 10px;
+  transition: .15s ease;
+}
+
+.rxp-btn-primary{
+  background: linear-gradient(90deg, var(--rx-primary), rgba(17,24,39,.75));
+  color:#fff;
+}
+
+.rxp-btn-outline{
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, .16);
+  color: var(--rx-ink);
+}
+
+/* =========================================================
+   Footer (compact-friendly)
+========================================================= */
+
+.rxp-footer{
+  position: relative;
+  z-index: 2;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--rx-line);
+
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  align-items: center;
+  text-align: center;
+
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.rxp-follow{
+  width: 100%;
+  font-weight: 900;
+  color: var(--rx-ink);
+  text-align: center;
+  line-height: 1.4;
+  font-size: 12.5px;
+}
+
+.rxp-footer-row{
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.rxp-footer-pills{
+  flex: 1 1 520px;
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  align-items: center;
+  direction: rtl;
+}
+
+.rxp-pill{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid rgba(15, 23, 42, .12);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, .02);
+  color: var(--rx-muted);
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.rxp-pill i{
+  color: var(--rx-primary);
+  font-size: 12px;
+}
+
+.rxp-pill-label{
+  color: var(--rx-ink);
+  font-weight: 900;
+  opacity: .92;
+}
+
+.rxp-pill-value{
+  font-weight: 900;
+  color: var(--rx-ink);
+  letter-spacing: .2px;
+  direction: auto;
+  unicode-bidi: plaintext;
+}
+
+.rxp-pill-address{ max-width: 520px; }
+.rxp-pill-address .rxp-pill-value{
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Toast */
+.rxp-toast{
+  position: fixed;
+  bottom: 18px;
+  right: 18px;
+  background: rgba(15, 23, 42, .92);
+  color: #fff;
+  border-radius: 14px;
+  padding: 10px 12px;
+  font-weight: 900;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: .18s ease;
+  z-index: 9999;
+}
+.rxp-toast.show{ opacity: 1; transform: translateY(0); }
+
+/* =========================================================
+   PRINT (A5 + One-page tuned)
+   ✅ صعود للأعلى + يقلل الهوامش/الفراغات + يثبت صفحة وحدة قدر الإمكان
+========================================================= */
+
+/* ✅ ملاحظة مهمّة:
+   بعض الطابعات/المتصفح ما يقبل margin=0 فعلياً.
+   لذلك نسوي margin صغير داخل @page + نقلل padding داخلي بالورقة. */
+@page{
+  size: A5 portrait;
+  margin: 5mm; /* ✅ safer من 0mm */
+}
+
+@media print{
+  html, body{
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
   }
 
-  body {
-    margin: 0;
-    background: #fff;
-    font-size: 12px;
-  }
+  .rxp{ background:#fff !important; padding:0 !important; }
+  .rxp-stage{ padding:0 !important; }
 
-  .prescription-container {
-    box-shadow: none !important;
-    border: none;
-    padding: 0;
-  }
-
-  .prescription-card {
-    page-break-inside: avoid;
-  }
-
-  .doctor-header-vibrant {
+  .rxp, .rxp *{
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
+
+  /* إخفاء الأزرار بالطباعة */
+  .rxp-actions{ display:none !important; }
+
+  /* ✅ إلغاء مطلقات تسبب قص/اختفاء عند بعض المتصفحات:
+     بدال absolute نخليها flow طبيعي لكن بمقاسات A5 ثابتة */
+  #rxCard{
+    position: relative !important;
+    left: auto !important;
+    top: auto !important;
+    margin: 0 auto !important;
+  }
+
+  /* ✅ تثبيت A5 فعلياً */
+  #rxCard{
+    width: 148mm !important;
+    max-width: 148mm !important;
+    min-height: 210mm !important;
+  }
+
+  /* ✅ تضييق padding حتى يبقى صفحة وحدة قدر الإمكان */
+  #rxCard.rxp-paper{
+    padding-top: 2mm !important;
+    padding-right: 6mm !important;
+    padding-left: 6mm !important;
+    padding-bottom: 5mm !important;
+
+    border-radius: 0 !important;
+    border-width: 1px !important;
+
+    /* الطباعة أنظف بدون ظلال قوية */
+    box-shadow: none !important;
+  }
+
+  /* Header: أعلى + أقل padding */
+  .rxp-header{
+    margin: 0 0 8px 0 !important;
+    padding: 9px 10px 11px !important;
+
+    /* ظل خفيف فقط (بعض الطابعات ما تطبعه أصلاً) */
+    box-shadow: 0 6px 14px rgba(2,6,23,.10) !important;
+  }
+  .rxp-header::before{ opacity:.50 !important; }
+  .rxp-header::after{ opacity:.16 !important; }
+
+  .rxp-doctor{ font-size: 21px !important; }
+  .rxp-specialty{ font-size: 13.2px !important; line-height: 1.55 !important; }
+
+  .rxp-name-line,
+  .rxp-header-line{
+    margin: 7px auto 5px !important;
+    height: 4px !important;
+  }
+
+  /* Patient row: compact */
+  .rxp-row{
+    gap: 9px !important;
+    padding: 6px 0 !important;
+  }
+  .rxp-item .k{ font-size: 11px !important; margin-bottom: 3px !important; }
+  .rxp-item .v{ font-size: 13.2px !important; }
+
+  .rxp-sep, .rxp-rule{ margin: 6px 0 !important; }
+
+  /* Titles + bodies: compact */
+  .rxp-block-title, .rxp-title{ margin: 3px 0 6px !important; }
+  .rxp-chip{ font-size: 11px !important; padding: 3px 9px !important; }
+
+  .rxp-block-body, .rxp-body{
+    font-size: 12.2px !important;
+    line-height: 1.65 !important;
+  }
+
+  /* Table: أهم شي حتى ما يعبر */
+  .rxp-table tbody td{
+    padding: 6px 5px !important;
+    font-size: 12px !important;
+    line-height: 1.35 !important;
+  }
+  .col-n{ width: 34px !important; }
+
+  /* Footer + pills + QR: أصغر */
+  .rxp-footer{
+    margin-top: 6px !important;
+    padding-top: 6px !important;
+    gap: 6px !important;
+  }
+  .rxp-follow{ font-size: 11.2px !important; }
+
+  .rxp-pill{
+    font-size: 10.2px !important;
+    padding: 3px 7px !important;
+    background: transparent !important;
+  }
+
+  .rxp-qr, .rxp-qr-mini{
+    width: 56px !important;
+    height: 56px !important;
+  }
+  .rxp-qr img, .rxp-qr-mini img{
+    max-width: 56px !important;
+    max-height: 56px !important;
+  }
+  img[alt="QR"]{
+    width: 56px !important;
+    height: 56px !important;
+    max-width: 56px !important;
+    max-height: 56px !important;
+  }
+
+  /* watermark أخف بالطباعة */
+  .rxp-wm-img{ opacity: .06 !important; }
+  .rxp-wm-text{ opacity: .06 !important; }
+
+  /* ✅ منع الصفحة الثانية بسبب مسافات بالمتصفح */
+  .rxp-header, .rxp-row, .rxp-main, .rxp-footer, .rxp-block, .rxp-table tr{
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
 }
 
-/* =================== Responsive Design =================== */
-@media (max-width: 768px) {
-  .prescription-container {
-    padding: 15px;
-    margin: 10px;
-  }
-
-  .doctor-header-vibrant {
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    padding: 20px;
-  }
-
-  .logo-box-rounded {
-    margin-bottom: 15px;
-  }
-
-  .heart-logo {
-    height: 60px;
-    width: 60px;
-  }
-
-  .doctor-info {
-    padding: 10px 0;
-  }
-
-  .info-line {
-    flex-direction: column;
-    gap: 5px;
-    font-size: 14px;
-  }
-
-  .text-gradient {
-    font-size: 18px;
-  }
-
-  .prescription-card {
-    margin-top: 15px;
-    padding: 15px;
-  }
+/* ✅ Avoid ugly breaks (إذا المحتوى طويل جداً راح يطلع صفحة ثانية غصب) */
+.rxp-row, .rxp-footer, .rxp-grid2, .rxp-block{
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+.rxp-table tr{
+  page-break-inside: avoid;
+  break-inside: avoid;
 }
 
-@media (max-width: 480px) {
-  .doctor-name {
-    font-size: 18px;
-  }
-  
-  .doctor-name-en {
-    font-size: 12px;
-  }
-  
-  .degree, .specialization {
-    font-size: 11px;
-  }
+/* =========================================================
+   Responsive
+========================================================= */
+
+@media (max-width: 900px){
+  .rxp-row{ grid-template-columns: 1fr 1fr; }
+  .rxp-wm-prefix{ font-size: 28px; }
+  .rxp-wm-name{ font-size: 30px; }
+  .rxp-footer-row{ justify-content: center; }
 }

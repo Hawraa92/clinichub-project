@@ -1,8 +1,3 @@
-"""
-patient/models.py
-Refactored 06-Aug-2025 — cleansed, validated, ML-friendly, DB-hardened
-"""
-
 from __future__ import annotations
 
 import re
@@ -11,27 +6,82 @@ from typing import Final, Optional
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.core.validators import MinValueValidator, MaxValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import Q
-from django.db.models.functions import Lower  # case-insensitive indexes/constraints
+from django.db.models.functions import Lower
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-# ------------------------------------------------------------------ #
-#                      Optional: phonenumbers                         #
-# ------------------------------------------------------------------ #
+from core.models import SoftDeleteModel  # ✅ Soft Delete base
+
 try:
     import phonenumbers as _pn  # type: ignore
     _HAS_PN: Final[bool] = True
-except ImportError:  # pragma: no cover
+except ImportError:
     _HAS_PN = False
 
+# يسمح: + اختياري + أرقام فقط (بعد التنظيف)
 MOBILE_REGEX = re.compile(r"^\+?\d{7,15}$")
 
 
+def _normalize_mobile(value: str) -> str:
+    """
+    Normalize common user inputs:
+    - remove spaces, dashes, parentheses, dots
+    - keep digits and a leading '+'
+    """
+    if not value:
+        return ""
+    v = value.strip()
+    if not v:
+        return ""
+
+    # keep + only if it is leading; remove all other non-digit chars
+    v = v.replace(" ", "").replace("-", "").replace("(", "").replace(")", "").replace(".", "")
+    # also remove any weird characters except digits and +
+    v = re.sub(r"[^\d+]", "", v)
+
+    # allow only one leading '+'
+    if "+" in v and not v.startswith("+"):
+        v = v.replace("+", "")  # keep digits only
+    if v.startswith("+"):
+        v = "+" + re.sub(r"[^\d]", "", v[1:])
+    else:
+        v = re.sub(r"[^\d]", "", v)
+
+    return v
+
+
 def validate_mobile(value: str) -> None:
-    """E.164-like phone validator (+ optional, 7–15 digits)."""
-    if value and not MOBILE_REGEX.match(value):
+    """
+    Accepts typical Iraqi inputs (0770..., +964..., with spaces/dashes).
+    If phonenumbers installed: validate properly (IQ region).
+    Otherwise: fallback to regex after normalization.
+    """
+    if not value:
+        return
+
+    normalized = _normalize_mobile(value)
+    if not normalized:
+        return
+
+    if _HAS_PN:
+        try:
+            parsed = _pn.parse(normalized, "IQ")
+            if not _pn.is_possible_number(parsed) or not _pn.is_valid_number(parsed):
+                raise ValidationError(
+                    _("%(value)s is not a valid phone number."),
+                    params={"value": value},
+                )
+            return
+        except ValidationError:
+            raise
+        except Exception:
+            # fallback to regex if parsing fails
+            pass
+
+    if not MOBILE_REGEX.match(normalized):
         raise ValidationError(
             _("%(value)s is not a valid phone number."),
             params={"value": value},
@@ -43,9 +93,6 @@ def validate_dob(value) -> None:  # noqa: ANN001
         raise ValidationError(_("Date of birth cannot be in the future."))
 
 
-# ------------------------------------------------------------------ #
-#                         Enumerated Choices                          #
-# ------------------------------------------------------------------ #
 class Sex(models.TextChoices):
     MALE = "M", _("Male")
     FEMALE = "F", _("Female")
@@ -106,23 +153,24 @@ class IncomeLevel(models.IntegerChoices):
     OVER_75K = 8, _("≥ $75 000")
 
 
-# ------------------------------------------------------------------ #
-#                               Model                                 #
-# ------------------------------------------------------------------ #
-class Patient(models.Model):
-    """Primary patient record. One-to-one optional with AUTH_USER."""
+class Patient(SoftDeleteModel):
+    """
+    ✅ Patient now supports Soft Delete + Restore via SoftDeleteModel.
+    IMPORTANT:
+    - Unique constraints (mobile/email) are enforced only for ACTIVE records (is_deleted=False).
+    """
 
-    # --- account linkage ---
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
+        # ✅ لا نخليها CASCADE حتى لا يصير Hard delete للمريض إذا انحذف اليوزر
+        on_delete=models.SET_NULL,
         related_name="patient_profile",
         verbose_name=_("User Account"),
         blank=True,
         null=True,
+        db_index=True,
     )
 
-    # --- identity ---
     full_name = models.CharField(_("Full Name"), max_length=100, db_index=True)
     date_of_birth = models.DateField(
         _("Date of Birth"),
@@ -138,12 +186,13 @@ class Patient(models.Model):
         blank=True,
         null=True,
         db_index=True,
-        help_text=_("E.164 format: optional +, 7–15 digits."),
+        help_text=_("E.164 format: optional +, 7–15 digits (spaces/dashes allowed)."),
     )
     address = models.CharField(_("Address"), max_length=255, blank=True, null=True)
     email = models.EmailField(_("Email Address"), max_length=100, blank=True, null=True)
 
-    # --- clinical baseline ---
+    nationality = models.CharField(_("Nationality"), max_length=60, blank=True, null=True, db_index=True)
+
     diabetes_status = models.IntegerField(
         _("Diabetes Status"),
         choices=DiabetesStatus.choices,
@@ -175,24 +224,14 @@ class Patient(models.Model):
 
     smoker = models.IntegerField(_("Smoker?"), choices=YesNo.choices, default=0)
     stroke = models.IntegerField(_("Stroke?"), choices=YesNo.choices, default=0)
-    heart_disease_or_attack = models.IntegerField(
-        _("Heart Disease or Attack?"), choices=YesNo.choices, default=0
-    )
+    heart_disease_or_attack = models.IntegerField(_("Heart Disease or Attack?"), choices=YesNo.choices, default=0)
     phys_activity = models.IntegerField(_("Physical Activity?"), choices=YesNo.choices, default=0)
     fruits = models.IntegerField(_("Eats Fruits Regularly?"), choices=YesNo.choices, default=0)
     veggies = models.IntegerField(_("Eats Vegetables Regularly?"), choices=YesNo.choices, default=0)
-    hvy_alcohol_consump = models.IntegerField(
-        _("Heavy Alcohol Consumption?"), choices=YesNo.choices, default=0
-    )
-    any_healthcare = models.IntegerField(
-        _("Any Healthcare Coverage?"), choices=YesNo.choices, default=0
-    )
-    no_doc_bc_cost = models.IntegerField(
-        _("Could Not See Doctor Due to Cost?"), choices=YesNo.choices, default=0
-    )
-    gen_hlth = models.IntegerField(
-        _("General Health"), choices=GeneralHealth.choices, blank=True, null=True
-    )
+    hvy_alcohol_consump = models.IntegerField(_("Heavy Alcohol Consumption?"), choices=YesNo.choices, default=0)
+    any_healthcare = models.IntegerField(_("Any Healthcare Coverage?"), choices=YesNo.choices, default=0)
+    no_doc_bc_cost = models.IntegerField(_("Could Not See Doctor Due to Cost?"), choices=YesNo.choices, default=0)
+    gen_hlth = models.IntegerField(_("General Health"), choices=GeneralHealth.choices, blank=True, null=True)
     ment_hlth = models.IntegerField(
         _("Mental Health Days"),
         blank=True,
@@ -217,7 +256,6 @@ class Patient(models.Model):
         help_text=_("M = Male, F = Female"),
     )
 
-    # Age group auto-calculated from DOB
     age_group = models.IntegerField(
         _("Age Group"),
         choices=AgeGroup.choices,
@@ -226,20 +264,9 @@ class Patient(models.Model):
         null=True,
     )
 
-    education = models.IntegerField(
-        _("Education Level"),
-        choices=EducationLevel.choices,
-        blank=True,
-        null=True,
-    )
-    income = models.IntegerField(
-        _("Income Level"),
-        choices=IncomeLevel.choices,
-        blank=True,
-        null=True,
-    )
+    education = models.IntegerField(_("Education Level"), choices=EducationLevel.choices, blank=True, null=True)
+    income = models.IntegerField(_("Income Level"), choices=IncomeLevel.choices, blank=True, null=True)
 
-    # --- notes & prediction ---
     past_medical_history = models.TextField(_("Past Medical History"), blank=True, null=True)
     drug_history = models.TextField(_("Drug History"), blank=True, null=True)
     investigations = models.TextField(_("Investigations"), blank=True, null=True)
@@ -259,7 +286,6 @@ class Patient(models.Model):
     )
     clinical_notes = models.TextField(_("Clinical Notes"), blank=True, null=True)
 
-    # --- relations & meta ---
     doctor = models.ForeignKey(
         "doctor.Doctor",
         on_delete=models.SET_NULL,
@@ -267,8 +293,10 @@ class Patient(models.Model):
         verbose_name=_("Assigned Doctor"),
         blank=True,
         null=True,
+        db_index=True,
     )
-    created_at = models.DateTimeField(_("Created At"), auto_now_add=True)
+
+    created_at = models.DateTimeField(_("Created At"), auto_now_add=True, db_index=True)
 
     class Meta:
         verbose_name = _("Patient")
@@ -278,135 +306,150 @@ class Patient(models.Model):
             models.Index(fields=["doctor", "full_name"]),
             models.Index(fields=["date_of_birth"]),
             models.Index(fields=["doctor", "created_at"]),
-            # faster case-insensitive search by name
             models.Index(Lower("full_name"), name="idx_patient_full_name_lower"),
-            # optional: case-insensitive lookup by email
             models.Index(Lower("email"), name="idx_patient_email_lower"),
         ]
         constraints = [
-            # BMI range (DB-level) consistent with field validators
             models.CheckConstraint(
                 check=(Q(bmi__gte=10) & Q(bmi__lte=80)) | Q(bmi__isnull=True),
                 name="patient_bmi_range",
             ),
-            # HbA1c range (DB-level)
             models.CheckConstraint(
                 check=(Q(hbA1c__gte=3) & Q(hbA1c__lte=15)) | Q(hbA1c__isnull=True),
                 name="patient_hba1c_range",
             ),
-            # ment_hlth & phys_hlth ranges (DB-level)
             models.CheckConstraint(
                 check=(Q(ment_hlth__gte=0) & Q(ment_hlth__lte=30)) | Q(ment_hlth__isnull=True),
                 name="patient_ment_hlth_range",
             ),
             models.CheckConstraint(
-                check=(Q(phys_hlth__gte=0) & Q(phys_hlth__lte=30)) | Q(phys_hl_h__isnull=True)
-                if False  # safeguard: keep original name
-                else (Q(phys_hlth__gte=0) & Q(phys_hlth__lte=30)) | Q(phys_hlth__isnull=True),
+                check=(Q(phys_hlth__gte=0) & Q(phys_hlth__lte=30)) | Q(phys_hlth__isnull=True),
                 name="patient_phys_hlth_range",
             ),
-            # Age group valid window if present
             models.CheckConstraint(
                 check=(Q(age_group__gte=1) & Q(age_group__lte=13)) | Q(age_group__isnull=True),
                 name="patient_age_group_valid",
             ),
-            # Uniqueness of non-empty mobile (normalized in save)
+            # ✅ ACTIVE-only unique mobile
             models.UniqueConstraint(
                 fields=["mobile"],
-                condition=Q(mobile__gt=""),
+                condition=(
+                    Q(is_deleted=False)
+                    & Q(mobile__isnull=False)
+                    & ~Q(mobile="")
+                ),
                 name="uniq_patient_mobile_nonempty",
             ),
-            # Case-insensitive uniqueness for non-empty emails (PostgreSQL recommended)
+            # ✅ ACTIVE-only unique email (case-insensitive)
             models.UniqueConstraint(
                 Lower("email"),
-                condition=Q(email__isnull=False) & ~Q(email=""),
+                condition=(
+                    Q(is_deleted=False)
+                    & Q(email__isnull=False)
+                    & ~Q(email="")
+                ),
                 name="uniq_patient_email_lower",
             ),
         ]
 
-    # ------------------------------------------------------------------ #
-    #                               Hooks                                #
-    # ------------------------------------------------------------------ #
     def clean(self):
-        """Basic validations not enforced by field validators."""
         super().clean()
-        # (Phone normalization is handled in save())
+        if (self.full_name or "").strip() == "":
+            raise ValidationError({"full_name": _("Full name cannot be empty.")})
 
     def save(self, *args, **kwargs):
-        """Normalize mobile/email and compute/reset age_group from DOB before save."""
-        # --- normalize name ---
+        # ✅ IMPORTANT: when soft-delete/restore updates only soft fields, skip normalization/full_clean
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None:
+            uf = set(update_fields)
+            soft_fields = {"is_deleted", "deleted_at", "deleted_by"}
+            if uf.issubset(soft_fields):
+                return super().save(*args, **kwargs)
+
+        # optional bypass (useful for bulk imports if needed)
+        skip_full_clean = bool(kwargs.pop("skip_full_clean", False))
+
         if self.full_name:
             self.full_name = " ".join(self.full_name.split()).strip()
 
-        # --- normalize email ---
-        if self.email:
+        # ✅ normalize empty -> None
+        if self.email is not None:
             self.email = self.email.strip().lower()
+            if self.email == "":
+                self.email = None
 
-        # --- normalize mobile always ---
-        if self.mobile:
-            normalized = self.mobile.strip().replace(" ", "")
-            if _HAS_PN:
-                try:
-                    parsed = _pn.parse(normalized, "IQ")  # default region: Iraq
-                    normalized = _pn.format_number(parsed, _pn.PhoneNumberFormat.E164)
-                except Exception:
-                    # keep raw if parsing fails
-                    pass
-            self.mobile = normalized
+        if self.nationality is not None:
+            self.nationality = " ".join(self.nationality.split()).strip()
+            if self.nationality == "":
+                self.nationality = None
 
-        # --- compute/reset age_group from DOB ---
+        if self.address is not None:
+            self.address = " ".join(self.address.split()).strip()
+            if self.address == "":
+                self.address = None
+
+        if self.mobile is not None:
+            normalized = _normalize_mobile(self.mobile)
+            if normalized == "":
+                self.mobile = None
+            else:
+                if _HAS_PN:
+                    try:
+                        parsed = _pn.parse(normalized, "IQ")
+                        normalized = _pn.format_number(parsed, _pn.PhoneNumberFormat.E164)
+                    except Exception:
+                        pass
+                self.mobile = normalized
+
         if self.date_of_birth:
             years = _calc_age_years(self.date_of_birth)
             self.age_group = _years_to_group(years)
         else:
             self.age_group = None
 
-        # Enforce model-level validators even if saved programmatically
-        self.full_clean(exclude=None)
+        if not skip_full_clean:
+            self.full_clean(exclude=None)
 
         super().save(*args, **kwargs)
 
-    # ------------------------------------------------------------------ #
-    #                            Properties                              #
-    # ------------------------------------------------------------------ #
     @property
     def age(self) -> Optional[int]:
-        """
-        Exact age in years computed from date_of_birth.
-        Returns None if DOB is missing.
-        """
         if self.date_of_birth:
             return _calc_age_years(self.date_of_birth)
         return None
 
     @property
     def display_age(self) -> Optional[int]:
-        """Backward-compatible alias that returns the same as .age."""
         return self.age
 
-    def __str__(self) -> str:  # pragma: no cover
+    def __str__(self) -> str:
         return self.full_name
 
 
-# ------------------------------------------------------------------ #
-#                        Helper functions                             #
-# ------------------------------------------------------------------ #
 def _calc_age_years(dob: date) -> int:
-    """Accurate age in years (accounts for month/day)."""
-    today = date.today()
+    today = timezone.localdate()
     years = today.year - dob.year
     if (today.month, today.day) < (dob.month, dob.day):
         years -= 1
-    return years
+    return max(0, years)
 
 
 def _years_to_group(years: int) -> int:
-    """Convert exact age in years to AgeGroup code."""
     bins = [
-        (24, 1), (29, 2), (34, 3), (39, 4), (44, 5), (49, 6), (54, 7),
-        (59, 8), (64, 9), (69, 10), (74, 11), (79, 12),
+        (24, 1),
+        (29, 2),
+        (34, 3),
+        (39, 4),
+        (44, 5),
+        (49, 6),
+        (54, 7),
+        (59, 8),
+        (64, 9),
+        (69, 10),
+        (74, 11),
+        (79, 12),
     ]
     for limit, code in bins:
         if years <= limit:
             return code
-    return 13  # 80+
+    return 13

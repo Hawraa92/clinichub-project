@@ -1,0 +1,297 @@
+{# templates/lab/lab_order_detail.html #}
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Lab Order #{{ order.id }} | ClinicHub{% endblock %}
+
+{% block extra_head %}
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/lab/lab_base.css' %}">
+  <link rel="stylesheet" href="{% static 'css/lab/lab_order_detail.css' %}">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+{% endblock %}
+
+{% block content %}
+{% firstof settings_obj.lab_name "Lab Panel" as lab_name %}
+{% firstof order.urgency order.priority "" as urgency_display %}
+
+<div class="labp">
+  <div class="page-bg">
+    <div class="dashboard-container">
+
+      <!-- Sidebar (Lab) -->
+      <aside class="sidebar" aria-label="Lab Sidebar Navigation">
+        <div class="brand-container">
+          <div class="lab-avatar" aria-hidden="true">
+            {% if settings_obj and settings_obj.lab_logo %}
+              <img
+                src="{{ settings_obj.lab_logo.url }}"
+                alt="Lab Logo"
+                style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;">
+            {% else %}
+              <i class="bi bi-flask2"></i>
+            {% endif %}
+          </div>
+          <div class="brand-text">
+            <h3>{{ lab_name }}</h3>
+            <p>Order Detail</p>
+          </div>
+        </div>
+
+        <nav class="nav-menu">
+          <a class="nav-item" href="{% url 'lab:dashboard' %}">
+            <i class="bi bi-speedometer2" aria-hidden="true"></i> Dashboard
+          </a>
+
+          <a class="nav-item" href="{% url 'lab:lab_inbox' %}">
+            <i class="bi bi-inbox" aria-hidden="true"></i> Orders Inbox
+          </a>
+
+          <a class="nav-item" href="{% url 'lab:lab_settings' %}">
+            <i class="bi bi-gear" aria-hidden="true"></i> Settings
+          </a>
+
+          <a class="nav-item active" href="javascript:void(0)" aria-current="page">
+            <i class="bi bi-receipt" aria-hidden="true"></i> Order #{{ order.id }}
+          </a>
+        </nav>
+
+        <div class="logout-container">
+          <form method="post" action="{% url 'accounts:logout' %}">
+            {% csrf_token %}
+            <button type="submit" class="nav-item" style="width:100%; background:transparent; border:0; text-align:left;">
+              <i class="bi bi-box-arrow-right" aria-hidden="true"></i> Logout
+            </button>
+          </form>
+        </div>
+      </aside>
+
+      <!-- Main -->
+      <main class="main-content">
+
+        <div class="dashboard-header">
+          <div class="welcome-section">
+            <h1>Lab Order #{{ order.id }}</h1>
+            <p class="inspiration">
+              Patient: <strong>{{ order.patient.full_name|default:order.patient|default:"—" }}</strong>
+            </p>
+          </div>
+
+          <div class="datetime-card" aria-label="Order Status">
+            <div class="clock-icon" aria-hidden="true">
+              <i class="bi bi-activity"></i>
+            </div>
+            <div>
+              <div class="clock" style="font-size:16px;font-weight:900;">
+                <span class="chip chip-{{ order.status|default:''|lower }}">{{ order.status|default:"—" }}</span>
+              </div>
+
+              {% if urgency_display %}
+                <div class="date" style="margin-top:6px;">
+                  <span class="chip chip-{{ urgency_display|lower }}">{{ urgency_display }}</span>
+                </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        {% if order.status == "CANCELLED" %}
+          <div class="labd-alert labd-alert-danger" style="margin: 0 0 14px;">
+            <i class="bi bi-x-octagon" aria-hidden="true"></i>
+            This order is <strong>CANCELLED</strong>. Results cannot be edited or sent.
+          </div>
+        {% elif require_verify %}
+          <div class="labd-alert labd-alert-warning" style="margin: 0 0 14px;">
+            <i class="bi bi-info-circle" aria-hidden="true"></i>
+            This lab is in <strong>Draft mode</strong>. Use <strong>Verify &amp; Send</strong> to mark the order as <strong>READY</strong> and notify the doctor.
+          </div>
+        {% endif %}
+
+        <!-- Order Info -->
+        <section class="archives-section">
+          <div class="section-header">
+            <i class="bi bi-file-earmark-medical" aria-hidden="true"></i>
+            <h2>Order Information</h2>
+          </div>
+
+          <div class="labod-meta">
+            <div class="labod-item">
+              <span class="labod-k">Patient</span>
+              <span class="labod-v">{{ order.patient.full_name|default:order.patient|default:"—" }}</span>
+            </div>
+
+            <div class="labod-item">
+              <span class="labod-k">Doctor</span>
+              <span class="labod-v">{{ order.doctor.user.get_full_name|default:order.doctor.user.username|default:"—" }}</span>
+            </div>
+
+            <div class="labod-item">
+              <span class="labod-k">Status</span>
+              <span class="labod-v">
+                <span class="chip chip-{{ order.status|default:''|lower }}">{{ order.status|default:"—" }}</span>
+              </span>
+            </div>
+
+            {% if urgency_display %}
+              <div class="labod-item">
+                <span class="labod-k">Urgency</span>
+                <span class="labod-v">
+                  <span class="chip chip-{{ urgency_display|lower }}">{{ urgency_display }}</span>
+                </span>
+              </div>
+            {% endif %}
+
+            {% if order.created_at %}
+              <div class="labod-item">
+                <span class="labod-k">Created</span>
+                <span class="labod-v">{{ order.created_at|date:"Y-m-d H:i" }}</span>
+              </div>
+            {% endif %}
+          </div>
+
+          <!-- Requested tests (safe) -->
+          <div class="labod-block">
+            <div class="labod-title">Requested Tests</div>
+            <div class="labod-body">
+              {% if order.requested_tests_text %}
+                {{ order.requested_tests_text|linebreaksbr }}
+              {% else %}
+                <span style="opacity:.75;">—</span>
+              {% endif %}
+            </div>
+          </div>
+
+          {% if order.notes %}
+            <div class="labod-block">
+              <div class="labod-title">Notes</div>
+              <div class="labod-body">
+                {{ order.notes|linebreaksbr }}
+              </div>
+            </div>
+          {% endif %}
+
+          {% if order.doctor_attachment %}
+            <div class="labod-block">
+              <div class="labod-title">Doctor Attachment (PDF)</div>
+              <div class="labod-body">
+                <a class="labd-btn" href="{{ order.doctor_attachment.url }}" target="_blank" rel="noopener">
+                  <i class="bi bi-paperclip" aria-hidden="true"></i> Open doctor PDF
+                </a>
+              </div>
+            </div>
+          {% endif %}
+        </section>
+
+        <!-- Result Form -->
+        <section class="archives-section">
+          <div class="section-header">
+            <i class="bi bi-clipboard2-check" aria-hidden="true"></i>
+            <h2>Result</h2>
+          </div>
+
+          {% if result %}
+            <div class="labod-meta" style="margin-bottom:12px;">
+              {% if result.status %}
+                <div class="labod-item">
+                  <span class="labod-k">Result Status</span>
+                  <span class="labod-v"><span class="chip">{{ result.status }}</span></span>
+                </div>
+              {% endif %}
+
+              {% if result.attachment %}
+                <div class="labod-item">
+                  <span class="labod-k">Attachment</span>
+                  <span class="labod-v">
+                    <a class="labd-btn" href="{{ result.attachment.url }}" target="_blank" rel="noopener">
+                      <i class="bi bi-paperclip" aria-hidden="true"></i> Open current attachment
+                    </a>
+                  </span>
+                </div>
+              {% endif %}
+            </div>
+          {% endif %}
+
+          <form method="post" enctype="multipart/form-data" class="labd-form" novalidate>
+            {% csrf_token %}
+
+            <div class="labd-form-body">
+
+              {% if form.non_field_errors %}
+                <div class="labd-alert labd-alert-danger">
+                  {{ form.non_field_errors }}
+                </div>
+              {% endif %}
+
+              {% for field in form %}
+                <div class="labd-field {% if field.errors %}has-error{% endif %}">
+                  <label class="labd-label" for="{{ field.id_for_label }}">
+                    {{ field.label }}
+                    {% if field.field.required %}
+                      <span class="labd-required">*</span>
+                    {% endif %}
+                  </label>
+
+                  <div class="labd-control">
+                    {{ field }}
+                  </div>
+
+                  {% if field.help_text %}
+                    <div class="labd-help">{{ field.help_text|safe }}</div>
+                  {% endif %}
+
+                  {% if field.errors %}
+                    <div class="labd-errors">
+                      {% for err in field.errors %}
+                        <div class="labd-error">{{ err }}</div>
+                      {% endfor %}
+                    </div>
+                  {% endif %}
+                </div>
+              {% endfor %}
+            </div>
+
+            <div class="labd-actions">
+              {% if order.status == "CANCELLED" %}
+                <button class="labd-btn primary" type="button" disabled style="opacity:.6; cursor:not-allowed;">
+                  <i class="bi bi-lock" aria-hidden="true"></i> Disabled (Cancelled)
+                </button>
+              {% else %}
+                {% if require_verify %}
+                  <button class="labd-btn" name="action" value="save" type="submit">
+                    <i class="bi bi-save2" aria-hidden="true"></i> Save Draft
+                  </button>
+
+                  <button class="labd-btn primary" name="action" value="verify" type="submit">
+                    <i class="bi bi-check2-circle" aria-hidden="true"></i> Verify &amp; Send
+                  </button>
+                {% else %}
+                  <button class="labd-btn primary" name="action" value="save" type="submit">
+                    <i class="bi bi-check2-circle" aria-hidden="true"></i> Save &amp; Send
+                  </button>
+                {% endif %}
+              {% endif %}
+
+              <a class="labd-btn" href="{% url 'lab:lab_inbox' %}?status={{ order.status|default:'PENDING' }}">
+                <i class="bi bi-arrow-left" aria-hidden="true"></i> Back
+              </a>
+            </div>
+          </form>
+
+          {% if result and result.status == "VERIFIED" %}
+            <div class="labod-verified">
+              <i class="bi bi-shield-check" aria-hidden="true"></i>
+              Verified
+              {% if result.verified_by %} by <strong>{{ result.verified_by }}</strong>{% endif %}
+              {% if result.verified_at %} at <strong>{{ result.verified_at|date:"Y-m-d H:i" }}</strong>{% endif %}
+            </div>
+          {% endif %}
+        </section>
+
+      </main>
+    </div>
+  </div>
+</div>
+{% endblock %}

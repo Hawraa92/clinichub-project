@@ -1,3 +1,4 @@
+{# templates/patient/edit_patient.html #}
 {% extends "base.html" %}
 {% load static %}
 {% load group_filters %}
@@ -9,6 +10,7 @@
 {% endblock %}
 
 {% block content %}
+<div class="ptp">
 
   {# Django flash messages #}
   {% if messages %}
@@ -24,20 +26,34 @@
 
   <div class="edit-patient-container">
     <div class="patient-form-card">
+
       <!-- Header -->
       <div class="form-header">
         <div class="header-icon pastel-bg">
           <i class="fas fa-user-edit"></i>
         </div>
-        <h1 class="gradient-text">Edit Patient Record</h1>
-        <p class="subtitle">Update the medical information for your patient</p>
+
+        {% if request.user.role == "secretary" or request.user|has_group:"Secretaries" %}
+          <h1 class="gradient-text">Edit Patient</h1>
+          <p class="subtitle">Update essential patient details (doctor will complete medical data).</p>
+        {% else %}
+          <h1 class="gradient-text">Edit Patient Record</h1>
+          <p class="subtitle">Update the medical information for your patient.</p>
+        {% endif %}
       </div>
 
       {# السماح للطبيب والسكرتير معًا #}
       {% if request.user.role == "doctor" or request.user|has_group:"Doctors" or request.user.role == "secretary" or request.user|has_group:"Secretaries" %}
 
-        <form method="post" class="needs-validation" id="edit-patient-form" novalidate>
+        <form method="post" class="needs-validation" id="edit-patient-form" novalidate autocomplete="off">
           {% csrf_token %}
+
+          {# Hidden fields safety #}
+          {% for field in form %}
+            {% if field.is_hidden %}
+              {{ field }}
+            {% endif %}
+          {% endfor %}
 
           {% if form.non_field_errors %}
             <div class="alert">
@@ -48,51 +64,55 @@
 
           <div class="form-grid">
             {% for field in form %}
-              <div class="form-group">
-                <label for="{{ field.id_for_label }}">
-                  {{ field.label }}{% if field.field.required %}<span class="required">*</span>{% endif %}
-                </label>
+              {% if not field.is_hidden %}
+                <div class="form-group">
+                  <label for="{{ field.id_for_label }}">
+                    {{ field.label }}{% if field.field.required %}<span class="required">*</span>{% endif %}
+                  </label>
 
-                <div class="input-container">
-                  {% if field.name == 'date_of_birth' %}
-                    <div class="input-with-icon">
+                  <div class="input-container">
+                    {% if field.name == 'date_of_birth' %}
+                      <div class="input-with-icon">
+                        {{ field }}
+                        <button type="button" class="date-today-btn" title="Set to today">Today</button>
+                      </div>
+                    {% else %}
                       {{ field }}
-                      <button type="button" class="date-today-btn" title="Set to today">Today</button>
-                    </div>
-                  {% else %}
-                    {{ field }}
-                  {% endif %}
+                    {% endif %}
 
-                  {% if field.help_text %}
-                    <span class="input-info" data-tooltip="{{ field.help_text }}">
-                      <i class="fas fa-info-circle"></i>
-                    </span>
-                  {% endif %}
-                </div>
-
-                {% for error in field.errors %}
-                  <div class="error-message">
-                    <i class="fas fa-exclamation-triangle"></i> {{ error }}
+                    {% if field.help_text %}
+                      <span class="input-info" data-tooltip="{{ field.help_text }}">
+                        <i class="fas fa-info-circle"></i>
+                      </span>
+                    {% endif %}
                   </div>
-                {% endfor %}
-              </div>
+
+                  {% for error in field.errors %}
+                    <div class="error-message">
+                      <i class="fas fa-exclamation-triangle"></i> {{ error }}
+                    </div>
+                  {% endfor %}
+                </div>
+              {% endif %}
             {% endfor %}
           </div>
 
           <div class="form-actions">
-            <a href="{% url 'patient:detail' patient.pk %}" class="btn-cancel">Cancel</a>
-
-            {# رابط رجوع مناسب حسب الدور #}
             {% if request.user.role == "secretary" or request.user|has_group:"Secretaries" %}
-              <a href="{% url 'appointments:secretary_dashboard' %}" class="btn-cancel">Back</a>
+              <a href="{% url 'patient:list' %}" class="btn-cancel">
+                <i class="fas fa-arrow-left"></i> Back
+              </a>
             {% else %}
-              <a href="{% url 'patient:list' %}" class="btn-cancel">Back</a>
+              <a href="{% url 'patient:detail' patient.pk %}" class="btn-cancel">
+                <i class="fas fa-arrow-left"></i> Back
+              </a>
             {% endif %}
 
             <button type="submit" class="btn-save" id="btn-save">
               <i class="fas fa-save"></i> Save Changes
             </button>
           </div>
+
         </form>
 
       {% else %}
@@ -106,36 +126,10 @@
       {% endif %}
     </div>
   </div>
+
+</div>
 {% endblock %}
 
 {% block extra_js %}
-<script>
-  document.addEventListener('DOMContentLoaded', function () {
-    // زر اليوم لتاريخ الميلاد
-    const dob = document.getElementById('id_date_of_birth');
-    const todayBtn = document.querySelector('.date-today-btn');
-    if (dob && todayBtn) {
-      todayBtn.addEventListener('click', function () {
-        const t = new Date();
-        const y = t.getFullYear();
-        const m = String(t.getMonth() + 1).padStart(2, '0');
-        const d = String(t.getDate()).padStart(2, '0');
-        dob.value = `${y}-${m}-${d}`;
-      });
-    }
-
-    // منع الإرسال المزدوج
-    const form = document.getElementById('edit-patient-form');
-    const saveBtn = document.getElementById('btn-save');
-    if (form && saveBtn) {
-      let submitted = false;
-      form.addEventListener('submit', function (e) {
-        if (submitted) { e.preventDefault(); return; }
-        submitted = true;
-        saveBtn.disabled = true;
-        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
-      });
-    }
-  });
-</script>
+  <script src="{% static 'js/patient/edit_patient.js' %}"></script>
 {% endblock %}

@@ -1,0 +1,54 @@
+<div class="notifications-panel shadow-sm">
+  <div class="notifications-header">
+    <div>
+      <h5 class="notifications-title">Notifications</h5>
+      <p class="notifications-subtitle">
+        Latest booking requests and updates from ClinicHub
+      </p>
+    </div>
+
+    {# اختياري: عدّاد الإشعارات غير المقروءة إذا عندك متغير unread_count #}
+    {% if unread_count %}
+      <span class="badge-notif">{{ unread_count }} new</span>
+    {% endif %}
+  </div>
+
+  <div class="notifications-list">
+    {% for notification in notifications %}
+      <article class="notification-item">
+        <div class="notification-icon">
+          <!-- ممكن تبدلين الأيقونة حسب نوع الإشعار -->
+          <span class="notification-icon-circle">
+            <i class="fas fa-bell"></i>
+          </span>
+        </div>
+
+        <div class="notification-content">
+          <div class="notification-top-row">
+            <h6 class="notification-title">
+              {{ notification.title|default:"New Notification" }}
+            </h6>
+            <span class="notification-time">
+              {{ notification.created_at|date:"D, M d, Y @ g:i A" }}
+            </span>
+          </div>
+
+          <p class="notification-message">
+            {{ notification.message }}
+          </p>
+
+          {# إذا عندك link في الموديل #}
+          {% if notification.link %}
+            <a href="{{ notification.link }}" class="notification-link">
+              View details
+            </a>
+          {% endif %}
+        </div>
+      </article>
+    {% empty %}
+      <div class="notifications-empty">
+        <p>No notifications yet. All clear ✨</p>
+      </div>
+    {% endfor %}
+  </div>
+</div>

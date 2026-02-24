@@ -1,0 +1,195 @@
+/* File: static/css/medical_archive/archive_export_pdf.css */
+
+/* ---------- Fonts (FIX Arabic squares) ----------
+   Put a font file that supports Arabic here:
+   static/fonts/NotoNaskhArabic-Regular.ttf  (recommended)
+   or static/fonts/Amiri-Regular.ttf
+   and optionally Inter for Latin text.
+
+   NOTE: paths are relative to this CSS file:
+   static/css/medical_archive/ -> ../../fonts/
+*/
+@font-face {
+  font-family: "CH-Arabic";
+  src: url("../../fonts/NotoNaskhArabic-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "CH-Latin";
+  src: url("../../fonts/Inter-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+}
+
+/* Page setup */
+@page {
+  size: A4;
+  margin: 18mm 16mm 18mm 16mm;
+}
+
+html, body {
+  padding: 0;
+  margin: 0;
+}
+
+body.pdf {
+  font-family: "CH-Latin", "CH-Arabic", "DejaVu Sans", Arial, sans-serif;
+  color: #0f172a;
+  font-size: 11.2px;
+  line-height: 1.55;
+}
+
+/* Header */
+.pdf-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 0 0 10px 0;
+  border-bottom: 1px solid #e2e8f0;
+  margin-bottom: 14px;
+}
+
+.brand-name {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: .2px;
+}
+
+.brand-sub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #475569;
+}
+
+.doc-meta {
+  text-align: right;
+}
+
+.pill {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #1d4ed8;
+  font-weight: 700;
+  font-size: 11px;
+}
+
+.small {
+  margin-top: 6px;
+  font-size: 10px;
+  color: #64748b;
+}
+
+/* Layout */
+.pdf-main {
+  display: block;
+}
+
+.card {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px 12px;
+  margin: 0 0 12px 0;
+  background: #fff;
+}
+
+.card-title {
+  margin: 0 0 10px 0;
+  font-size: 12.8px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+/* Tables */
+.meta-table, .list-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.meta-table th {
+  width: 150px;
+  text-align: left;
+  color: #334155;
+  font-weight: 700;
+  padding: 6px 8px;
+  border-bottom: 1px solid #e2e8f0;
+  vertical-align: top;
+  background: #f8fafc;
+}
+
+.meta-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #e2e8f0;
+  vertical-align: top;
+}
+
+.list-table thead th {
+  text-align: left;
+  font-weight: 800;
+  padding: 7px 8px;
+  border-bottom: 1px solid #cbd5e1;
+  background: #f1f5f9;
+}
+
+.list-table tbody td {
+  padding: 7px 8px;
+  border-bottom: 1px solid #e2e8f0;
+  vertical-align: top;
+}
+
+.list-table tbody tr:nth-child(even) td {
+  background: #fcfcfd;
+}
+
+/* Notes */
+.notes {
+  border: 1px dashed #cbd5e1;
+  background: #fbfdff;
+  border-radius: 8px;
+  padding: 10px 10px;
+}
+
+.notes p { margin: 0 0 8px; }
+.notes h1, .notes h2, .notes h3 {
+  margin: 10px 0 6px;
+  font-weight: 800;
+}
+.notes ul, .notes ol { margin: 6px 0 6px 18px; }
+.notes li { margin: 3px 0; }
+
+/* Tags */
+.tag {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 10px;
+}
+
+.tag-danger { background: #fee2e2; color: #991b1b; }
+.tag-ok     { background: #dcfce7; color: #166534; }
+
+.muted { color: #64748b; }
+
+/* Footer */
+.pdf-footer {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #64748b;
+}
+
+/* WeasyPrint page numbering (works in most setups) */
+@page {
+  @bottom-right {
+    content: "Page " counter(page) " of " counter(pages);
+    font-size: 10px;
+    color: #64748b;
+  }
+}

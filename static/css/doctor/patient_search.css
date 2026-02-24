@@ -1,85 +1,360 @@
-/* static/css/doctor/patient_search.css — 28‑Jul‑2025 (report picker) */
+/* =========================================================
+   static/css/doctor/patient_search.css
+   ClinicHub Doctor Theme — Generate Patient Report
+   Scoped styles only (safe)
+   ✅ FIXED: Patient select height = From/To height
+   ✅ FIXED: Patient field not "higher" than others (grid align start)
+   ✅ ADDED: Date validation error box styles (.ps-error)
+========================================================= */
 
-:root{
-  --p-blue:#A2D2FF;
-  --bg:#F8FAFC;
-  --white:#FFF;
-  --text:#2D3748;
-  --text-light:#718096;
-  --border:#E2E8F0;
-  --radius:16px;
-  --radius-sm:10px;
-  --shadow-md:0 8px 22px rgba(0,0,0,.06);
+.ps-page{
+  /* close to Doctor Dashboard palette */
+  --ps-bg: #f5f8ff;
+  --ps-card: #ffffff;
+  --ps-ink: #0f172a;
+  --ps-muted: #64748b;
+  --ps-border: rgba(15, 23, 42, .10);
+
+  /* dashboard sky blue */
+  --ps-sky: #8fd3e8;
+  --ps-sky-2: #a9dff0;
+
+  --ps-radius: 18px;
+  --ps-radius-sm: 12px;
+  --ps-shadow: 0 12px 30px rgba(2, 6, 23, .08);
+
+  /* ✅ unified control height */
+  --ps-control-h: 52px;
+
+  background: var(--ps-bg);
+  color: var(--ps-ink);
+  padding: 22px 18px 44px;
 }
 
-*{box-sizing:border-box;}
-body{
-  background:var(--bg);
-  color:var(--text);
-  font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+.ps-page, .ps-page *{ box-sizing: border-box; }
+
+/* ✅ normalize form fonts (prevents select looking bigger) */
+.ps-page input,
+.ps-page select,
+.ps-page button{
+  font-family: inherit;
+  font-size: inherit;
 }
 
-.ps-wrapper{
-  max-width:700px;
-  margin:40px auto;
-  padding:0 18px;
-  text-align:center;
+/* Layout shell */
+.ps-shell{
+  max-width: 1040px;
+  margin: 0 auto;
 }
+
+/* Back link */
+.ps-back{
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: var(--ps-muted);
+  font-weight: 600;
+  padding: 10px 12px;
+  border-radius: 999px;
+  transition: background .15s ease, color .15s ease, transform .05s ease;
+}
+.ps-back:hover{
+  background: rgba(255,255,255,.75);
+  color: var(--ps-ink);
+}
+.ps-back:active{ transform: translateY(1px); }
+
+/* Header */
+.ps-head{
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 12px 0 16px;
+}
+
+.ps-badge{
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, var(--ps-sky), var(--ps-sky-2));
+  box-shadow: 0 12px 26px rgba(143, 211, 232, .35);
+  color: #fff;
+  flex: 0 0 auto;
+}
+.ps-badge i{ font-size: 22px; }
 
 .ps-title{
-  font-size:28px;
-  font-weight:600;
-  margin:0 0 6px;
+  margin: 0;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: .2px;
 }
-.ps-title i{
-  color:var(--p-blue);
-  margin-inline-end:6px;
-}
+
 .ps-subtitle{
-  color:var(--text-light);
-  margin-bottom:26px;
-  font-size:15px;
+  margin: 6px 0 0;
+  color: var(--ps-muted);
+  font-size: 14.5px;
+  line-height: 1.6;
 }
 
-.ps-filter-card{
-  background:var(--white);
-  border:1px solid var(--border);
-  border-radius:var(--radius);
-  padding:26px 28px;
-  box-shadow:var(--shadow-md);
+/* Card */
+.ps-card{
+  background: var(--ps-card);
+  border: 1px solid var(--ps-border);
+  border-radius: var(--ps-radius);
+  box-shadow: var(--ps-shadow);
+  padding: 18px;
 }
 
+/* Grid */
 .ps-grid{
-  display:grid;
-  gap:20px;
-  grid-template-columns:repeat(auto-fit,minmax(210px,1fr));
-  align-items:end;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 1.4fr 1fr 1fr;
+
+  /* ✅ IMPORTANT: prevents Patient (with help text) from looking "higher" */
+  align-items: start;
 }
 
-.ps-field{display:flex;flex-direction:column;}
-.ps-field label{
-  font-size:14px;
-  margin-bottom:6px;
-  font-weight:500;
-}
-.ps-field input,
-.ps-field select{
-  padding:11px 13px;
-  border:1px solid var(--border);
-  border-radius:var(--radius-sm);
-  background:var(--bg);
+.ps-field{ text-align: start; }
+.ps-field-wide{ grid-column: 1 / 2; }
+
+.ps-label{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 13.5px;
+  font-weight: 700;
 }
 
-.btn{
-  display:inline-flex;
-  align-items:center;
-  gap:8px;
-  background:var(--p-blue);
-  color:#1A365D;
-  border:none;
-  padding:11px 24px;
-  border-radius:var(--radius-sm);
-  cursor:pointer;
-  font-weight:500;
+.ps-required{
+  color: #ef4444;
+  font-weight: 900;
 }
-.btn:hover{filter:brightness(.95);}
+
+/* =========================================================
+   Controls (✅ FINAL fix)
+========================================================= */
+.ps-control{
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+
+  height: var(--ps-control-h) !important;
+  min-height: var(--ps-control-h) !important;
+
+  padding: 0 12px !important;
+  border-radius: var(--ps-radius-sm);
+  border: 1px solid rgba(15, 23, 42, .10);
+  background: #f7fbff;
+  overflow: hidden;
+
+  transition: border-color .15s ease, box-shadow .15s ease, transform .05s ease;
+}
+
+.ps-control i{
+  color: rgba(15, 23, 42, .55);
+  font-size: 18px;
+  line-height: 1;
+  align-self: center;
+  flex: 0 0 auto;
+}
+
+/* ✅ Strong targeting for our native fields */
+.ps-control .ps-native{
+  flex: 1 1 auto !important;
+  width: 100% !important;
+  min-width: 0 !important;
+
+  /* ✅ explicit height to kill select weirdness */
+  height: var(--ps-control-h) !important;
+  min-height: var(--ps-control-h) !important;
+
+  border: 0 !important;
+  outline: 0 !important;
+  background: transparent !important;
+  color: var(--ps-ink) !important;
+
+  padding: 0 !important;
+  margin: 0 !important;
+
+  display: block !important;
+  align-self: stretch !important;
+
+  /* ✅ centers text */
+  line-height: calc(var(--ps-control-h) - 2px) !important;
+
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  font-size: 14px !important;
+}
+
+/* Select normalization */
+.ps-control select.ps-native{
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+}
+
+/* Date input normalization (Chrome/Safari) */
+.ps-control input[type="date"].ps-native{
+  appearance: none !important;
+  -webkit-appearance: none !important;
+}
+.ps-control input[type="date"].ps-native::-webkit-datetime-edit,
+.ps-control input[type="date"].ps-native::-webkit-datetime-edit-fields-wrapper,
+.ps-control input[type="date"].ps-native::-webkit-datetime-edit-text,
+.ps-control input[type="date"].ps-native::-webkit-datetime-edit-month-field,
+.ps-control input[type="date"].ps-native::-webkit-datetime-edit-day-field,
+.ps-control input[type="date"].ps-native::-webkit-datetime-edit-year-field{
+  padding: 0 !important;
+  margin: 0 !important;
+  line-height: calc(var(--ps-control-h) - 2px) !important;
+}
+
+/* Focus ring like dashboard */
+.ps-control:focus-within{
+  border-color: rgba(143, 211, 232, .95);
+  box-shadow: 0 0 0 4px rgba(143, 211, 232, .35);
+}
+
+/* Select: keep room for chevron */
+.ps-control.ps-select select.ps-native{
+  padding-right: 38px !important;
+}
+
+/* Chevron */
+.ps-chevron{
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: rgba(15, 23, 42, .45);
+}
+
+/* Help text */
+.ps-help{
+  display: block;
+  margin-top: 8px;
+  color: var(--ps-muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+/* ✅ Error box (used by date validation in patient_search.html) */
+.ps-error{
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(239, 68, 68, .35);
+  background: rgba(239, 68, 68, .08);
+  color: #991b1b;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.ps-error[hidden]{ display: none; }
+.ps-error i{ margin-top: 1px; }
+.ps-error__msg{ font-weight: 700; }
+
+/* Footer */
+.ps-footer{
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(15, 23, 42, .08);
+}
+
+.ps-hint{
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ps-muted);
+  font-size: 13px;
+}
+
+/* Buttons */
+.ps-actions{
+  display: inline-flex;
+  gap: 10px;
+}
+
+.ps-btn{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 11px 16px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 13.5px;
+  text-decoration: none;
+  cursor: pointer;
+  user-select: none;
+  border: 1px solid transparent;
+  transition: transform .05s ease, filter .15s ease, background .15s ease, border-color .15s ease;
+  white-space: nowrap;
+}
+
+.ps-btn:active{ transform: translateY(1px); }
+
+.ps-btn-primary{
+  background: linear-gradient(135deg, var(--ps-sky), var(--ps-sky-2));
+  color: #0f172a;
+  box-shadow: 0 12px 26px rgba(143, 211, 232, .35);
+}
+
+.ps-btn-primary:hover{ filter: brightness(.98); }
+
+.ps-btn-ghost{
+  background: #ffffff;
+  color: var(--ps-ink);
+  border-color: rgba(15, 23, 42, .12);
+}
+
+.ps-btn-ghost:hover{
+  background: #f8fafc;
+  border-color: rgba(15, 23, 42, .16);
+}
+
+/* =========================================================
+   Bootstrap safety (if global CSS touches selects/inputs)
+========================================================= */
+.ps-page .ps-control .form-control,
+.ps-page .ps-control .form-select,
+.ps-page .ps-control .form-control-lg,
+.ps-page .ps-control .form-select-lg{
+  height: var(--ps-control-h) !important;
+  min-height: var(--ps-control-h) !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  line-height: calc(var(--ps-control-h) - 2px) !important;
+  font-size: 14px !important;
+}
+
+/* Responsive */
+@media (max-width: 900px){
+  .ps-grid{ grid-template-columns: 1fr; }
+  .ps-field-wide{ grid-column: auto; }
+  .ps-footer{
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .ps-actions{ width: 100%; }
+  .ps-btn{ width: 100%; }
+  .ps-title{ font-size: 24px; }
+}

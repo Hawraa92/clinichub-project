@@ -1,0 +1,176 @@
+{# File: templates/medical_archive/archive_export_pdf.html #}
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Medical Record Export</title>
+
+  {# For browser preview only. WeasyPrint will load CSS via pdf_utils.py #}
+  <link rel="stylesheet" href="{% static 'css/medical_archive/archive_export_pdf.css' %}">
+</head>
+<body class="pdf">
+
+  <header class="pdf-header">
+    <div class="brand">
+      <div class="brand-name">ClinicHub</div>
+      <div class="brand-sub">Medical Record Export</div>
+    </div>
+
+    <div class="doc-meta">
+      <div class="pill">ARCH-{{ archive.id|stringformat:"04d" }}</div>
+      <div class="small">
+        Generated: {% now "Y-m-d h:i A" %}
+      </div>
+    </div>
+  </header>
+
+  <main class="pdf-main">
+
+    <section class="card">
+      <h2 class="card-title">Record Summary</h2>
+
+      <table class="meta-table">
+        <tbody>
+          <tr>
+            <th>Archive ID</th>
+            <td>ARCH-{{ archive.id|stringformat:"04d" }}</td>
+          </tr>
+
+          <tr>
+            <th>Title</th>
+            <td dir="auto">{{ archive.title|default:"—" }}</td>
+          </tr>
+
+          <tr>
+            <th>Type</th>
+            <td dir="auto">{{ archive.get_archive_type_display|default:"—" }}</td>
+          </tr>
+
+          <tr>
+            <th>Status</th>
+            <td dir="auto">{{ archive.get_status_display|default:"—" }}</td>
+          </tr>
+
+          <tr>
+            <th>Critical</th>
+            <td>
+              {% if archive.is_critical %}
+                <span class="tag tag-danger">YES</span>
+              {% else %}
+                <span class="tag tag-ok">NO</span>
+              {% endif %}
+            </td>
+          </tr>
+
+          <tr>
+            <th>Created</th>
+            <td>{{ archive.created_at|date:"Y-m-d h:i A"|default:"—" }}</td>
+          </tr>
+
+          <tr>
+            <th>Updated</th>
+            <td>{{ archive.updated_at|date:"Y-m-d h:i A"|default:"—" }}</td>
+          </tr>
+
+          <tr>
+            <th>Patient</th>
+            <td dir="auto">
+              {% if archive.patient %}{{ archive.patient.full_name|default:"—" }}{% else %}—{% endif %}
+            </td>
+          </tr>
+
+          <tr>
+            <th>Doctor</th>
+            <td dir="auto">
+              {% if archive.doctor %}
+                Dr. {{ archive.doctor.user.get_full_name|default:archive.doctor.user.username }}
+              {% else %}
+                —
+              {% endif %}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2 class="card-title">Clinical Notes</h2>
+      <div class="notes" dir="auto">
+        {% if archive.notes %}
+          {{ archive.notes|safe }}
+        {% else %}
+          <span class="muted">—</span>
+        {% endif %}
+      </div>
+    </section>
+
+    <section class="card">
+      <h2 class="card-title">Attachments ({{ attachments|length }})</h2>
+
+      {% if attachments %}
+        <table class="list-table">
+          <thead>
+            <tr>
+              <th style="width:44px;">#</th>
+              <th>Name</th>
+              <th>Description</th>
+              <th style="width:120px;">Uploaded</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for a in attachments %}
+              <tr>
+                <td>{{ forloop.counter }}</td>
+                <td dir="auto">{{ a.file.name|default:"—" }}</td>
+                <td dir="auto">{{ a.description|default:"—" }}</td>
+                <td>{{ a.uploaded_at|date:"Y-m-d"|default:"—" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <div class="muted">—</div>
+      {% endif %}
+    </section>
+
+    <section class="card">
+      <h2 class="card-title">Voice Notes ({{ voice_notes|length }})</h2>
+
+      {% if voice_notes %}
+        <table class="list-table">
+          <thead>
+            <tr>
+              <th style="width:44px;">#</th>
+              <th>Title</th>
+              <th>File</th>
+              <th style="width:120px;">Recorded</th>
+              <th style="width:95px;">Duration</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for v in voice_notes %}
+              <tr>
+                <td>{{ forloop.counter }}</td>
+                <td dir="auto">{{ v.title|default:"Voice Note" }}</td>
+                <td dir="auto">{{ v.audio.name|default:"—" }}</td>
+                <td>{{ v.recorded_at|date:"Y-m-d"|default:"—" }}</td>
+                <td>{{ v.duration_seconds|default:"—" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <div class="muted">—</div>
+      {% endif %}
+    </section>
+
+  </main>
+
+  <footer class="pdf-footer">
+    <div class="muted">ClinicHub • Confidential Medical Record</div>
+    <div class="page-number"></div>
+  </footer>
+
+</body>
+</html>

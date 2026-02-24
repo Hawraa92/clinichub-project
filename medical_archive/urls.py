@@ -1,24 +1,37 @@
+# File: medical_archive/urls.py
 from django.urls import path
+
 from . import views
 
-app_name = 'medical_archive'
+app_name = "medical_archive"
 
 urlpatterns = [
-    # 📂 List all archives (عرض جميع الأرشيفات للمريض)
-    path('', views.archive_list, name='archive_list'),
+    # -----------------------------
+    # Primary routes
+    # -----------------------------
+    path("", views.archive_list, name="archive_list"),
+    path("create/", views.create_archive, name="create_archive"),
 
-    # ➕ Create a new archive (إنشاء سجل أرشيف جديد)
-    path('create/', views.create_archive, name='create_archive'),
+    path("archive/<int:archive_id>/", views.archive_detail, name="archive_detail"),
+    path("archive/<int:archive_id>/edit/", views.edit_archive, name="edit_archive"),
+    path("archive/<int:archive_id>/delete/", views.delete_archive, name="delete_archive"),
 
-    # 🔍 View archive detail and attachments (عرض تفاصيل الأرشيف والمرفقات)
-    path('<int:archive_id>/', views.archive_detail, name='archive_detail'),
+    # Exports
+    path("archive/<int:archive_id>/export/pdf/", views.export_archive_pdf, name="export_archive_pdf"),
 
-    # ✏️ Edit archive info (تعديل الأرشيف: العنوان، الملاحظات، إلخ)
-    path('<int:archive_id>/edit/', views.edit_archive, name='edit_archive'),
+    # Downloads
+    path("attachments/<int:attachment_id>/download/", views.download_attachment, name="download_attachment"),
+    path("voice-notes/<int:voice_id>/download/", views.download_voice_note, name="download_voice_note"),
 
-    # 🗑️ Delete an archive (حذف الأرشيف والمرفقات)
-    path('<int:archive_id>/delete/', views.delete_archive, name='delete_archive'),
+    # -----------------------------
+    # Optional aliases (keep if your templates use them)
+    # -----------------------------
+    path("archives/", views.archive_list, name="archives_list_alias"),
+    path("archives/new/", views.create_archive, name="archives_create_alias"),
+    path("archives/<int:archive_id>/", views.archive_detail, name="archives_detail_alias"),
+    path("archives/<int:archive_id>/update/", views.edit_archive, name="archives_edit_alias"),
+    path("archives/<int:archive_id>/remove/", views.delete_archive, name="archives_delete_alias"),
 
-    # 📨 Download single attachment (تنزيل مرفق واحد)
-    path('attachment/<int:attachment_id>/download/', views.download_attachment, name='download_attachment'),
+    # ✅ Alias for export to avoid breaking older templates/links
+    path("archives/<int:archive_id>/export/pdf/", views.export_archive_pdf, name="archives_export_pdf_alias"),
 ]

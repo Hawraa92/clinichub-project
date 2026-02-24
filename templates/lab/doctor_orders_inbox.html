@@ -1,0 +1,274 @@
+{# templates/lab/doctor_orders_inbox.html #}
+{% extends "base.html" %}
+{% load static i18n %}
+
+{% block title %}{% trans "Lab" %} | ClinicHub{% endblock %}
+
+{% block extra_head %}
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  {# ✅ endpoint for JS (no hardcode) #}
+  <meta name="lab-ready-endpoint" content="{% url 'lab:doctor_ready_count_api' %}">
+
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  {# ✅ Base shared lab styles #}
+  <link rel="stylesheet" href="{% static 'css/lab/lab_base.css' %}">
+
+  {# ✅ Page-specific styles #}
+  <link rel="stylesheet" href="{% static 'css/lab/doctor_orders_inbox.css' %}">
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+{% endblock %}
+
+{% block content %}
+<div class="labp">
+  <div class="page-bg doi-page">
+    <div class="dashboard-container">
+
+      <!-- Sidebar (Doctor) -->
+      <aside class="sidebar" aria-label="Lab Sidebar Navigation">
+        <div class="brand-container">
+          <div class="lab-avatar doi-lab-avatar">
+            <i class="bi bi-droplet-half"></i>
+          </div>
+          <div class="brand-text">
+            <h3>Clinic Panel</h3>
+            <p>Lab Orders</p>
+          </div>
+        </div>
+
+        <nav class="nav-menu">
+          <a class="nav-item" href="{% url 'doctor:dashboard' %}">
+            <i class="bi bi-speedometer2"></i> Doctor Dashboard
+          </a>
+
+          <a class="nav-item active" href="{% url 'lab:doctor_orders_inbox' %}">
+            <i class="bi bi-inbox"></i> Lab Inbox
+            <span class="nav-badge" id="labReadyBadge"
+                  data-init="{{ ready_count|default:0 }}"
+                  {% if not ready_count %}style="display:none"{% endif %}>
+              {% if ready_count %}{{ ready_count }}{% endif %}
+            </span>
+          </a>
+
+          <a class="nav-item" href="{% url 'lab:doctor_create_order' %}">
+            <i class="bi bi-plus-circle"></i> Create Lab Order
+          </a>
+        </nav>
+
+        <div class="logout-container">
+          <form method="post" action="{% url 'accounts:logout' %}">
+            {% csrf_token %}
+            <button type="submit" class="nav-item" style="width:100%; background:transparent; border:0; text-align:left;">
+              <i class="bi bi-box-arrow-right"></i> Logout
+            </button>
+          </form>
+        </div>
+      </aside>
+
+      <!-- Main -->
+      <main class="main-content">
+        <div class="doi-wrap">
+
+          <!-- Top Header (Simple) -->
+          <header class="doi-top">
+            <div>
+              <h1 class="doi-title">{% trans "Lab Inbox" %}</h1>
+              <p class="doi-sub">
+                {% trans "View lab requests, track status, and open results quickly." %}
+              </p>
+            </div>
+
+            <div class="doi-actions">
+              <a class="labd-btn primary" href="{% url 'lab:doctor_create_order' %}">
+                <i class="bi bi-plus-circle"></i> {% trans "New Lab Order" %}
+              </a>
+            </div>
+          </header>
+
+          <!-- Filter Card -->
+          <section class="doi-card">
+            <div class="doi-card-head">
+              <div class="doi-card-title">
+                <i class="bi bi-funnel"></i>
+                <span>{% trans "Filter" %}</span>
+              </div>
+            </div>
+
+            <form method="get" class="doi-search" aria-label="{% trans 'Search lab orders' %}">
+              <div class="doi-searchbox">
+                <i class="bi bi-search doi-search-ic" aria-hidden="true"></i>
+                <input class="doi-input"
+                       type="text"
+                       name="q"
+                       value="{{ q|default:'' }}"
+                       placeholder="{% trans 'Search patient / tests / notes...' %}">
+              </div>
+
+              <input type="hidden" name="status" value="{{ status|default:'PENDING' }}">
+
+              <button type="submit" class="labd-btn primary doi-btn-compact">
+                <i class="bi bi-search"></i> {% trans "Search" %}
+              </button>
+
+              {% if q %}
+                <a class="labd-btn doi-btn-compact" href="?status={{ status|default:'PENDING' }}">
+                  <i class="bi bi-x-circle"></i> {% trans "Clear" %}
+                </a>
+              {% endif %}
+            </form>
+
+            {% with cur=status|default:"PENDING" %}
+            <div class="doi-tabs" aria-label="{% trans 'Status tabs' %}">
+              <a href="?status=PENDING&q={{ q|urlencode }}" class="doi-tab {% if cur == 'PENDING' %}is-active{% endif %}">
+                <i class="bi bi-hourglass-split"></i> {% trans "Pending" %}
+              </a>
+
+              <a href="?status=IN_PROGRESS&q={{ q|urlencode }}" class="doi-tab {% if cur == 'IN_PROGRESS' %}is-active{% endif %}">
+                <i class="bi bi-eye"></i> {% trans "In Progress" %}
+              </a>
+
+              <a href="?status=READY&q={{ q|urlencode }}" class="doi-tab {% if cur == 'READY' %}is-active{% endif %}">
+                <i class="bi bi-check2-circle"></i> {% trans "Ready" %}
+              </a>
+
+              <a href="?status=CANCELLED&q={{ q|urlencode }}" class="doi-tab {% if cur == 'CANCELLED' %}is-active{% endif %}">
+                <i class="bi bi-x-octagon"></i> {% trans "Cancelled" %}
+              </a>
+            </div>
+
+            <div class="doi-mobile-select">
+              <label class="doi-sr" for="doiStatusSelect">{% trans "Status" %}</label>
+              <form method="get">
+                <input type="hidden" name="q" value="{{ q|default:'' }}">
+                <select id="doiStatusSelect" name="status" class="doi-select" onchange="this.form.submit()">
+                  <option value="PENDING" {% if cur == "PENDING" %}selected{% endif %}>{% trans "Pending" %}</option>
+                  <option value="IN_PROGRESS" {% if cur == "IN_PROGRESS" %}selected{% endif %}>{% trans "In Progress" %}</option>
+                  <option value="READY" {% if cur == "READY" %}selected{% endif %}>{% trans "Ready" %}</option>
+                  <option value="CANCELLED" {% if cur == "CANCELLED" %}selected{% endif %}>{% trans "Cancelled" %}</option>
+                </select>
+              </form>
+            </div>
+            {% endwith %}
+          </section>
+
+          <!-- Orders Table -->
+          <section class="doi-card">
+            <div class="doi-card-head doi-card-head-row">
+              <div class="doi-card-title">
+                <i class="bi bi-list-check"></i>
+                <span>
+                  {% trans "Orders" %}
+                  {% if orders %}<small class="doi-count">({{ orders|length }})</small>{% endif %}
+                </span>
+              </div>
+
+              <a class="labd-btn doi-btn-compact" href="{% url 'doctor:dashboard' %}">
+                <i class="bi bi-arrow-left"></i> {% trans "Back" %}
+              </a>
+            </div>
+
+            <div class="doi-table-scroll">
+              <table class="doi-table">
+                <thead>
+                  <tr>
+                    <th class="doi-th-id">#</th>
+                    <th>{% trans "Patient" %}</th>
+                    <th class="doi-th-tests">{% trans "Tests" %}</th>
+                    <th>{% trans "Status" %}</th>
+                    <th>{% trans "Seen" %}</th>
+                    <th class="doi-th-created">{% trans "Created" %}</th>
+                    <th class="doi-th-action">{% trans "Action" %}</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {% if orders %}
+                    {% for o in orders %}
+                      <tr>
+                        <td class="doi-td-id">{{ o.id }}</td>
+
+                        <td>
+                          <div class="doi-patient">
+                            <span class="doi-avatar"><i class="bi bi-person-badge"></i></span>
+                            <div class="doi-patient-meta">
+                              <div class="doi-patient-name">{{ o.patient.full_name|default:"—" }}</div>
+                              <div class="doi-patient-sub"><i class="bi bi-droplet"></i> {% trans "Lab Order" %}</div>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td class="doi-td-tests">
+                          <div class="doi-tests">{{ o.requested_tests_text|default:"—" }}</div>
+                        </td>
+
+                        <td>
+                          <span class="doi-chip doi-chip-{{ o.status|default:''|lower }}">
+                            {{ o.status|default:"—" }}
+                          </span>
+                        </td>
+
+                     
+                        <td>
+                          {% if o.status == "READY" %}
+                            {% if o.doctor_seen_at %}
+                              <span class="doi-chip doi-chip-seen">
+                                <i class="bi bi-eye"></i> {% trans "Seen" %}
+                              </span>
+                            {% else %}
+                              <span class="doi-chip doi-chip-notyet">
+                                <i class="bi bi-bell-fill"></i> {% trans "New" %}
+                              </span>
+                            {% endif %}
+                          {% elif o.status == "IN_PROGRESS" %}
+                            <span class="doi-chip doi-chip-seen">
+                              <i class="bi bi-hourglass-split"></i> {% trans "Processing" %}
+                            </span>
+                          {% elif o.status == "PENDING" %}
+                            <span class="doi-chip doi-chip-notyet">
+                              <i class="bi bi-eye-slash"></i> {% trans "Not yet" %}
+                            </span>
+                          {% else %}
+                            <span class="doi-chip doi-chip-cancelled">
+                              <i class="bi bi-x-octagon"></i> {% trans "Cancelled" %}
+                            </span>
+                          {% endif %}
+                        </td>
+
+                        <td class="doi-td-created">
+                          <div class="doi-date">{{ o.created_at|date:"Y-m-d" }}</div>
+                          <div class="doi-time">{{ o.created_at|date:"H:i" }}</div>
+                        </td>
+
+                        <td class="doi-td-action">
+                          <a class="labd-btn primary doi-btn-compact"
+                             href="{% url 'lab:doctor_order_detail' order_id=o.id %}">
+                            <i class="bi bi-eye"></i> {% trans "View" %}
+                          </a>
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  {% else %}
+                    <tr>
+                      <td colspan="7" class="doi-empty">
+                        <div class="doi-empty-ic"><i class="bi bi-inbox"></i></div>
+                        <div class="doi-empty-title">{% trans "No orders yet." %}</div>
+                        <div class="doi-empty-sub">{% trans "Create a new lab order using the button above." %}</div>
+                      </td>
+                    </tr>
+                  {% endif %}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+        </div>
+      </main>
+    </div>
+  </div>
+</div>
+
+<script src="{% static 'js/lab/doctor_orders_inbox.js' %}"></script>
+{% endblock %}
