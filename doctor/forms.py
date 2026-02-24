@@ -1,15 +1,18 @@
 # doctor/forms.py
 
+from __future__ import annotations
+
 from django import forms
 from django.utils.translation import gettext_lazy as _
 
-from .models import Doctor, phone_validator
+from .models import Doctor, validate_phone
 
 
 class DoctorProfileForm(forms.ModelForm):
     """
-    نموذج يتيح للطبيب تعديل بياناته المسموح بها فقط.
-    الحقول 'full_name' و 'specialty' للقراءة ولا يمكن تعديلها.
+    Doctor profile settings form.
+    Only allows editing permitted fields.
+    'full_name' and 'specialty' are read-only.
     """
 
     delete_photo = forms.BooleanField(
@@ -20,13 +23,14 @@ class DoctorProfileForm(forms.ModelForm):
 
     phone = forms.CharField(
         required=False,
-        validators=[phone_validator],
+        validators=[validate_phone],
         widget=forms.TextInput(
             attrs={
                 "class": "form-control",
                 "placeholder": "+9647XXXXXXXX",
                 "inputmode": "tel",
                 "pattern": r"^\+?\d{7,15}$",
+                "autocomplete": "tel",
             }
         ),
         label=_("Phone Number"),
@@ -40,10 +44,11 @@ class DoctorProfileForm(forms.ModelForm):
             attrs={
                 "class": "form-control",
                 "placeholder": _("Consultation fee (IQD)"),
+                "min": "0",
             }
         ),
         label=_("Consultation Fee"),
-        help_text=_("Leave empty if not applicable."),
+        help_text=_("Set 0 for free. Leave empty if not applicable."),
     )
 
     class Meta:
@@ -92,6 +97,7 @@ class DoctorProfileForm(forms.ModelForm):
             "photo": _("Profile Photo"),
             "short_bio": _("Short Bio"),
             "available": _("Available for Booking"),
+            "consultation_fee": _("Consultation Fee"),
         }
 
     READONLY_FIELDS = ("full_name", "specialty")
@@ -99,33 +105,66 @@ class DoctorProfileForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        for fld in ("clinic_address", "photo", "short_bio"):
-            self.fields[fld].required = False
+        # Optional fields
+        for fld in ("clinic_address", "photo", "short_bio", "phone", "consultation_fee"):
+            if fld in self.fields:
+                self.fields[fld].required = False
 
+        # Strict read-only protection (UI + server-side)
         for fld in self.READONLY_FIELDS:
-            self.fields[fld].disabled = True
+            if fld in self.fields:
+                self.fields[fld].disabled = True
+
+    # ----------------------------
+    # Cleaning / Normalization
+    # ----------------------------
+    def clean_phone(self):
+        """
+        Normalize phone input:
+        - empty -> None (better with null=True + unique constraint)
+        - strip spaces
+        """
+        val = (self.cleaned_data.get("phone") or "").strip()
+        if not val:
+            return None
+        # remove internal spaces
+        val = "".join(val.split())
+        return val
 
     def clean(self):
         cleaned = super().clean()
+
+        # Enforce read-only fields values from instance (server-side)
         if self.instance and self.instance.pk:
             for fld in self.READONLY_FIELDS:
                 cleaned[fld] = getattr(self.instance, fld)
+
         return cleaned
 
+    # ----------------------------
+    # Save
+    # ----------------------------
     def save(self, commit: bool = True) -> Doctor:
         """
-        حذف الصورة فعليًا عند اختيار 'delete_photo' ثم حفظ التعديلات.
-        يُستدعى full_clean() لتطبيق كل قواعد التحقق في نموذج Doctor.
+        Deletes current photo if requested, then saves.
+        Calls Doctor.full_clean() to apply all model-level validations.
         """
         doc: Doctor = super().save(commit=False)
 
+        # delete current photo physically
         if self.cleaned_data.get("delete_photo") and doc.photo:
             doc.photo.delete(save=False)
             doc.photo = None
 
+        # Apply cleaned phone normalization to the model field
+        # (important: empty string -> None)
+        doc.phone = self.cleaned_data.get("phone", None)
+
+        # Run model-level validation (includes phone normalization + theme validators + file checks)
         doc.full_clean()
 
         if commit:
             doc.save()
             self.save_m2m()
+
         return doc

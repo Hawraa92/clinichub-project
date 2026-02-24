@@ -3,106 +3,312 @@
 {% load group_filters %}
 
 {% block extra_head %}
-<link rel="stylesheet" href="{% static 'css/patient/patient_detail.css' %}">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/patient/patient_detail.css' %}">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
-<script src="{% static 'js/patient/patient_detail.js' %}" defer></script>
+  <script src="{% static 'js/patient/patient_detail.js' %}" defer></script>
 {% endblock %}
 
 {% block content %}
-<div class="glass-container">
-  <div class="patient-detail-card">
+<div class="ptp ptp-pdetail">
 
-    <!-- Header -->
-    <div class="pd-header">
-      <div class="pd-avatar">
-        <i class="fas fa-user-injured"></i>
-        <div class="status-indicator {{ patient.diabetes_status|default:'pending' }}"></div>
+  {% if messages %}
+    <div class="container mt-3">
+      {% for msg in messages %}
+        <div class="alert alert-{{ msg.tags }} alert-dismissible fade show" role="alert">
+          {{ msg }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <div class="pd-shell">
+
+    <section class="pd-hero">
+      <div class="pd-hero-bg"></div>
+
+      <div class="pd-hero-inner">
+        <div class="pd-hero-left">
+          <div class="pd-avatar" aria-hidden="true">
+            <i class="fa-solid fa-user"></i>
+          </div>
+
+          <div class="pd-title">
+            <h1 class="pd-name pd-value">{{ patient.full_name|default:"—" }}</h1>
+
+            <div class="pd-chips" role="list">
+              <span class="pd-chip" role="listitem">
+                <i class="fa-solid fa-id-card-clip"></i>
+                <span>Record: #{{ patient.id }}</span>
+                <button type="button" class="pd-chip-btn" data-copy="{{ patient.id }}" title="Copy">
+                  <i class="fa-regular fa-copy"></i>
+                </button>
+              </span>
+
+              <span class="pd-chip" role="listitem">
+                <i class="fa-solid fa-cake-candles"></i>
+                <span>Age: {{ patient.display_age|default:"—" }}</span>
+              </span>
+
+              <span class="pd-chip" role="listitem">
+                <i class="fa-solid fa-venus-mars"></i>
+                <span>Gender: {{ patient.get_sex_display|default:patient.sex|default:"—" }}</span>
+              </span>
+
+              <span class="pd-chip" role="listitem">
+                <i class="fa-solid fa-flag"></i>
+                <span>Nationality: {{ patient.nationality|default:"—" }}</span>
+              </span>
+
+              {% if request.user|has_group:"Doctors" or request.user.role == "doctor" %}
+                {% with dp=patient.diabetes_prediction %}
+                  <span class="pd-chip pd-chip-badge" role="listitem">
+                    <i class="fa-solid fa-vial"></i>
+                    {% if dp == 2 %}
+                      <span class="pd-badge pd-badge-pos">Diabetic</span>
+                    {% elif dp == 1 %}
+                      <span class="pd-badge pd-badge-pre">Prediabetic</span>
+                    {% elif dp == 0 %}
+                      <span class="pd-badge pd-badge-neg">Healthy</span>
+                    {% else %}
+                      <span class="pd-badge pd-badge-pending">Pending</span>
+                    {% endif %}
+                  </span>
+                {% endwith %}
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <div class="pd-hero-right">
+          <a href="{% url 'patient:list' %}" class="pd-btn pd-btn-ghost">
+            <i class="fa-solid fa-arrow-left"></i> Back
+          </a>
+
+          <a href="{% url 'patient:edit' patient.pk %}" class="pd-btn pd-btn-primary">
+            <i class="fa-solid fa-pen-to-square"></i> Edit
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <section class="pd-grid">
+
+      <div class="pd-card">
+        <div class="pd-card-head">
+          <div class="pd-card-icon"><i class="fa-solid fa-circle-info"></i></div>
+          <div>
+            <h2>Basic Info</h2>
+            <p>Identity and registration details.</p>
+          </div>
+        </div>
+
+        <div class="pd-table-wrap">
+          <table class="pd-table" aria-label="Basic Info">
+            <tbody>
+              <tr>
+                <th>Full Name</th>
+                <td class="pd-value">{{ patient.full_name|default:"—" }}</td>
+              </tr>
+              <tr>
+                <th>Date of Birth</th>
+                <td class="pd-value">{{ patient.date_of_birth|date:"Y-m-d"|default:"—" }}</td>
+              </tr>
+              <tr>
+                <th>Gender</th>
+                <td class="pd-value">{{ patient.get_sex_display|default:patient.sex|default:"—" }}</td>
+              </tr>
+              <tr>
+                <th>Nationality</th>
+                <td class="pd-value">{{ patient.nationality|default:"—" }}</td>
+              </tr>
+              <tr>
+                <th>Address</th>
+                <td class="pd-value">{{ patient.address|default:"—" }}</td>
+              </tr>
+              <tr>
+                <th>Registered On</th>
+                <td class="pd-value">{{ patient.created_at|date:"Y-m-d"|default:"—" }}</td>
+              </tr>
+              <tr>
+                <th>Assigned Doctor</th>
+                <td class="pd-value">
+                  {% if patient.doctor %}
+                    {{ patient.doctor.user.get_full_name|default:patient.doctor.user.username|default:"—" }}
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      <div class="pd-header-info">
-        <h1>{{ patient.full_name }}</h1>
-        <div class="pd-meta">
-          <span class="pd-record-id">#{{ patient.id }}</span>
-          <span class="pd-age">{{ patient.display_age|default:"—" }} yr</span>
-          <span class="pd-gender">{{ patient.get_sex_display|default:"—" }}</span>
+      <div class="pd-card">
+        <div class="pd-card-head">
+          <div class="pd-card-icon"><i class="fa-solid fa-address-book"></i></div>
+          <div>
+            <h2>Contact</h2>
+            <p>Copy, call, or email.</p>
+          </div>
+        </div>
+
+        <div class="pd-table-wrap">
+          <table class="pd-table" aria-label="Contact">
+            <tbody>
+              <tr>
+                <th>Mobile</th>
+                <td>
+                  <div class="pd-cell-actions">
+                    <span class="pd-value">{{ patient.mobile|default:"—" }}</span>
+                    {% if patient.mobile %}
+                      <button type="button" class="pd-iconbtn" data-copy="{{ patient.mobile }}" title="Copy">
+                        <i class="fa-regular fa-copy"></i>
+                      </button>
+                      <a class="pd-iconbtn" href="tel:{{ patient.mobile }}" title="Call">
+                        <i class="fa-solid fa-phone"></i>
+                      </a>
+                    {% endif %}
+                  </div>
+                </td>
+              </tr>
+
+              <tr>
+                <th>Email</th>
+                <td>
+                  <div class="pd-cell-actions">
+                    <span class="pd-value">{{ patient.email|default:"—" }}</span>
+                    {% if patient.email %}
+                      <button type="button" class="pd-iconbtn" data-copy="{{ patient.email }}" title="Copy">
+                        <i class="fa-regular fa-copy"></i>
+                      </button>
+                      <a class="pd-iconbtn" href="mailto:{{ patient.email }}" title="Email">
+                        <i class="fa-solid fa-envelope"></i>
+                      </a>
+                    {% endif %}
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="pd-note">
+          <i class="fa-solid fa-shield-halved"></i>
+          This record is visible only to the assigned doctor and their secretary.
+        </div>
+      </div>
+
+      <div class="pd-card">
+        <div class="pd-card-head">
+          <div class="pd-card-icon"><i class="fa-solid fa-calendar-check"></i></div>
+          <div>
+            <h2>Visits</h2>
+            <p>Last and next visit for this patient.</p>
+          </div>
+        </div>
+
+        <div class="pd-table-wrap">
+          <table class="pd-table" aria-label="Visits">
+            <tbody>
+              <tr>
+                <th>Last Visit</th>
+                <td class="pd-value">
+                  {% if last_visit and last_visit.scheduled_time %}
+                    {{ last_visit.scheduled_time|date:"Y-m-d" }} — {{ last_visit.scheduled_time|time:"h:i A" }}
+                    {% if last_visit.queue_number %} · #{{ last_visit.queue_number }}{% endif %}
+                    {% if last_visit.status %}
+                      <span class="pd-muted"> ({{ last_visit.get_status_display|default:last_visit.status }})</span>
+                    {% endif %}
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+              </tr>
+              <tr>
+                <th>Next Visit</th>
+                <td class="pd-value">
+                  {% if next_visit and next_visit.scheduled_time %}
+                    {{ next_visit.scheduled_time|date:"Y-m-d" }} — {{ next_visit.scheduled_time|time:"h:i A" }}
+                    {% if next_visit.queue_number %} · #{{ next_visit.queue_number }}{% endif %}
+                    {% if next_visit.status %}
+                      <span class="pd-muted"> ({{ next_visit.get_status_display|default:next_visit.status }})</span>
+                    {% endif %}
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
 
       {% if request.user|has_group:"Doctors" or request.user.role == "doctor" %}
-        {% with patient.diabetes_prediction as dp %}
-          <div class="pd-prediction">
-            {% if dp == 2 %}
-              <span class="pd-badge pd-badge-pos"><i class="fas fa-vial"></i> Diabetic</span>
-            {% elif dp == 1 %}
-              <span class="pd-badge pd-badge-pre"><i class="fas fa-vial"></i> Prediabetic</span>
-            {% elif dp == 0 %}
-              <span class="pd-badge pd-badge-neg"><i class="fas fa-vial"></i> Healthy</span>
-            {% else %}
-              <span class="pd-badge pd-badge-pending"><i class="fas fa-vial"></i> Pending</span>
-            {% endif %}
+        <div class="pd-card pd-card-wide">
+          <div class="pd-card-head">
+            <div class="pd-card-icon"><i class="fa-solid fa-heart-pulse"></i></div>
+            <div>
+              <h2>Clinical Summary</h2>
+              <p>Key values and AI confidence.</p>
+            </div>
           </div>
-        {% endwith %}
+
+          <div class="pd-table-wrap">
+            <table class="pd-table" aria-label="Clinical Summary">
+              <tbody>
+                <tr>
+                  <th>Manual Diabetes Status</th>
+                  <td class="pd-value">{{ patient.get_diabetes_status_display|default:"—" }}</td>
+                </tr>
+                <tr>
+                  <th>BMI</th>
+                  <td class="pd-value">{{ patient.bmi|default:"—" }}</td>
+                </tr>
+                <tr>
+                  <th>HbA1c</th>
+                  <td class="pd-value">{{ patient.hbA1c|default:"—" }}</td>
+                </tr>
+
+                {# ✅ FIXED: confidence display works even if 0, and bar never breaks #}
+                <tr>
+                  <th>AI Confidence</th>
+                  <td>
+                    <div class="pd-confidence">
+                      <div class="pd-gauge" role="img" aria-label="AI confidence">
+                        <div class="pd-gauge-bar" style="width:{{ confidence|default_if_none:0 }}%"></div>
+                      </div>
+                      <div class="pd-confidence-meta">
+                        <span class="pd-value">
+                          {% if confidence != None %}{{ confidence }}%{% else %}—{% endif %}
+                        </span>
+                        <span class="pd-muted">probability</span>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="pd-notes">
+            <div class="pd-notes-head">
+              <i class="fa-solid fa-notes-medical"></i>
+              <span>Clinical Notes</span>
+            </div>
+            <div class="pd-notes-body pd-value">
+              {{ patient.clinical_notes|default:"No notes yet." }}
+            </div>
+          </div>
+        </div>
       {% endif %}
-    </div>
 
-    {% if request.user|has_group:"Doctors" or request.user.role == "doctor" %}
-      <!-- ===== Doctor-only view ===== -->
-      <div class="pd-info-grid">
-
-        <!-- Personal -->
-        <div class="pd-card">
-          <div class="pd-section-title"><i class="fas fa-id-card"></i> Personal</div>
-          <div class="pd-info-row"><span>Full Name</span><span class="highlight">{{ patient.full_name }}</span></div>
-          <div class="pd-info-row"><span>DOB</span><span>{{ patient.date_of_birth|date:"M d, Y" }}</span></div>
-          <div class="pd-info-row"><span>Address</span><span>{{ patient.address|default:"—" }}</span></div>
-        </div>
-
-        <!-- Contact -->
-        <div class="pd-card">
-          <div class="pd-section-title"><i class="fas fa-mobile-alt"></i> Contact</div>
-          <div class="pd-info-row"><span>Mobile</span><a href="tel:{{ patient.mobile }}">{{ patient.mobile|default:"—" }}</a></div>
-          <div class="pd-info-row"><span>Email</span><a href="mailto:{{ patient.email }}">{{ patient.email|default:"—" }}</a></div>
-        </div>
-
-        <!-- Quick metrics -->
-        <div class="pd-card metrics-card">
-          <div class="pd-section-title"><i class="fas fa-chart-line"></i> Metrics</div>
-          <div class="metrics-grid">
-            <div class="metric-item"><div class="metric-value">{{ patient.bmi|default:"—" }}</div><div class="metric-label">BMI</div></div>
-            <div class="metric-item"><div class="metric-value">{{ patient.hbA1c|default:"—" }}</div><div class="metric-label">HbA1c</div></div>
-          </div>
-        </div>
-
-        <!-- Clinical notes -->
-        <div class="pd-card notes-card">
-          <div class="pd-section-title"><i class="fas fa-notes-medical"></i> Clinical Notes</div>
-          <div class="notes-content">{{ patient.clinical_notes|default:"No notes yet." }}</div>
-        </div>
-      </div>
-
-      <div class="pd-actions">
-        <a class="pd-btn pd-btn-edit" href="{% url 'patient:edit' patient.pk %}"><i class="fas fa-edit"></i> Edit</a>
-        <a class="pd-btn pd-btn-back" href="{% url 'patient:list' %}"><i class="fas fa-arrow-left"></i> Back</a>
-      </div>
-
-    {% else %}
-      <!-- ===== Secretary / minimal view ===== -->
-      <div class="pd-card">
-        <div class="pd-section-title"><i class="fas fa-id-card"></i> Basic Info</div>
-        <div class="pd-info-row"><span>Full Name</span><span class="highlight">{{ patient.full_name }}</span></div>
-        <div class="pd-info-row"><span>DOB</span><span>{{ patient.date_of_birth|date:"M d, Y" }}</span></div>
-        <div class="pd-info-row"><span>Gender</span><span>{{ patient.get_sex_display|default:"—" }}</span></div>
-        <div class="pd-info-row"><span>Address</span><span>{{ patient.address|default:"—" }}</span></div>
-      </div>
-      <div class="pd-actions">
-        <a class="pd-btn pd-btn-back" href="{% url 'patient:list' %}"><i class="fas fa-arrow-left"></i> Back</a>
-      </div>
-    {% endif %}
+    </section>
   </div>
 </div>
 {% endblock %}

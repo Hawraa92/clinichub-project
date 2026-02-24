@@ -1,208 +1,492 @@
+{# File: templates/medical_archive/create_archive.html #}
 {% extends "base.html" %}
 {% load static %}
 
+{% block title %}Create Medical Record - MedArchive{% endblock %}
+
 {% block extra_head %}
-  <link rel="stylesheet" href="{% static 'css/medical_archive/create_archive.css' %}">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <meta charset="utf-8" />
+  <meta name="description" content="Create a new medical record with patient information, clinical details, and file attachments" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="{% static 'css/medical_archive/create_archive.css' %}?v=2.0.4" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+        integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw=="
+        crossorigin="anonymous" referrerpolicy="no-referrer" />
   <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 {% endblock %}
 
 {% block content %}
-<div class="archive-container">
-  <div class="archive-card">
-    <div class="card-header">
-      <div class="header-content">
-        <h2><i class="fas fa-file-medical pulse"></i> Create New Medical Record</h2>
-        <p class="header-subtitle">Complete patient medical documentation</p>
+<div class="medical-record-creator">
+
+  <noscript>
+    <div class="message message-warning" role="alert">
+      <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
+      <span>This page needs JavaScript enabled to work properly.</span>
+    </div>
+  </noscript>
+
+  <!-- Glassmorphic Header -->
+  <header class="creator-header" aria-label="Page header">
+    <div class="header-gradient">
+      <div class="header-icon-wrapper" aria-hidden="true">
+        <i class="fas fa-file-medical"></i>
+      </div>
+      <div>
+        <h1 class="header-title">New Medical Record</h1>
+        <p class="header-subtitle">Complete patient documentation securely</p>
       </div>
     </div>
 
-    {% if messages %}
-      <div class="messages-container">
-        {% for message in messages %}
-          <div class="alert alert-{{ message.tags }} slide-in">
-            <div class="alert-content">
-              <i class="fas {% if message.tags == 'success' %}fa-check-circle{% else %}fa-exclamation-circle{% endif %}"></i>
-              <span>{{ message }}</span>
-            </div>
-            <button type="button" class="close-btn" aria-label="Close">
-              <i class="fas fa-times"></i>
-            </button>
-          </div>
-        {% endfor %}
+    <div class="header-progress" aria-label="Form completion progress">
+      <div class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+      <span class="progress-text" id="progressText">0% complete</span>
+    </div>
+  </header>
+
+  <!-- Minimal Stepper -->
+  <nav class="minimal-stepper" aria-label="Form sections navigation">
+    <div class="stepper-line" aria-hidden="true"></div>
+    <div class="stepper-items">
+      <button type="button"
+              class="stepper-item active"
+              data-step="1"
+              aria-current="step"
+              aria-controls="section-patient"
+              aria-label="Go to patient information section">
+        <div class="stepper-dot" aria-hidden="true"><span class="stepper-number">1</span></div>
+        <span class="stepper-label">Patient</span>
+      </button>
+
+      <button type="button"
+              class="stepper-item"
+              data-step="2"
+              aria-controls="section-details"
+              aria-label="Go to record details section">
+        <div class="stepper-dot" aria-hidden="true"><span class="stepper-number">2</span></div>
+        <span class="stepper-label">Details</span>
+      </button>
+
+      <button type="button"
+              class="stepper-item"
+              data-step="3"
+              aria-controls="section-attachments"
+              aria-label="Go to attachments section">
+        <div class="stepper-dot" aria-hidden="true"><span class="stepper-number">3</span></div>
+        <span class="stepper-label">Files</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Messages -->
+  {% if messages %}
+    <div class="message-container" aria-live="polite" aria-atomic="true">
+      {% for message in messages %}
+        <div class="message message-{{ message.tags|default:'info' }}" role="alert" id="message-{{ forloop.counter }}">
+          <i class="fas {% if message.tags == 'success' %}fa-check-circle{% elif message.tags == 'error' %}fa-exclamation-circle{% elif message.tags == 'warning' %}fa-exclamation-triangle{% else %}fa-info-circle{% endif %}" aria-hidden="true"></i>
+          <span>{{ message }}</span>
+          <button type="button" class="message-close" aria-label="Close message" data-message-id="message-{{ forloop.counter }}">
+            <i class="fas fa-times" aria-hidden="true"></i>
+          </button>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <!-- Form -->
+  <form method="post"
+        enctype="multipart/form-data"
+        class="medical-form"
+        id="medicalRecordForm"
+        novalidate
+        data-unsaved-warning="true">
+    {% csrf_token %}
+
+    {# Unified error summary #}
+    {% if archive_form.non_field_errors or attachment_form.non_field_errors or voice_form.non_field_errors %}
+      <div class="form-error" role="alert">
+        <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
+        <div>
+          <p class="error-title">Form validation errors</p>
+
+          {% if archive_form.non_field_errors %}
+            <ul class="error-list">
+              {% for error in archive_form.non_field_errors %}
+                <li>{{ error }}</li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+
+          {% if attachment_form.non_field_errors %}
+            <ul class="error-list">
+              {% for error in attachment_form.non_field_errors %}
+                <li>{{ error }}</li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+
+          {% if voice_form.non_field_errors %}
+            <ul class="error-list">
+              {% for error in voice_form.non_field_errors %}
+                <li>{{ error }}</li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+        </div>
       </div>
     {% endif %}
 
-    <form method="post" enctype="multipart/form-data" class="archive-form" id="medicalRecordForm">
-      {% csrf_token %}
-
-      <!-- Patient & Doctor Section -->
-      <div class="form-section glass-card">
-        <div class="section-header">
-          <div class="section-icon">
-            <i class="fas fa-user-friends"></i>
-          </div>
-          <h3>Patient & Doctor Information</h3>
-          <div class="section-tooltip">
-            <i class="fas fa-info-circle"></i>
-            <span class="tooltip-text">Select patient and attending physician</span>
-          </div>
-        </div>
-        
-        <div class="form-row">
-          <div class="form-group {% if archive_form.patient.errors %}has-error{% endif %}">
-            <label for="id_patient"><i class="fas fa-user-injured"></i> Patient</label>
-            <div class="select-wrapper">
-              {{ archive_form.patient }}
-              <i class="fas fa-chevron-down"></i>
-            </div>
-            {% if archive_form.patient.errors %}
-              <div class="errorlist">{{ archive_form.patient.errors }}</div>
-            {% endif %}
-          </div>
-          
-          <div class="form-group {% if archive_form.doctor.errors %}has-error{% endif %}">
-            <label for="id_doctor"><i class="fas fa-user-md"></i> Attending Physician</label>
-            <div class="select-wrapper">
-              {{ archive_form.doctor }}
-              <i class="fas fa-chevron-down"></i>
-            </div>
-            {% if archive_form.doctor.errors %}
-              <div class="errorlist">{{ archive_form.doctor.errors }}</div>
-            {% endif %}
-          </div>
+    <!-- ===================== -->
+    <!-- Section 1: Patient Info -->
+    <!-- ===================== -->
+    <section class="form-section active"
+             data-section="1"
+             id="section-patient"
+             aria-labelledby="patient-heading">
+      <div class="section-header">
+        <div class="section-icon" aria-hidden="true"><i class="fas fa-user-injured"></i></div>
+        <div>
+          <h2 id="patient-heading">Patient Information</h2>
+          <p class="section-description">Select a patient</p>
         </div>
       </div>
 
-      <!-- Record Details -->
-      <div class="form-section glass-card">
-        <div class="section-header">
-          <div class="section-icon">
-            <i class="fas fa-file-medical"></i>
-          </div>
-          <h3>Medical Record Details</h3>
-          <div class="section-tooltip">
-            <i class="fas fa-info-circle"></i>
-            <span class="tooltip-text">Provide detailed medical information</span>
-          </div>
-        </div>
-        
-        <div class="form-group {% if archive_form.title.errors %}has-error{% endif %}">
-          <label for="id_title"><i class="fas fa-heading"></i> Record Title</label>
-          {{ archive_form.title }}
-          {% if archive_form.title.errors %}
-            <div class="errorlist">{{ archive_form.title.errors }}</div>
-          {% endif %}
-          <div class="input-hint">Example: Initial Visit, Blood Test Results, Surgery Report</div>
-        </div>
+      <div class="form-grid">
+        <div class="input-group {% if archive_form.patient.errors %}error{% endif %}"
+             data-required="true"
+             style="grid-column: 1 / -1;">
+          <label for="{{ archive_form.patient.id_for_label }}">
+            <i class="fas fa-user" aria-hidden="true"></i>
+            <span>Patient</span>
+            <span class="required" aria-hidden="true">*</span>
+          </label>
 
-        <div class="form-group {% if archive_form.notes.errors %}has-error{% endif %}">
-          <label for="id_notes"><i class="fas fa-notes-medical"></i> Doctor's Notes</label>
-          <div class="rich-text-editor">
-            <div class="rich-text-toolbar">
-              <button type="button" class="format-btn" data-command="bold" title="Bold"><i class="fas fa-bold"></i></button>
-              <button type="button" class="format-btn" data-command="italic" title="Italic"><i class="fas fa-italic"></i></button>
-              <button type="button" class="format-btn" data-command="insertUnorderedList" title="Bullet List"><i class="fas fa-list-ul"></i></button>
-              <button type="button" class="format-btn" data-command="insertOrderedList" title="Numbered List"><i class="fas fa-list-ol"></i></button>
-              <button type="button" class="format-btn" data-command="createLink" title="Insert Link"><i class="fas fa-link"></i></button>
-            </div>
+          <div class="select-container">
+            {{ archive_form.patient }}
+            <i class="fas fa-chevron-down" aria-hidden="true"></i>
+          </div>
+
+          <div class="input-hint" id="patientHint">Search by name or patient ID</div>
+
+          {% if archive_form.patient.errors %}
+            <div class="error-text" role="alert">{{ archive_form.patient.errors|striptags }}</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="section-footer">
+        <button type="button" class="btn btn-next" data-next="2" aria-label="Continue to record details">
+          <span>Continue to Details</span>
+          <i class="fas fa-arrow-right" aria-hidden="true"></i>
+        </button>
+      </div>
+    </section>
+
+    <!-- ===================== -->
+    <!-- Section 2: Record Details -->
+    <!-- ===================== -->
+    <section class="form-section"
+             data-section="2"
+             id="section-details"
+             aria-labelledby="details-heading">
+      <div class="section-header">
+        <div class="section-icon" aria-hidden="true"><i class="fas fa-clipboard-check"></i></div>
+        <div>
+          <h2 id="details-heading">Record Details</h2>
+          <p class="section-description">Enter clinical information and classification</p>
+        </div>
+      </div>
+
+      <div class="input-group {% if archive_form.title.errors %}error{% endif %}" data-required="true">
+        <label for="{{ archive_form.title.id_for_label }}">
+          <i class="fas fa-heading" aria-hidden="true"></i>
+          <span>Record Title</span>
+          <span class="required" aria-hidden="true">*</span>
+        </label>
+
+        {{ archive_form.title }}
+
+        <div class="input-hint" id="titleHint">Brief descriptive title for the record (max 200 characters)</div>
+        <div class="char-counter" id="titleCounter">0/200</div>
+
+        {% if archive_form.title.errors %}
+          <div class="error-text" role="alert">{{ archive_form.title.errors|striptags }}</div>
+        {% endif %}
+      </div>
+
+      <!-- Notes (RTE surface + hidden Django field) -->
+      <div class="input-group {% if archive_form.notes.errors %}error{% endif %}">
+        <label for="notesRte">
+          <i class="fas fa-notes-medical" aria-hidden="true"></i>
+          <span>Clinical Notes</span>
+        </label>
+
+        <div class="editor-wrapper" data-rte-notes="true">
+          <div id="notesRte"
+               class="rte-surface"
+               contenteditable="true"
+               tabindex="0"
+               role="textbox"
+               aria-multiline="true"
+               aria-label="Clinical notes editor"
+               data-max="5000"></div>
+
+          {# Keep Django field in DOM (JS should sync editor -> textarea before submit) #}
+          <div class="rte-hidden-field" style="display:none;">
             {{ archive_form.notes }}
           </div>
-          {% if archive_form.notes.errors %}
-            <div class="errorlist">{{ archive_form.notes.errors }}</div>
+
+          <div class="editor-tools" role="toolbar" aria-label="Text formatting tools">
+            <button type="button" class="tool-btn" data-command="bold" aria-label="Bold (Ctrl+B)">
+              <i class="fas fa-bold" aria-hidden="true"></i>
+            </button>
+            <button type="button" class="tool-btn" data-command="italic" aria-label="Italic (Ctrl+I)">
+              <i class="fas fa-italic" aria-hidden="true"></i>
+            </button>
+            <button type="button" class="tool-btn" data-command="insertUnorderedList" aria-label="Bulleted list">
+              <i class="fas fa-list-ul" aria-hidden="true"></i>
+            </button>
+            <button type="button" class="tool-btn" data-command="h3" aria-label="Heading">
+              <i class="fas fa-heading" aria-hidden="true"></i>
+            </button>
+            <button type="button" class="tool-btn" data-command="clear" aria-label="Clear formatting">
+              <i class="fas fa-eraser" aria-hidden="true"></i>
+            </button>
+          </div>
+
+          <div class="editor-footer">
+            <span class="format-hint">Rich text editor</span>
+            <span class="char-counter" id="notesCounter">0/5000</span>
+          </div>
+        </div>
+
+        {% if archive_form.notes.errors %}
+          <div class="error-text" role="alert">{{ archive_form.notes.errors|striptags }}</div>
+        {% endif %}
+      </div>
+
+      <div class="form-grid">
+        <div class="input-group {% if archive_form.archive_type.errors %}error{% endif %}" data-required="true">
+          <label for="{{ archive_form.archive_type.id_for_label }}">
+            <i class="fas fa-tag" aria-hidden="true"></i>
+            <span>Record Type</span>
+            <span class="required" aria-hidden="true">*</span>
+          </label>
+
+          <div class="select-container">
+            {{ archive_form.archive_type }}
+            <i class="fas fa-chevron-down" aria-hidden="true"></i>
+          </div>
+
+          {% if archive_form.archive_type.errors %}
+            <div class="error-text" role="alert">{{ archive_form.archive_type.errors|striptags }}</div>
           {% endif %}
         </div>
 
-        <div class="form-row">
-          <div class="form-group {% if archive_form.archive_type.errors %}has-error{% endif %}">
-            <label for="id_archive_type"><i class="fas fa-tag"></i> Record Type</label>
-            <div class="select-wrapper">
-              {{ archive_form.archive_type }}
-              <i class="fas fa-chevron-down"></i>
+        <div class="input-group critical-toggle">
+          <div class="toggle-wrapper">
+            <div class="toggle-left">
+              <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
+              <div>
+                <span class="toggle-title">Critical Record</span>
+                <small class="toggle-hint">Requires urgent attention</small>
+              </div>
             </div>
-            {% if archive_form.archive_type.errors %}
-              <div class="errorlist">{{ archive_form.archive_type.errors }}</div>
-            {% endif %}
-          </div>
-          
-          <div class="form-group switch-group">
-            <div class="critical-toggle">
-              <label class="switch">
+
+            <div class="toggle-switch">
+              <label class="toggle-switch-label"
+                     for="{{ archive_form.is_critical.id_for_label }}"
+                     aria-label="Mark record as critical">
                 {{ archive_form.is_critical }}
-                <span class="slider round"></span>
-              </label>
-              <label for="id_is_critical" class="switch-label">
-                <i class="fas fa-exclamation-triangle"></i> Critical Condition
+                <span class="toggle-slider" aria-hidden="true"></span>
               </label>
             </div>
-            {% if archive_form.is_critical.errors %}
-              <div class="errorlist">{{ archive_form.is_critical.errors }}</div>
+          </div>
+
+          {% if archive_form.is_critical.errors %}
+            <div class="error-text" role="alert">{{ archive_form.is_critical.errors|striptags }}</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="section-footer">
+        <button type="button" class="btn btn-prev" data-prev="1" aria-label="Back to patient information">
+          <i class="fas fa-arrow-left" aria-hidden="true"></i>
+          <span>Back</span>
+        </button>
+
+        <button type="button" class="btn btn-next" data-next="3" aria-label="Continue to attachments">
+          <span>Continue to Attachments</span>
+          <i class="fas fa-arrow-right" aria-hidden="true"></i>
+        </button>
+      </div>
+    </section>
+
+    <!-- ===================== -->
+    <!-- Section 3: Files + Voice Note -->
+    <!-- ===================== -->
+    <section class="form-section"
+             data-section="3"
+             id="section-attachments"
+             aria-labelledby="attachments-heading">
+      <div class="section-header">
+        <div class="section-icon" aria-hidden="true"><i class="fas fa-paperclip"></i></div>
+        <div>
+          <h2 id="attachments-heading">Attachments</h2>
+          <p class="section-description">Upload supporting documents and optional voice note</p>
+        </div>
+      </div>
+
+      <!-- Voice Note (Optional) -->
+      <div class="input-group {% if voice_form.audio.errors or voice_form.title.errors or voice_form.duration_seconds.errors %}error{% endif %}">
+        <label for="{{ voice_form.audio.id_for_label }}">
+          <i class="fas fa-microphone" aria-hidden="true"></i>
+          <span>Doctor Voice Note (Optional)</span>
+        </label>
+
+        <div class="input-hint">
+          You can upload a voice note. Supported: webm/ogg/wav/mp3/m4a.
+        </div>
+
+        <div class="form-grid" style="margin-top: 12px;">
+          <div class="input-group" style="margin-bottom: 0;">
+            <label for="{{ voice_form.title.id_for_label }}" style="margin-bottom: 8px;">
+              <i class="fas fa-heading" aria-hidden="true"></i>
+              <span>Voice Title (Optional)</span>
+            </label>
+            {{ voice_form.title }}
+            {% if voice_form.title.errors %}
+              <div class="error-text" role="alert">{{ voice_form.title.errors|striptags }}</div>
+            {% endif %}
+          </div>
+
+          <div class="input-group" style="margin-bottom: 0;">
+            <label for="{{ voice_form.audio.id_for_label }}" style="margin-bottom: 8px;">
+              <i class="fas fa-file-audio" aria-hidden="true"></i>
+              <span>Voice File</span>
+            </label>
+            {{ voice_form.audio }}
+            {% if voice_form.audio.errors %}
+              <div class="error-text" role="alert">{{ voice_form.audio.errors|striptags }}</div>
             {% endif %}
           </div>
         </div>
+
+        <div style="display:none;">
+          {{ voice_form.duration_seconds }}
+        </div>
+
+        {% if voice_form.duration_seconds.errors %}
+          <div class="error-text" role="alert">{{ voice_form.duration_seconds.errors|striptags }}</div>
+        {% endif %}
       </div>
 
-      <!-- Attachments Section -->
-      <div class="form-section glass-card">
-        <div class="section-header">
-          <div class="section-icon">
-            <i class="fas fa-paperclip"></i>
-          </div>
-          <h3>Attachments</h3>
-          <div class="section-tooltip">
-            <i class="fas fa-info-circle"></i>
-            <span class="tooltip-text">Upload relevant documents or reports</span>
-          </div>
-        </div>
-        
-        <div class="form-group file-upload">
-          <label><i class="fas fa-cloud-upload-alt"></i> Upload Files</label>
-          <div class="upload-container" id="uploadContainer">
-            {{ attachment_form.files }}
-            <div class="upload-prompt">
-              <i class="fas fa-cloud-upload-alt fa-3x"></i>
-              <p>Drag & drop files here or click to browse</p>
-              <small>Supports: JPG, PNG, PDF, DOCX (Max 10MB each)</small>
-            </div>
-            <div class="upload-loading" id="uploadLoading">
-              <div class="spinner"></div>
-              <p>Processing files...</p>
-            </div>
-          </div>
-          <div class="file-preview-grid" id="filePreview"></div>
-          {% if attachment_form.files.errors %}
-            <div class="errorlist">{{ attachment_form.files.errors }}</div>
-          {% endif %}
+      <!-- Upload Area (Attachments) -->
+      <div class="upload-area"
+           id="uploadArea"
+           role="region"
+           aria-labelledby="upload-heading"
+           tabindex="0"
+           data-files-input-id="{{ attachment_form.files.id_for_label }}"
+           data-files-input-name="{{ attachment_form.files.html_name }}">
+
+        <div class="upload-icon" aria-hidden="true">
+          <i class="fas fa-cloud-upload-alt"></i>
         </div>
 
-        <div class="form-group {% if attachment_form.description.errors %}has-error{% endif %}">
-          <label><i class="fas fa-align-left"></i> Attachment Description</label>
-          {{ attachment_form.description }}
-          {% if attachment_form.description.errors %}
-            <div class="errorlist">{{ attachment_form.description.errors }}</div>
-          {% endif %}
-          <div class="input-hint">Brief description of the attached documents</div>
+        <div class="upload-content">
+          <h3 id="upload-heading">Upload Files</h3>
+          <p>Drag & drop or click to browse</p>
+          <small id="uploadHelp">PDF, JPG, PNG, GIF • Max 10MB each • Up to 10 files</small>
         </div>
-      </div>
 
-      <!-- Form Actions -->
-      <div class="form-actions">
-        <button type="button" class="btn btn-clear" id="clearForm">
-          <i class="fas fa-eraser"></i> Clear Form
+        {# IMPORTANT: keep the real input inside the form. Hide it off-screen so it won't block clicks. #}
+        <div style="position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden;">
+          {{ attachment_form.files }}
+        </div>
+
+        <button type="button"
+                class="browse-btn"
+                id="browseBtn"
+                aria-label="Browse files"
+                aria-describedby="uploadHelp">
+          <i class="fas fa-folder-open" aria-hidden="true"></i>
+          Browse Files
         </button>
-        <a href="{% url 'medical_archive:archive_list' %}" class="btn btn-cancel">
-          <i class="fas fa-times"></i> Cancel
+
+        {% if attachment_form.files.errors %}
+          <div class="error-text" role="alert">{{ attachment_form.files.errors|striptags }}</div>
+        {% endif %}
+      </div>
+
+      <div class="upload-stats" aria-live="polite" aria-atomic="true">
+        <span id="fileCount">0 files</span>
+        <span id="totalSize">0 MB</span>
+      </div>
+
+      <div class="file-preview" id="uploadPreview" role="list" aria-label="Selected files preview" aria-live="polite"></div>
+
+      <div class="input-group {% if attachment_form.description.errors %}error{% endif %}">
+        <label for="{{ attachment_form.description.id_for_label }}">
+          <i class="fas fa-align-left" aria-hidden="true"></i>
+          <span>Attachment Description</span>
+        </label>
+
+        {{ attachment_form.description }}
+
+        <div class="input-hint">Optional description for uploaded files</div>
+        <div class="char-counter" id="descCounter">0/500</div>
+
+        {% if attachment_form.description.errors %}
+          <div class="error-text" role="alert">{{ attachment_form.description.errors|striptags }}</div>
+        {% endif %}
+      </div>
+
+      <div class="section-footer">
+        <button type="button" class="btn btn-prev" data-prev="2" aria-label="Back to record details">
+          <i class="fas fa-arrow-left" aria-hidden="true"></i>
+          <span>Back</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- Form Actions -->
+    <div class="form-actions">
+      <div class="actions-right">
+        <button type="reset" class="btn btn-secondary" id="resetBtn">
+          <i class="fas fa-redo-alt" aria-hidden="true"></i>
+          <span>Reset Form</span>
+        </button>
+
+        <a href="{% url 'medical_archive:archive_list' %}" class="btn btn-outline" id="cancelBtn">
+          <i class="fas fa-times" aria-hidden="true"></i>
+          <span>Cancel</span>
         </a>
-        <button type="submit" class="btn btn-save" id="submitBtn">
-          <i class="fas fa-save"></i> Save Record
+
+        <button type="submit" class="btn btn-primary" id="submitBtn">
+          <i class="fas fa-save" aria-hidden="true"></i>
+          <span>Create Medical Record</span>
         </button>
       </div>
-    </form>
-  </div>
+    </div>
+
+    <!-- Hidden fields for form state -->
+    <input type="hidden" name="current_section" id="currentSection" value="1" />
+    <input type="hidden" name="form_state" id="formState" value="new" />
+  </form>
+
 </div>
 {% endblock %}
 
 {% block extra_js %}
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"
+          integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo="
+          crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-  <script src="{% static 'js/medical_archive/create_archive.js' %}"></script>
+  <script src="{% static 'js/medical_archive/create_archive.js' %}?v=2.0.4" defer></script>
 {% endblock %}

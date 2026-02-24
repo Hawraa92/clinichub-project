@@ -5,12 +5,12 @@ from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.forms import ReadOnlyPasswordHashField
 from django.utils.translation import gettext_lazy as _
 
-from django.contrib.auth.models import Permission  # <- مهم لنسجّل PermissionAdmin
+from django.contrib.auth.models import Permission  # ← لإدارة الصلاحيات
 from .models import User
 
 
 # --------------------------
-# Permission admin (لأجل autocomplete على user_permissions)
+# Permission admin (لأجل البحث في user_permissions)
 # --------------------------
 @admin.register(Permission)
 class PermissionAdmin(admin.ModelAdmin):
@@ -26,7 +26,6 @@ class UserAdminCreationForm(forms.ModelForm):
     """
     Form used in the Django Admin 'Add user' page.
     Handles password confirmation + sets password hash.
-    (لا نفرض تغيير الدور إذا تم اختيار superuser)
     """
     password1 = forms.CharField(label=_("Password"), widget=forms.PasswordInput)
     password2 = forms.CharField(label=_("Confirm Password"), widget=forms.PasswordInput)
@@ -37,6 +36,7 @@ class UserAdminCreationForm(forms.ModelForm):
             "email",
             "username",
             "role",
+            "assigned_doctor",  # 🔴 ربط السكرتير بالدكتور عند الإنشاء
             "is_approved",
             "is_staff",
             "is_superuser",
@@ -54,13 +54,12 @@ class UserAdminCreationForm(forms.ModelForm):
         user = super().save(commit=False)
         user.set_password(self.cleaned_data["password1"])
 
-        # اتساق أساسي:
         # superuser ⇒ staff + approved
         if user.is_superuser:
             user.is_staff = True
             user.is_approved = True
 
-        # role=admin ⇒ امنحيه staff (بدون إجبار superuser)
+        # role=admin ⇒ نخليه staff (بدون إجبار superuser)
         if user.role == "admin":
             user.is_staff = True
 
@@ -90,6 +89,7 @@ class UserAdminChangeForm(forms.ModelForm):
             "username",
             "password",
             "role",
+            "assigned_doctor",  # 🔴 يظهر هنا في صفحة التعديل
             "is_approved",
             "is_staff",
             "is_superuser",
@@ -111,7 +111,6 @@ class UserAdmin(BaseUserAdmin):
     """
     Admin interface for the custom User model.
     Email is the primary identifier; role + approval controlled here.
-    فصل الدور الوظيفي عن الامتياز التقني (superuser).
     """
     model = User
     add_form = UserAdminCreationForm
@@ -129,6 +128,7 @@ class UserAdmin(BaseUserAdmin):
         "email",
         "username",
         "display_role",
+        "assigned_doctor",   # 🔴 يظهر في قائمة المستخدمين
         "is_approved",
         "is_staff",
         "is_superuser",
@@ -138,23 +138,34 @@ class UserAdmin(BaseUserAdmin):
     list_editable = ("is_approved",)
     list_display_links = ("email",)
 
-    # مهم: في Django الـ search_fields تستخدم icontains افتراضياً،
-    # لذلك لا نكتب __icontains هنا.
-    search_fields = ("email", "username", "role")
+    search_fields = (
+        "email",
+        "username",
+        "role",
+        "assigned_doctor__full_name",
+        "assigned_doctor__user__first_name",
+        "assigned_doctor__user__last_name",
+    )
     ordering = ("email",)
     list_per_page = 50
 
     # يوفّر اختيارًا أسرع للمجموعات والصلاحيات
     autocomplete_fields = ("groups", "user_permissions")
 
-    # لا نكرر filter_horizontal لنفس الحقول مع autocomplete لتجنب تعارض الواجهات
-    # filter_horizontal = ("groups", "user_permissions")
-
     readonly_fields = ("last_login", "date_joined")
 
     fieldsets = (
         (None, {"fields": ("email", "username", "password")}),
-        (_("Role & Approval"), {"fields": ("role", "is_approved")}),
+        (
+            _("Role & Approval"),
+            {
+                "fields": (
+                    "role",
+                    "assigned_doctor",  # 🔴 هنا تحت التبويب Role & Approval
+                    "is_approved",
+                )
+            },
+        ),
         (
             _("Permissions"),
             {
@@ -179,6 +190,7 @@ class UserAdmin(BaseUserAdmin):
                     "email",
                     "username",
                     "role",
+                    "assigned_doctor",  # 🔴 أيضاً في صفحة الإضافة
                     "is_approved",
                     "password1",
                     "password2",
@@ -207,7 +219,7 @@ class UserAdmin(BaseUserAdmin):
     def get_readonly_fields(self, request, obj=None):
         ro = list(self.readonly_fields)
         if not request.user.is_superuser:
-            # منع ترقية الذات أو العبث بالدور/الصلاحيات الحساسة
+            # منع العبث بالدور/الصلاحيات الحساسة
             ro += ["is_superuser", "role", "groups", "user_permissions", "is_staff"]
         return ro
 
@@ -215,8 +227,7 @@ class UserAdmin(BaseUserAdmin):
         """
         اتساق الصلاحيات عند الحفظ:
         - إذا superuser ⇒ staff + approved
-        - إذا role=admin ⇒ staff (بدون إجبار superuser)
-        (لا نغير الدور تلقائياً عند تفعيل superuser)
+        - إذا role=admin ⇒ staff
         """
         if obj.is_superuser:
             obj.is_staff = True

@@ -1,22 +1,20 @@
 # accounts/models.py
-from django.db import models
+from __future__ import annotations
+
 from django.contrib.auth.base_user import BaseUserManager
 from django.contrib.auth.models import AbstractUser
+from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 
 class UserManager(BaseUserManager):
     """
     Custom manager using email as the unique login identifier.
-    Applies default approval rules based on role.
+    Applies default approval rules based on role, BUT respects explicit is_approved.
     """
     use_in_migrations = True
 
-    def _create_user(self, email, password, **extra_fields):
-        """
-        Internal helper to create and save a user with the given email and password.
-        Expects 'role' in extra_fields (defaults to 'patient').
-        """
+    def _create_user(self, email: str, password: str | None, **extra_fields):
         if not email:
             raise ValueError(_("The Email field must be set"))
 
@@ -24,31 +22,27 @@ class UserManager(BaseUserManager):
         email = self.normalize_email(email).strip().lower()
 
         # Extract role (default to patient)
-        role = extra_fields.pop("role", "patient")
+        role = extra_fields.pop("role", User.Roles.PATIENT)
 
-        # Default approval rule: patients auto-approved; staff require review
-        extra_fields.setdefault("is_approved", True if role == "patient" else False)
+        # Default approval rule (ONLY if caller didn't specify is_approved):
+        # - patients auto-approved by default
+        # - staff roles require approval by default
+        # NOTE: if tests/admin pass is_approved=False explicitly, we keep it.
+        extra_fields.setdefault("is_approved", True if role == User.Roles.PATIENT else False)
 
         user = self.model(email=email, role=role, **extra_fields)
         user.set_password(password)
         user.save(using=self._db)
         return user
 
-    def create_user(self, email, password=None, role="patient", **extra_fields):
-        """
-        Public user creation; default role=patient.
-        """
-        extra_fields["role"] = role  # explicit role wins
+    def create_user(self, email: str, password: str | None = None, role: str = "patient", **extra_fields):
+        extra_fields["role"] = role
         extra_fields.setdefault("is_staff", False)
         extra_fields.setdefault("is_superuser", False)
         return self._create_user(email, password, **extra_fields)
 
-    def create_superuser(self, email, password=None, **extra_fields):
-        """
-        Create a platform superuser (system admin).
-        Forces role=admin + full privileges.
-        """
-        extra_fields.setdefault("role", "admin")
+    def create_superuser(self, email: str, password: str | None = None, **extra_fields):
+        extra_fields.setdefault("role", User.Roles.ADMIN)
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
         extra_fields.setdefault("is_approved", True)
@@ -57,7 +51,7 @@ class UserManager(BaseUserManager):
             raise ValueError("Superuser must have is_staff=True.")
         if extra_fields.get("is_superuser") is not True:
             raise ValueError("Superuser must have is_superuser=True.")
-        if extra_fields.get("role") != "admin":
+        if extra_fields.get("role") != User.Roles.ADMIN:
             raise ValueError('Superuser must have role="admin".')
 
         return self._create_user(email, password, **extra_fields)
@@ -67,26 +61,29 @@ class User(AbstractUser):
     """
     Primary authentication model.
     - Email is the login ID (unique).
-    - Username becomes optional, non-unique, display-only (auto-filled from email if blank).
+    - Username is optional, non-unique, display-only (auto-filled from email if blank).
     - Role controls UI access & workflow approval.
+    - assigned_doctor links each secretary to a specific doctor.
     """
-    email = models.EmailField(_("email address"), unique=True, db_index=True)
 
-    # Override AbstractUser.username: make it optional & NOT unique
+    class Roles(models.TextChoices):
+        DOCTOR = "doctor", _("Doctor")
+        SECRETARY = "secretary", _("Secretary")
+        LAB = "lab", _("Lab")
+        PATIENT = "patient", _("Patient")
+        ADMIN = "admin", _("Admin")
+
+    EMAIL_FIELD = "email"
+
+    email = models.EmailField(_("email address"), unique=True)
     username = models.CharField(
         _("username"),
-        max_length=150,               # keep 150 to align with defaults/validators if ever reused
+        max_length=150,
         null=True,
         blank=True,
         unique=False,
         help_text=_("Auto-filled from email if left blank"),
     )
-
-    class Roles(models.TextChoices):
-        DOCTOR = "doctor", _("Doctor")
-        SECRETARY = "secretary", _("Secretary")
-        PATIENT = "patient", _("Patient")
-        ADMIN = "admin", _("Admin")
 
     role = models.CharField(
         _("role"),
@@ -100,48 +97,76 @@ class User(AbstractUser):
     is_approved = models.BooleanField(
         _("approved"),
         default=False,
-        help_text=_("Must be approved by admin before logging in (for doctor/secretary)."),
+        help_text=_("Must be approved by admin before logging in (for staff roles)."),
     )
 
-    # Use email for authentication
+    assigned_doctor = models.ForeignKey(
+        "doctor.Doctor",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="secretaries",
+        help_text=_(
+            "If this user is a secretary, link them to their primary doctor. "
+            "For non-secretaries this field will be cleared automatically."
+        ),
+    )
+
     USERNAME_FIELD = "email"
-    REQUIRED_FIELDS = []  # no extra fields required for createsuperuser
+    REQUIRED_FIELDS: list[str] = []
 
     objects = UserManager()
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.get_full_name() or self.email
 
     def clean(self):
-        """
-        Normalize email at validation-time too (covers admin forms).
-        """
         super().clean()
+
         if self.email:
             self.email = self.email.strip().lower()
 
+        if self.role != self.Roles.SECRETARY:
+            self.assigned_doctor = None
+
     def save(self, *args, **kwargs):
+        # Normalize email
+        if self.email:
+            self.email = self.email.strip().lower()
+
         # Auto-fill username from email prefix if missing
         if self.email and not self.username:
             self.username = self.email.split("@")[0]
-        # Enforce lower-case email consistency again at save
-        if self.email:
-            self.email = self.email.strip().lower()
+
+        # ✅ Only enforce superuser approval (safe)
+        if getattr(self, "is_superuser", False):
+            self.is_approved = True
+
+        # Do not force patient approval here.
+        # (PatientSignUpForm / UserManager defaults handle auto-approval,
+        # while tests/admin can set is_approved=False explicitly.)
+        if self.role != self.Roles.SECRETARY:
+            self.assigned_doctor = None
+
         super().save(*args, **kwargs)
 
-    # Convenience role checks (handy in templates/decorators)
+    # Convenience role checks
     @property
-    def is_doctor(self):
+    def is_doctor(self) -> bool:
         return self.role == self.Roles.DOCTOR
 
     @property
-    def is_secretary(self):
+    def is_secretary(self) -> bool:
         return self.role == self.Roles.SECRETARY
 
     @property
-    def is_patient(self):
+    def is_lab(self) -> bool:
+        return self.role == self.Roles.LAB
+
+    @property
+    def is_patient(self) -> bool:
         return self.role == self.Roles.PATIENT
 
     @property
-    def is_admin_role(self):
+    def is_admin_role(self) -> bool:
         return self.role == self.Roles.ADMIN

@@ -1,0 +1,35 @@
+{
+  "classification_report": {
+    "Healthy": {
+      "precision": 0.8592647758538654,
+      "recall": 0.9718069301139421,
+      "f1-score": 0.9120772946859903,
+      "support": 42741.0
+    },
+    "Prediabetic": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 926.0
+    },
+    "Diabetic": {
+      "precision": 0.4872021182700794,
+      "recall": 0.15617484792757108,
+      "f1-score": 0.2365291912158543,
+      "support": 7069.0
+    },
+    "accuracy": 0.8404288867865026,
+    "macro avg": {
+      "precision": 0.44882229804131496,
+      "recall": 0.3759939260138377,
+      "f1-score": 0.38286882863394817,
+      "support": 50736.0
+    },
+    "weighted avg": {
+      "precision": 0.7917428957509707,
+      "recall": 0.8404288867865026,
+      "f1-score": 0.801307168576135,
+      "support": 50736.0
+    }
+  }
+}

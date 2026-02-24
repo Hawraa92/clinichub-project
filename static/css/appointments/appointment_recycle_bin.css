@@ -1,0 +1,145 @@
+/* static/css/appointments/appointment_recycle_bin.css */
+
+:root {
+    --ch-bg: #f6f8fc;
+    --ch-card: #ffffff;
+    --ch-border: rgba(15, 23, 42, 0.10);
+    --ch-text: #0f172a;
+    --ch-muted: #64748b;
+  
+    --ch-primary: #2563eb;
+    --ch-success: #16a34a;
+    --ch-danger: #ef4444;
+  
+    --ch-shadow: 0 12px 30px rgba(2, 8, 23, 0.08);
+    --ch-radius: 16px;
+  }
+  
+  .ptp-recycle-bin {
+    background: var(--ch-bg);
+    min-height: 100vh;
+    padding: 28px 0;
+    color: var(--ch-text);
+  }
+  
+  .ptp-recycle-bin .page-title {
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin: 0 0 4px 0;
+  }
+  
+  .ptp-recycle-bin .page-subtitle {
+    color: var(--ch-muted);
+    margin: 0;
+  }
+  
+  .ptp-recycle-bin .card {
+    border: 1px solid var(--ch-border);
+    border-radius: var(--ch-radius);
+    box-shadow: var(--ch-shadow);
+  }
+  
+  .ptp-recycle-bin .card-header,
+  .ptp-recycle-bin .card-footer {
+    background: rgba(255, 255, 255, 0.75);
+    border-color: var(--ch-border);
+  }
+  
+  .ptp-recycle-bin .table thead th {
+    font-size: 0.92rem;
+    color: #334155;
+    border-bottom: 1px solid var(--ch-border);
+  }
+  
+  .ptp-recycle-bin .table td {
+    vertical-align: middle;
+    border-top: 1px solid rgba(15, 23, 42, 0.06);
+  }
+  
+  .ptp-recycle-bin .table-hover tbody tr:hover {
+    background: rgba(37, 99, 235, 0.04);
+  }
+  
+  .ptp-recycle-bin .badge {
+    padding: 0.45rem 0.7rem;
+    border-radius: 999px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+  }
+  
+  /* Buttons */
+  .ptp-recycle-bin .btn {
+    border-radius: 12px;
+    font-weight: 700;
+    transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
+  }
+  
+  .ptp-recycle-bin .btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 20px rgba(2, 8, 23, 0.10);
+  }
+  
+  .ptp-recycle-bin .btn-primary {
+    background: linear-gradient(135deg, var(--ch-primary), #60a5fa);
+    border: none;
+  }
+  
+  .ptp-recycle-bin .btn-success {
+    background: linear-gradient(135deg, var(--ch-success), #86efac);
+    border: none;
+  }
+  
+  .ptp-recycle-bin .btn-outline-danger {
+    border-color: rgba(239, 68, 68, 0.35);
+  }
+  
+  .ptp-recycle-bin .btn-outline-danger:hover {
+    background: rgba(239, 68, 68, 0.08);
+  }
+  
+  /* Search card */
+  .ptp-recycle-bin .search-card .form-label {
+    font-weight: 700;
+    color: #334155;
+  }
+  
+  .ptp-recycle-bin .search-card input.form-control {
+    border-radius: 12px;
+    border: 1px solid var(--ch-border);
+    padding: 0.65rem 0.9rem;
+  }
+  
+  .ptp-recycle-bin .search-card input.form-control:focus {
+    border-color: rgba(37, 99, 235, 0.55);
+    box-shadow: 0 0 0 0.25rem rgba(37, 99, 235, 0.12);
+  }
+  
+  /* Pagination */
+  .ptp-recycle-bin .pagination .page-link {
+    border-radius: 12px;
+    border: 1px solid var(--ch-border);
+    color: #334155;
+  }
+  
+  .ptp-recycle-bin .pagination .page-item.active .page-link {
+    background: rgba(37, 99, 235, 0.12);
+    border-color: rgba(37, 99, 235, 0.25);
+    color: #1d4ed8;
+    font-weight: 800;
+  }
+  
+  /* Mobile tweaks */
+  @media (max-width: 576px) {
+    .ptp-recycle-bin {
+      padding: 18px 0;
+    }
+  
+    .ptp-recycle-bin .btn {
+      width: 100%;
+    }
+  
+    .ptp-recycle-bin .table-responsive {
+      border-radius: var(--ch-radius);
+    }
+  }
+  

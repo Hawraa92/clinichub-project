@@ -1,5 +1,6 @@
 /* =========================================
-   create_appointment.css (Improved & Refactored)
+   create_appointment.css (Scoped & Refactored)
+   Scope: .create-appt-wrapper
    ========================================= */
 
 /* -------- CSS Variables -------- */
@@ -76,16 +77,18 @@
   }
 }
 
-/* -------- Global Page Styling -------- */
-body {
-  font-family: var(--font-base);
-  background: var(--color-bg-page);
-  margin: 0;
-  padding: 2rem;
+/* -------- Scoped Page Styling -------- */
+.create-appt-wrapper,
+.create-appt-wrapper * {
+  box-sizing: border-box;
 }
 
-/* -------- Appointment Form Card -------- */
-.appointment-form-card {
+.create-appt-wrapper {
+  font-family: var(--font-base);
+}
+
+/* بدل ما نخرب body بكل الموقع، نخلي خلفية الصفحة من داخل wrapper */
+.create-appt-wrapper .appointment-form-card {
   background: var(--color-card-bg);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
@@ -94,11 +97,15 @@ body {
   position: relative;
 }
 
+/* Optional: لو تريد نفس لون الخلفية للجزء حول الكارد فقط */
+.create-appt-wrapper {
+  background: var(--color-bg-page);
+  border-radius: var(--radius-lg);
+}
+
 /* Card Header */
-.appointment-form-card .card-header {
-  background: linear-gradient(92deg,
-    var(--color-primary-start),
-    var(--color-primary-end));
+.create-appt-wrapper .appointment-form-card .card-header {
+  background: linear-gradient(92deg, var(--color-primary-start), var(--color-primary-end));
   color: #fff;
   font-size: 1.25rem;
   font-weight: 700;
@@ -108,7 +115,7 @@ body {
   position: relative;
 }
 
-.appointment-form-card .card-header::after {
+.create-appt-wrapper .appointment-form-card .card-header::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -120,18 +127,18 @@ body {
 }
 
 /* Card Body */
-.appointment-form-card .card-body {
+.create-appt-wrapper .appointment-form-card .card-body {
   background: var(--color-card-alt);
   padding: 2.25rem 2.4rem 2rem;
 }
 @media (max-width: 768px) {
-  .appointment-form-card .card-body {
+  .create-appt-wrapper .appointment-form-card .card-body {
     padding: 1.7rem 1.3rem 1.2rem;
   }
 }
 
 /* -------- Form Labels -------- */
-.form-label {
+.create-appt-wrapper .form-label {
   font-weight: 600;
   color: var(--color-heading);
   margin-bottom: .35rem;
@@ -141,64 +148,65 @@ body {
   align-items: center;
   gap: .25rem;
 }
-.form-label.required-star::after {
+.create-appt-wrapper .form-label.required-star::after {
   content: "*";
   color: var(--color-danger);
   margin-left: 2px;
 }
 
 /* -------- Form Controls -------- */
-.appointment-form-card select,
-.appointment-form-card textarea,
-.appointment-form-card input[type="text"],
-.appointment-form-card input[type="number"],
-.appointment-form-card input[type="datetime-local"],
-.appointment-form-card input[type="tel"],
-.appointment-form-card input[type="date"],
-.appointment-form-card .datetimepicker {
+.create-appt-wrapper .appointment-form-card select,
+.create-appt-wrapper .appointment-form-card textarea,
+.create-appt-wrapper .appointment-form-card input[type="text"],
+.create-appt-wrapper .appointment-form-card input[type="number"],
+.create-appt-wrapper .appointment-form-card input[type="datetime-local"],
+.create-appt-wrapper .appointment-form-card input[type="tel"],
+.create-appt-wrapper .appointment-form-card input[type="date"],
+.create-appt-wrapper .appointment-form-card .datetimepicker {
   width: 100%;
   border-radius: var(--radius-md);
   padding: .7rem .85rem;
   font-size: .9rem;
-  background: #fff;
   border: 1px solid var(--color-border);
   color: var(--color-text);
   line-height: 1.35;
   transition: var(--transition);
   box-shadow: 0 1px 1px rgba(0,0,0,0.04);
+  background: var(--color-card-bg);
 }
-.appointment-form-card textarea {
+
+.create-appt-wrapper .appointment-form-card textarea {
   min-height: 90px;
   resize: vertical;
 }
 
-.appointment-form-card select:focus,
-.appointment-form-card textarea:focus,
-.appointment-form-card input:focus {
+.create-appt-wrapper .appointment-form-card select:focus,
+.create-appt-wrapper .appointment-form-card textarea:focus,
+.create-appt-wrapper .appointment-form-card input:focus {
   border-color: var(--color-primary);
-  background: #fff;
   outline: none;
   box-shadow: var(--shadow-focus);
+  background: var(--color-card-bg);
 }
 
 /* -------- Invalid States -------- */
-.appointment-form-card .is-invalid {
+.create-appt-wrapper .appointment-form-card .is-invalid {
   border-color: var(--color-danger) !important;
   background: var(--color-danger-bg) !important;
   color: var(--color-danger);
   box-shadow: 0 0 0 2px rgba(220,53,69,0.15);
 }
-.appointment-form-card .is-invalid:focus {
+.create-appt-wrapper .appointment-form-card .is-invalid:focus {
   box-shadow: 0 0 0 3px rgba(220,53,69,0.25);
 }
 
 /* -------- Field Errors -------- */
-.field-errors {
+.create-appt-wrapper .field-errors {
   list-style: none;
   padding-left: 0;
   margin: .4rem 0 0;
 }
-.field-errors li {
+.create-appt-wrapper .field-errors li {
   background: var(--color-danger-bg);
   border: 1px solid var(--color-danger-border);
   color: var(--color-danger);
@@ -211,7 +219,7 @@ body {
 }
 
 /* -------- Non-field Error Alert -------- */
-.alert.alert-danger {
+.create-appt-wrapper .alert.alert-danger {
   font-size: .85rem;
   padding: .8rem 1rem;
   border-radius: var(--radius-md);
@@ -221,7 +229,7 @@ body {
 }
 
 /* -------- Help Text -------- */
-.appointment-form-card small.text-muted {
+.create-appt-wrapper .appointment-form-card small.text-muted {
   display: block;
   margin-top: .35rem;
   font-size: .65rem;
@@ -230,7 +238,7 @@ body {
 }
 
 /* -------- Submit Button -------- */
-.appointment-form-card .btn-success {
+.create-appt-wrapper .appointment-form-card .btn-success {
   font-weight: 600;
   padding: .85rem 2.2rem;
   font-size: .95rem;
@@ -240,22 +248,22 @@ body {
   transition: var(--transition);
   position: relative;
 }
-.appointment-form-card .btn-success:hover,
-.appointment-form-card .btn-success:focus-visible {
+.create-appt-wrapper .appointment-form-card .btn-success:hover,
+.create-appt-wrapper .appointment-form-card .btn-success:focus-visible {
   background: var(--color-success-hover);
   transform: translateY(-2px);
   box-shadow: 0 10px 26px -6px rgba(25,135,84,0.35);
 }
-.appointment-form-card .btn-success:active {
+.create-appt-wrapper .appointment-form-card .btn-success:active {
   transform: translateY(0);
 }
 
 /* Busy State */
-.appointment-form-card .btn-success.is-busy {
+.create-appt-wrapper .appointment-form-card .btn-success.is-busy {
   pointer-events: none;
   opacity: .7;
 }
-.appointment-form-card .btn-success.is-busy::after {
+.create-appt-wrapper .appointment-form-card .btn-success.is-busy::after {
   content: "";
   width: 16px;
   height: 16px;
@@ -276,20 +284,30 @@ body {
 
 /* -------- Responsive Button -------- */
 @media (max-width: 576px) {
-  .appointment-form-card .btn-success {
+  .create-appt-wrapper .appointment-form-card .btn-success {
     width: 100%;
     font-size: .9rem;
   }
 }
 
 /* ========== Quick-Create Patient Modal ========== */
-.qp-modal { display:none; position: fixed; inset: 0; z-index: 1050; }
-.qp-modal-open { overflow: hidden; }
-.qp-modal__backdrop {
-  position: absolute; inset: 0;
+.create-appt-wrapper .qp-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 1050;
+}
+
+/* تنطبق على body لأنك تضيفينها عبر JS */
+body.qp-modal-open { overflow: hidden; }
+
+.create-appt-wrapper .qp-modal__backdrop {
+  position: absolute;
+  inset: 0;
   background: rgba(0,0,0,.45);
 }
-.qp-modal__dialog {
+
+.create-appt-wrapper .qp-modal__dialog {
   position: relative;
   width: min(720px, 92vw);
   margin: 6vh auto;
@@ -299,15 +317,36 @@ body {
   box-shadow: var(--shadow-card);
   overflow: hidden;
 }
-.qp-modal__header, .qp-modal__footer {
+
+.create-appt-wrapper .qp-modal__header {
   padding: 0.9rem 1rem;
   background: var(--color-card-alt);
   border-bottom: 1px solid var(--color-border);
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
-.qp-modal__footer { border-top: 1px solid var(--color-border); border-bottom: none; }
-.qp-modal__body { padding: 1rem; background: var(--color-card-bg); }
-.qp-modal__close {
-  background: transparent; border: 0; font-size: 1.6rem; line-height: 1;
-  color: var(--color-text-soft); cursor: pointer;
+
+.create-appt-wrapper .qp-modal__footer {
+  padding: 0.9rem 1rem;
+  background: var(--color-card-alt);
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
+
+.create-appt-wrapper .qp-modal__body {
+  padding: 1rem;
+  background: var(--color-card-bg);
+}
+
+.create-appt-wrapper .qp-modal__close {
+  background: transparent;
+  border: 0;
+  font-size: 1.6rem;
+  line-height: 1;
+  color: var(--color-text-soft);
+  cursor: pointer;
+}
+.create-appt-wrapper .qp-modal__close:hover { color: var(--color-text); }

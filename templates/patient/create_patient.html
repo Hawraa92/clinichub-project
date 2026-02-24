@@ -9,6 +9,7 @@
 {% endblock %}
 
 {% block content %}
+<div class="ptp">
 
   {# Django flash messages #}
   {% if messages %}
@@ -28,6 +29,7 @@
         <i class="fas fa-user-injured"></i>
         <div class="icon-pulse"></div>
       </div>
+
       {% if request.user.role == "doctor" or request.user|has_group:"Doctors" %}
         <h1>Register New Patient</h1>
         <p>Complete all required fields to create a new patient record.</p>
@@ -44,6 +46,13 @@
       <div class="registration-card">
         <form method="post" id="patient-form" novalidate autocomplete="off">
           {% csrf_token %}
+
+          {# Hidden fields safety #}
+          {% for field in form %}
+            {% if field.is_hidden %}
+              {{ field }}
+            {% endif %}
+          {% endfor %}
 
           {% if form.non_field_errors %}
             <div class="alert alert-danger mb-3">
@@ -65,72 +74,77 @@
 
           <div class="form-grid">
             {% for field in form %}
-              <div class="form-group">
-                <label for="{{ field.id_for_label }}" class="form-label">
-                  {{ field.label }}{% if field.field.required %}<span class="required-asterisk">*</span>{% endif %}
-                </label>
-                <div class="input-container">
-                  {% if field.name == 'date_of_birth' %}
-                    <div class="input-with-icon">
-                      {{ field }}
-                      <span class="input-icon"><i class="fas fa-calendar-day"></i></span>
-                      <button type="button" class="date-today-btn" title="Set to today">Today</button>
-                    </div>
-                  {% else %}
-                    <div class="input-with-icon">
-                      {{ field }}
-                      <span class="input-icon">
-                        {% if field.name == 'full_name' %}<i class="fas fa-user"></i>
-                        {% elif field.name == 'email' %}<i class="fas fa-envelope"></i>
-                        {% elif field.name == 'mobile' %}<i class="fas fa-phone"></i>
-                        {% elif field.name == 'address' %}<i class="fas fa-home"></i>
-                        {% elif field.name == 'sex' %}<i class="fas fa-venus-mars"></i>
-                        {% elif field.name == 'diabetes_status' %}<i class="fas fa-clipboard-check"></i>
-                        {% elif field.name == 'high_bp' or field.name == 'high_chol' %}<i class="fas fa-tint"></i>
-                        {% elif field.name == 'chol_check' %}<i class="fas fa-vial-circle-check"></i>
-                        {% elif field.name == 'bmi' %}<i class="fas fa-weight"></i>
-                        {% elif field.name == 'hbA1c' %}<i class="fas fa-vial"></i>
-                        {% elif field.name == 'smoker' %}<i class="fas fa-smoking"></i>
-                        {% elif field.name == 'stroke' %}<i class="fas fa-brain"></i>
-                        {% elif field.name == 'heart_disease_or_attack' %}<i class="fas fa-heartbeat"></i>
-                        {% elif field.name == 'phys_activity' %}<i class="fas fa-person-running"></i>
-                        {% elif field.name == 'fruits' %}<i class="fas fa-apple-alt"></i>
-                        {% elif field.name == 'veggies' %}<i class="fas fa-carrot"></i>
-                        {% elif field.name == 'hvy_alcohol_consump' %}<i class="fas fa-wine-bottle"></i>
-                        {% elif field.name == 'any_healthcare' %}<i class="fas fa-briefcase-medical"></i>
-                        {% elif field.name == 'no_doc_bc_cost' %}<i class="fas fa-hand-holding-dollar"></i>
-                        {% elif field.name == 'gen_hlth' %}<i class="fas fa-star-half-stroke"></i>
-                        {% elif field.name == 'ment_hlth' %}<i class="fas fa-face-tired"></i>
-                        {% elif field.name == 'phys_hlth' %}<i class="fas fa-heart-pulse"></i>
-                        {% elif field.name == 'diff_walk' %}<i class="fas fa-person-walking-with-cane"></i>
-                        {% elif field.name == 'education' %}<i class="fas fa-graduation-cap"></i>
-                        {% elif field.name == 'income' %}<i class="fas fa-dollar-sign"></i>
-                        {% elif field.name == 'past_medical_history' %}<i class="fas fa-clipboard-list"></i>
-                        {% elif field.name == 'drug_history' %}<i class="fas fa-pills"></i>
-                        {% elif field.name == 'investigations' %}<i class="fas fa-microscope"></i>
-                        {% elif field.name == 'clinical_notes' %}<i class="fas fa-notes-medical"></i>
-                        {% elif field.name == 'doctor' %}<i class="fas fa-user-doctor"></i>
-                        {% else %}<i class="fas fa-pen"></i>
-                        {% endif %}
-                      </span>
-                    </div>
-                  {% endif %}
-                  {% if field.help_text %}
-                    <div class="form-tip">{{ field.help_text }}</div>
-                  {% endif %}
-                  {% for error in field.errors %}
-                    <div class="form-error">
-                      <i class="fas fa-exclamation-circle"></i> {{ error }}
-                    </div>
-                  {% endfor %}
+              {% if not field.is_hidden %}
+                <div class="form-group">
+                  <label for="{{ field.id_for_label }}" class="form-label">
+                    {{ field.label }}{% if field.field.required %}<span class="required-asterisk">*</span>{% endif %}
+                  </label>
+
+                  <div class="input-container">
+                    {% if field.name == 'date_of_birth' %}
+                      <div class="input-with-icon">
+                        {{ field }}
+                        <span class="input-icon"><i class="fas fa-calendar-day"></i></span>
+                        <button type="button" class="date-today-btn" title="Set to today">Today</button>
+                      </div>
+                    {% else %}
+                      <div class="input-with-icon">
+                        {{ field }}
+                        <span class="input-icon">
+                          {% if field.name == 'full_name' %}<i class="fas fa-user"></i>
+                          {% elif field.name == 'email' %}<i class="fas fa-envelope"></i>
+                          {% elif field.name == 'mobile' %}<i class="fas fa-phone"></i>
+                          {% elif field.name == 'address' %}<i class="fas fa-home"></i>
+                          {% elif field.name == 'sex' %}<i class="fas fa-venus-mars"></i>
+                          {% elif field.name == 'diabetes_status' %}<i class="fas fa-clipboard-check"></i>
+                          {% elif field.name == 'high_bp' or field.name == 'high_chol' %}<i class="fas fa-tint"></i>
+                          {% elif field.name == 'chol_check' %}<i class="fas fa-vial-circle-check"></i>
+                          {% elif field.name == 'bmi' %}<i class="fas fa-weight"></i>
+                          {% elif field.name == 'hbA1c' %}<i class="fas fa-vial"></i>
+                          {% elif field.name == 'smoker' %}<i class="fas fa-smoking"></i>
+                          {% elif field.name == 'stroke' %}<i class="fas fa-brain"></i>
+                          {% elif field.name == 'heart_disease_or_attack' %}<i class="fas fa-heartbeat"></i>
+                          {% elif field.name == 'phys_activity' %}<i class="fas fa-person-running"></i>
+                          {% elif field.name == 'fruits' %}<i class="fas fa-apple-alt"></i>
+                          {% elif field.name == 'veggies' %}<i class="fas fa-carrot"></i>
+                          {% elif field.name == 'hvy_alcohol_consump' %}<i class="fas fa-wine-bottle"></i>
+                          {% elif field.name == 'any_healthcare' %}<i class="fas fa-briefcase-medical"></i>
+                          {% elif field.name == 'no_doc_bc_cost' %}<i class="fas fa-hand-holding-dollar"></i>
+                          {% elif field.name == 'gen_hlth' %}<i class="fas fa-star-half-stroke"></i>
+                          {% elif field.name == 'ment_hlth' %}<i class="fas fa-face-tired"></i>
+                          {% elif field.name == 'phys_hlth' %}<i class="fas fa-heart-pulse"></i>
+                          {% elif field.name == 'diff_walk' %}<i class="fas fa-person-walking-with-cane"></i>
+                          {% elif field.name == 'education' %}<i class="fas fa-graduation-cap"></i>
+                          {% elif field.name == 'income' %}<i class="fas fa-dollar-sign"></i>
+                          {% elif field.name == 'past_medical_history' %}<i class="fas fa-clipboard-list"></i>
+                          {% elif field.name == 'drug_history' %}<i class="fas fa-pills"></i>
+                          {% elif field.name == 'investigations' %}<i class="fas fa-microscope"></i>
+                          {% elif field.name == 'clinical_notes' %}<i class="fas fa-notes-medical"></i>
+                          {% elif field.name == 'doctor' %}<i class="fas fa-user-doctor"></i>
+                          {% else %}<i class="fas fa-pen"></i>
+                          {% endif %}
+                        </span>
+                      </div>
+                    {% endif %}
+
+                    {% if field.help_text %}
+                      <div class="form-tip">{{ field.help_text }}</div>
+                    {% endif %}
+
+                    {% for error in field.errors %}
+                      <div class="form-error">
+                        <i class="fas fa-exclamation-circle"></i> {{ error }}
+                      </div>
+                    {% endfor %}
+                  </div>
                 </div>
-              </div>
+              {% endif %}
             {% endfor %}
           </div>
 
           <div class="form-actions">
             <a
-              href="{% if request.user.role == 'doctor' or request.user|has_group:'Doctors' %}{% url 'patient:list' %}{% else %}{% url 'appointments:secretary_dashboard' %}{% endif %}"
+              href="{% url 'patient:list' %}"
               class="btn-cancel"
             >
               <i class="fas fa-arrow-left"></i> Back
@@ -141,6 +155,7 @@
               <i class="fas fa-user-plus"></i> Register Patient
             </button>
           </div>
+
         </form>
       </div>
     {% else %}
@@ -157,6 +172,8 @@
       </div>
     {% endif %}
   </div>
+
+</div>
 {% endblock %}
 
 {% block extra_js %}

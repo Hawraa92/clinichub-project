@@ -1,0 +1,315 @@
+{# File: prescription/templates/prescription/verify.html #}
+{% extends "base.html" %}
+{% load static %}
+
+{% block extra_head %}
+<style>
+  .verify-wrap{
+    min-height: 70vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding: 28px 14px 60px;
+    background: linear-gradient(135deg, #f8fafc, #eef2ff);
+  }
+  .verify-card{
+    width: min(880px, 100%);
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 18px;
+    box-shadow: 0 18px 50px rgba(2,6,23,.08);
+    overflow: hidden;
+  }
+  .verify-head{
+    padding: 28px 28px 22px;
+    color: #fff;
+    background: linear-gradient(135deg, #2563eb, #0d9488);
+  }
+  .verify-title{
+    margin:0 0 6px 0;
+    font-size: 1.7rem;
+    font-weight: 800;
+    letter-spacing: -.3px;
+  }
+  .verify-sub{
+    margin:0;
+    opacity:.9;
+    font-size: .98rem;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    flex-wrap: wrap;
+  }
+  .phi-pill{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: rgba(255,255,255,.16);
+    border: 1px solid rgba(255,255,255,.25);
+    color:#fff;
+    font-weight: 700;
+    font-size: .85rem;
+    letter-spacing: .01em;
+  }
+  .verify-body{
+    padding: 26px 28px 30px;
+  }
+
+  .status-row{
+    display:flex;
+    align-items:center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .status-pill{
+    display:inline-flex;
+    align-items:center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    font-weight: 800;
+    font-size: .92rem;
+    border: 1px solid transparent;
+    background: #f8fafc;
+    color:#0f172a;
+  }
+  .ok{
+    background:#ecfdf5;
+    color:#065f46;
+    border-color:#a7f3d0;
+  }
+  .bad{
+    background:#fef2f2;
+    color:#991b1b;
+    border-color:#fecaca;
+  }
+
+  .grid{
+    display:grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    margin-top: 18px;
+  }
+  .field{
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    padding: 14px 14px;
+    background:#fff;
+  }
+  .label{
+    display:block;
+    font-size:.72rem;
+    letter-spacing:.08em;
+    text-transform: uppercase;
+    color:#6b7280;
+    margin-bottom: 4px;
+  }
+  .value{
+    font-size: 1.05rem;
+    font-weight: 800;
+    color:#0f172a;
+    word-break: break-word;
+  }
+  .muted{ color:#64748b; }
+
+  .code{
+    display:inline-block;
+    padding: 6px 10px;
+    border-radius: 10px;
+    border: 1px dashed #e5e7eb;
+    background:#f8fafc;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+    font-size: .92rem;
+    letter-spacing: .02em;
+  }
+
+  .verify-actions{
+    margin-top: 18px;
+    display:flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .v-btn{
+    display:inline-flex;
+    align-items:center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-weight: 800;
+    font-size: .92rem;
+    text-decoration: none;
+    border: 1px solid #e5e7eb;
+    color:#0f172a;
+    background:#fff;
+  }
+  .v-btn:hover{ background:#f8fafc; }
+  .v-btn-primary{
+    border-color:#c7d2fe;
+    background:#eef2ff;
+  }
+
+  .verify-note{
+    margin-top:18px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: #f8fafc;
+    border: 1px dashed #e5e7eb;
+  }
+
+  .verify-footer{
+    padding: 18px 28px 26px;
+    border-top:1px solid #e5e7eb;
+    background:#0f172a;
+    color:#fff;
+    text-align:center;
+    font-size:.92rem;
+  }
+
+  @media (max-width: 900px){
+    .grid{ grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 560px){
+    .grid{ grid-template-columns: 1fr; }
+    .verify-head, .verify-body, .verify-footer{
+      padding-left: 18px;
+      padding-right: 18px;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="verify-wrap">
+  <div class="verify-card">
+
+    <div class="verify-head">
+      <div class="verify-title">Prescription Verification</div>
+      <p class="verify-sub">
+        ClinicHub secure verification page
+        <span class="phi-pill">🔒 PHI-Free</span>
+      </p>
+    </div>
+
+    <div class="verify-body">
+
+      <div class="status-row">
+        {% if valid %}
+          <span class="status-pill ok">✅ Verified</span>
+        {% else %}
+          <span class="status-pill bad">❌ Not Verified</span>
+        {% endif %}
+      </div>
+
+      {% if reason %}
+        <p class="muted" style="margin-top:10px;">{{ reason }}</p>
+      {% else %}
+        {% if valid %}
+          <p class="muted" style="margin-top:10px;">
+            This prescription is valid and was issued by ClinicHub.
+          </p>
+        {% else %}
+          <p class="muted" style="margin-top:10px;">
+            We could not verify this prescription.
+          </p>
+        {% endif %}
+      {% endif %}
+
+      {# ✅ Show full details only when verified #}
+      {% if valid %}
+        <div class="grid">
+          <div class="field">
+            <span class="label">Prescription ID</span>
+            <div class="value">
+              {% if rx_id %}
+                {{ rx_id|stringformat:"06d" }}
+              {% else %}
+                —
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="field">
+            <span class="label">Doctor</span>
+            <div class="value">{{ doctor|default:"—" }}</div>
+          </div>
+
+          <div class="field">
+            <span class="label">Issued At</span>
+            <div class="value">{{ issued_at|default:"—" }}</div>
+          </div>
+
+          <div class="field">
+            <span class="label">Status</span>
+            <div class="value">{{ status|default:"—" }}</div>
+          </div>
+
+          <div class="field">
+            <span class="label">System</span>
+            <div class="value">ClinicHub</div>
+          </div>
+
+          <div class="field">
+            <span class="label">Security Checksum</span>
+            <div class="value">
+              {% if checksum %}
+                <span class="code">{{ checksum }}</span>
+              {% else %}
+                —
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      {% else %}
+        <div class="grid" style="grid-template-columns: repeat(2, minmax(0, 1fr));">
+          <div class="field">
+            <span class="label">System</span>
+            <div class="value">ClinicHub</div>
+          </div>
+          <div class="field">
+            <span class="label">Security Checksum</span>
+            <div class="value">
+              {% if checksum %}
+                <span class="code">{{ checksum }}</span>
+              {% else %}
+                —
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      {% endif %}
+
+      {% if download_url %}
+        <div class="verify-actions">
+          <a class="v-btn v-btn-primary" href="{{ download_url }}" target="_blank" rel="noopener">
+            📄 Download PDF
+          </a>
+        </div>
+        <div class="verify-note" style="margin-top:12px;">
+          <small class="muted">
+            Note: PDF may contain patient information. Public download should be enabled only if you fully accept that.
+          </small>
+        </div>
+      {% endif %}
+
+      <div class="verify-note">
+        <small class="muted">
+          If you received this link from a printed prescription, do not edit the URL.
+        </small>
+      </div>
+
+      {# Optional: add a back button if you have a homepage route #}
+      {# <div class="verify-actions"><a class="v-btn" href="{% url 'home:index' %}">↩ Back</a></div> #}
+
+    </div>
+
+    <div class="verify-footer">
+      ClinicHub • Secure Prescription Verification
+    </div>
+
+  </div>
+</div>
+{% endblock %}

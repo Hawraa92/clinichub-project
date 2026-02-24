@@ -1,0 +1,167 @@
+{# templates/appointments/appointment_recycle_bin.html #}
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Appointments Recycle Bin{% endblock %}
+
+{% block extra_head %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'css/appointments/appointment_recycle_bin.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="ptp-recycle-bin">
+  <div class="container py-4">
+
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+      <div>
+        <h2 class="page-title">🗑️ Recycle Bin</h2>
+        <p class="page-subtitle">
+          Deleted appointments (soft-deleted). You can restore them or permanently delete (admin only).
+        </p>
+      </div>
+
+      <div class="d-flex flex-wrap gap-2">
+        <a href="{% url 'appointments:appointment_list' %}" class="btn btn-outline-secondary">
+          ← Back to Appointments
+        </a>
+      </div>
+    </div>
+
+    {% if messages %}
+      <div class="mb-3">
+        {% for message in messages %}
+          <div class="alert alert-{{ message.tags }} mb-2" role="alert">
+            {{ message }}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="card shadow-sm mb-3 search-card">
+      <div class="card-body">
+        <form method="get" class="row g-2 align-items-end">
+          <div class="col-md-6">
+            <label class="form-label">Search</label>
+            <input
+              type="text"
+              name="q"
+              value="{{ search_query|default:'' }}"
+              class="form-control"
+              placeholder="Patient / Doctor / Notes..."
+            >
+          </div>
+          <div class="col-md-6 d-flex gap-2">
+            <button class="btn btn-primary" type="submit">Search</button>
+            <a class="btn btn-outline-secondary" href="{% url 'appointments:appointment_recycle_bin' %}">Reset</a>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="card shadow-sm">
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>ID</th>
+                <th>Patient</th>
+                <th>Doctor</th>
+                <th>Scheduled</th>
+                <th>Status</th>
+                <th>Deleted At</th>
+                <th class="text-end">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for a in deleted_appointments %}
+                <tr>
+                  <td>{{ a.id }}</td>
+                  <td>{{ a.patient.full_name }}</td>
+                  <td>
+                    Dr. {{ a.doctor.user.get_full_name|default:a.doctor.user.username }}
+                  </td>
+                  <td>
+                    {% if a.scheduled_time %}
+                      {{ a.scheduled_time|date:"Y-m-d" }} {{ a.scheduled_time|time:"h:i A" }}
+                    {% else %}
+                      —
+                    {% endif %}
+                  </td>
+                  <td>
+                    <span class="badge bg-secondary">{{ a.get_status_display|default:a.status }}</span>
+                  </td>
+                  <td>
+                    {% if a.deleted_at %}
+                      {{ a.deleted_at|date:"Y-m-d" }} {{ a.deleted_at|time:"h:i A" }}
+                    {% else %}
+                      —
+                    {% endif %}
+                  </td>
+                  <td class="text-end">
+                    <form method="post" action="{% url 'appointments:restore_appointment' a.id %}" class="d-inline">
+                      {% csrf_token %}
+                      <button class="btn btn-sm btn-success" type="submit">Restore</button>
+                    </form>
+
+                    {% if request.user.is_superuser %}
+                      <a
+                        class="btn btn-sm btn-outline-danger"
+                        href="{% url 'appointments:hard_delete_appointment' a.id %}"
+                      >
+                        Hard Delete
+                      </a>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="7" class="text-center py-4 text-muted">
+                    No deleted appointments found.
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {% if deleted_appointments.paginator.num_pages > 1 %}
+        <div class="card-footer">
+          <nav aria-label="Recycle bin pagination">
+            <ul class="pagination mb-0">
+              {% if deleted_appointments.has_previous %}
+                <li class="page-item">
+                  <a class="page-link" href="?page={{ deleted_appointments.previous_page_number }}&q={{ search_query|urlencode }}">
+                    Previous
+                  </a>
+                </li>
+              {% else %}
+                <li class="page-item disabled"><span class="page-link">Previous</span></li>
+              {% endif %}
+
+              <li class="page-item disabled">
+                <span class="page-link">
+                  Page {{ deleted_appointments.number }} of {{ deleted_appointments.paginator.num_pages }}
+                </span>
+              </li>
+
+              {% if deleted_appointments.has_next %}
+                <li class="page-item">
+                  <a class="page-link" href="?page={{ deleted_appointments.next_page_number }}&q={{ search_query|urlencode }}">
+                    Next
+                  </a>
+                </li>
+              {% else %}
+                <li class="page-item disabled"><span class="page-link">Next</span></li>
+              {% endif %}
+            </ul>
+          </nav>
+        </div>
+      {% endif %}
+    </div>
+
+  </div>
+</div>
+{% endblock %}

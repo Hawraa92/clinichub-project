@@ -1,3 +1,4 @@
+{# templates/patient/patient_list.html #}
 {% extends "base.html" %}
 {% load static %}
 
@@ -8,44 +9,104 @@
 
 {% block content %}
 <div class="patients-container">
-    <h1><i class="fas fa-users"></i> Registered Patients</h1>
 
-    <div class="search-bar">
-        <input type="text" id="searchInput" placeholder="Search by name or phone..." onkeyup="filterPatients()">
+  <div class="patients-header">
+    <div class="patients-title">
+      <h1><i class="fa-solid fa-users"></i> Registered Patients</h1>
+      <p class="patients-subtitle">Search, review, and edit your registered patients.</p>
     </div>
 
+    <div class="patients-actions">
+      <a href="{% url 'patient:create' %}" class="btn-add">
+        <i class="fa-solid fa-user-plus"></i> New Patient
+      </a>
+    </div>
+  </div>
+
+  {# ✅ Server-side search (matches patient/views.py uses GET param: q) #}
+  {% url 'patient:list' as patient_list_url %}
+  <form class="search-bar" method="get" action="{{ patient_list_url }}" data-list-url="{{ patient_list_url }}">
+    <i class="fa-solid fa-magnifying-glass"></i>
+
+    <input
+      type="text"
+      id="searchInput"
+      name="q"
+      value="{{ search_query|default:'' }}"
+      placeholder="Search by name, phone, or email..."
+      autocomplete="off"
+    >
+
+    {# ✅ Keep page reset when searching #}
+    <input type="hidden" name="page" value="1">
+
+    <button type="button" class="btn-clear" id="clearSearch" title="Clear" style="display:none;">
+      <i class="fa-solid fa-xmark"></i>
+    </button>
+  </form>
+
+  <div class="table-wrap">
     <table id="patientsTable">
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>Full Name</th>
-                <th>Mobile</th>            {# <— أضف هذا العمود #}
-                <th>Age</th>
-                <th>Registered On</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for patient in patients %}
-            <tr>
-                <td>{{ patient.id }}</td>
-                <td>{{ patient.full_name }}</td>
-                <td>{{ patient.mobile|default:"—" }}</td>  {# <— إظهار الهاتف #}
-                <td>{{ patient.display_age|default:"—" }}</td>
-                <td>{{ patient.created_at|date:"Y-m-d" }}</td>
-                <td>
-                    <a href="{% url 'patient:edit' patient.id %}" class="btn-edit">
-                        <i class="fas fa-pen-to-square"></i> Edit
-                    </a>
-                </td>
-            </tr>
-            {% empty %}
-            <tr>
-                <td colspan="6" style="text-align:center;">No patients found.</td>
-            </tr>
-            {% endfor %}
-        </tbody>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Full Name</th>
+          <th>Mobile</th>
+          <th>Age</th>
+          <th>Registered On</th>
+          <th class="th-actions">Actions</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {% for patient in patients %}
+          <tr>
+            <td class="td-id">{{ patient.id }}</td>
+            <td class="td-name">{{ patient.full_name|default:"—" }}</td>
+            <td class="td-mobile">{{ patient.mobile|default:"—" }}</td>
+            <td class="td-age">{{ patient.display_age|default:"—" }}</td>
+            <td class="td-date">{{ patient.created_at|date:"Y-m-d"|default:"—" }}</td>
+            <td class="td-actions">
+              <a href="{% url 'patient:detail' patient.id %}" class="btn-view" title="View">
+                <i class="fa-regular fa-eye"></i>
+              </a>
+              <a href="{% url 'patient:edit' patient.id %}" class="btn-edit" title="Edit">
+                <i class="fa-regular fa-pen-to-square"></i>
+              </a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="6" class="empty-state">
+              <i class="fa-solid fa-circle-info"></i> No patients found.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
     </table>
+  </div>
+
+  {# ✅ Pagination (preserve q) #}
+  {% if patients.has_other_pages %}
+    <div class="pagination">
+      {% if patients.has_previous %}
+        <a class="page-btn" href="?page={{ patients.previous_page_number }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">&laquo; Prev</a>
+      {% else %}
+        <span class="page-btn disabled">&laquo; Prev</span>
+      {% endif %}
+
+      <span class="page-info">
+        Page {{ patients.number }} of {{ patients.paginator.num_pages }}
+      </span>
+
+      {% if patients.has_next %}
+        <a class="page-btn" href="?page={{ patients.next_page_number }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}">Next &raquo;</a>
+      {% else %}
+        <span class="page-btn disabled">Next &raquo;</span>
+      {% endif %}
+    </div>
+  {% endif %}
+
 </div>
 {% endblock %}
 

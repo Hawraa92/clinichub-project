@@ -1,0 +1,95 @@
+/* =========================================================
+   File: static/css/lab/lab_inbox.css
+   Page: Lab Inbox (filters + table)
+========================================================= */
+
+.labp .labx-tabs{
+    display:flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  
+  .labp .labx-tab{
+    padding: 9px 12px;
+    border-radius: 999px;
+    background:#fff;
+    border: 1px solid rgba(0,0,0,.10);
+    text-decoration:none;
+    font-weight: 900;
+    color: var(--dark);
+    transition:.2s ease;
+  }
+  
+  .labp .labx-tab:hover{
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+  }
+  
+  .labp .labx-tab.active{
+    background: rgba(142, 202, 230, .22);
+    border-color: rgba(142, 202, 230, .55);
+    color: var(--primary-dark);
+  }
+  
+  .labp .labx-filters{
+    display:flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-top: 8px;
+  }
+  
+  .labp .labx-input{
+    height: var(--control-h);
+    border-radius: 14px;
+    border: 1px solid rgba(0,0,0,.12);
+    padding: 10px 12px;
+    outline:none;
+    min-width: 280px;
+    flex: 1;
+    background:#fff;
+    transition: .2s ease;
+  }
+  
+  .labp .labx-input:focus{
+    border-color: rgba(33, 158, 188, .55);
+    box-shadow: 0 0 0 4px rgba(142, 202, 230, .28);
+  }
+  
+  /* Table rows: reuse labd-row from lab_dashboard.css style if موجود عندج،
+     لكن هنا نثبتها حتى لا تعتمدين على ملف ثاني */
+  .labp .labd-row{
+    display:grid;
+    grid-template-columns: 90px 1.2fr 1.1fr 1.0fr 1.0fr 1.1fr 140px;
+    gap: 10px;
+    align-items:center;
+    padding: 12px 12px;
+    border-radius: 12px;
+    background:#fff;
+    border: 1px solid rgba(0,0,0,.06);
+    box-shadow: 0 1px 0 rgba(0,0,0,.03);
+    margin-bottom: 10px;
+  }
+  
+  .labp .labd-head{
+    background: rgba(255,255,255,.75);
+    border-color: rgba(0,0,0,.05);
+    font-weight: 900;
+    color: var(--dark-gray);
+  }
+  
+  .labp .labd-empty{
+    padding: 18px;
+    text-align:center;
+    color: var(--dark-gray);
+    background:#fff;
+    border: 1px dashed rgba(0,0,0,.18);
+    border-radius: 14px;
+  }
+  
+  @media (max-width: 900px){
+    .labp .labd-row{ grid-template-columns: 1fr; }
+    .labp .labd-head{ display:none; }
+  }
+  

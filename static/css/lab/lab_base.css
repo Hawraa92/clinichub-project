@@ -1,0 +1,383 @@
+
+
+:root{
+  /* Pastel Palette (متوافق مع doctor dashboard) */
+  --primary: #8ECAE6;
+  --primary-light: #B8E0F9;
+  --primary-dark: #219EBC;
+
+  --secondary: #FFB4A2;
+  --accent: #A2D2FF;
+
+  --success: #95D5B2;
+  --warning: #FFD166;
+  --danger: #FF9B9B;
+
+  /* Neutrals */
+  --light: #F8F9FA;
+  --light-gray: #E9ECEF;
+  --medium-gray: #DEE2E6;
+  --dark-gray: #6C757D;
+  --dark: #212529;
+
+  /* Glass */
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(255, 255, 255, 0.35);
+
+  /* Shadows */
+  --shadow-sm: 0 2px 8px rgba(0,0,0,.08);
+  --shadow-md: 0 4px 12px rgba(0,0,0,.10);
+  --shadow-lg: 0 10px 28px rgba(0,0,0,.12);
+
+  /* Radius & Typography */
+  --radius: 16px;
+  --radius-sm: 12px;
+  --control-h: 52px;
+  --font-main: "Poppins", system-ui, -apple-system, Segoe UI, Arial, sans-serif;
+}
+
+*{ box-sizing:border-box; }
+
+/* Scope wrapper */
+.labp{
+  font-family: var(--font-main);
+  color: var(--dark);
+}
+
+.labp .page-bg{
+  background: linear-gradient(135deg, #f5f7fa 0%, #e4edf5 100%);
+  min-height: 100vh;
+}
+
+/* =========================================================
+   Layout
+========================================================= */
+.labp .dashboard-container{
+  display:flex;
+  min-height:100vh;
+}
+
+/* Sidebar */
+.labp .sidebar{
+  width:260px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  border-right: 1px solid var(--glass-border);
+  display:flex;
+  flex-direction:column;
+  padding: 24px 16px;
+  box-shadow: var(--shadow-md);
+  z-index:100;
+}
+
+.labp .brand-container{
+  display:flex;
+  align-items:center;
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+.labp .lab-avatar{
+  width:56px;
+  height:56px;
+  border-radius:50%;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:#fff;
+  font-size: 26px;
+  overflow: hidden; /* ✅ مهم حتى صورة اللوجو تنقص داخل الدائرة */
+}
+
+/* ✅ Logo inside the avatar circle (Dashboard/Settings/etc) */
+.labp .lab-avatar img{
+  width:100%;
+  height:100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display:block;
+}
+
+.labp .brand-text h3{
+  margin:0;
+  font-size:18px;
+  font-weight:800;
+}
+
+.labp .brand-text p{
+  margin: 2px 0 0;
+  font-size:13px;
+  color: var(--dark-gray);
+  font-weight:600;
+}
+
+.labp .nav-menu{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  flex:1;
+}
+
+/* ✅ nav item */
+.labp .nav-item{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding: 14px 14px;
+  border-radius:12px;
+  color: var(--dark-gray);
+  text-decoration:none;
+  font-weight:700;
+  transition: .25s ease;
+}
+
+.labp .nav-item i{
+  font-size:19px;
+  width:22px;
+  text-align:center;
+}
+
+.labp .nav-item:hover{
+  background: var(--primary-light);
+  color: var(--primary-dark);
+}
+
+.labp .nav-item.active{
+  background: var(--primary);
+  color:#fff;
+  box-shadow: var(--shadow-sm);
+}
+
+.labp .nav-item.disabled{
+  opacity:.55;
+  cursor:not-allowed;
+}
+
+/* ✅ RED notification badge */
+.labp .nav-badge{
+  margin-left:auto;
+  background:#ef4444;          /* 🔴 أحمر */
+  color:#fff;
+  font-size:12px;
+  font-weight:900;
+  line-height:1;
+  padding: 4px 10px;
+  border-radius:999px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  box-shadow: 0 8px 18px rgba(239,68,68,.28);
+}
+
+/* keep badge red even when nav-item active */
+.labp .nav-item.active .nav-badge{
+  background:#ef4444;
+  color:#fff;
+}
+
+.labp .logout-container{
+  margin-top:auto;
+  padding-top: 14px;
+  border-top: 1px solid var(--medium-gray);
+}
+
+/* Main */
+.labp .main-content{
+  flex:1;
+  padding: 32px;
+  display:flex;
+  flex-direction:column;
+  gap: 22px;
+}
+
+/* Header */
+.labp .dashboard-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap: 18px;
+}
+
+.labp .welcome-section h1{
+  margin:0 0 6px;
+  font-size:28px;
+  font-weight:900;
+}
+
+.labp .inspiration{
+  margin:0;
+  font-size:15px;
+  color: var(--dark-gray);
+  font-style: italic;
+  font-weight: 500;
+}
+
+/* Info/Date card */
+.labp .datetime-card{
+  display:flex;
+  align-items:center;
+  gap: 14px;
+  background: var(--glass-bg);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--glass-border);
+  min-width: 260px;
+}
+
+.labp .clock-icon{
+  width:46px;
+  height:46px;
+  border-radius:12px;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--primary) 100%);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:#fff;
+  font-size:18px;
+}
+
+.labp .clock{ font-size:22px; font-weight:900; }
+.labp .date{ font-size:13px; color: var(--dark-gray); margin-top: 2px; }
+
+/* Sections */
+.labp .chart-section,
+.labp .archives-section{
+  background: var(--glass-bg);
+  border-radius: var(--radius);
+  padding: 22px;
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-sm);
+}
+
+.labp .section-header{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-bottom: 14px;
+}
+
+.labp .section-header h2{
+  margin:0;
+  font-size:18px;
+  font-weight:900;
+}
+
+.labp .section-header i{
+  color: var(--primary-dark);
+  font-size: 18px;
+}
+
+/* =========================================================
+   Components: Buttons / Chips / Table empty
+========================================================= */
+.labp .labd-btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(0,0,0,.10);
+  background: #fff;
+  color: var(--dark);
+  text-decoration:none;
+  font-weight: 800;
+  box-shadow: 0 1px 0 rgba(0,0,0,.03);
+  transition: .2s ease;
+  cursor:pointer;
+}
+
+.labp .labd-btn:hover{
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+  border-color: rgba(0,0,0,.14);
+}
+
+.labp .labd-btn.primary{
+  background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 100%);
+  color:#fff;
+  border-color: transparent;
+}
+
+.labp .labd-btn.danger{
+  background: linear-gradient(135deg, #ff6b6b 0%, var(--danger) 100%);
+  color:#fff;
+  border-color: transparent;
+}
+
+.labp .chip{
+  display:inline-flex;
+  align-items:center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-weight: 900;
+  font-size: 12px;
+  border: 1px solid rgba(0,0,0,.08);
+  background:#fff;
+}
+
+/* Status (supports lowercase & UPPERCASE) */
+.labp .chip-pending, .labp .chip-PENDING{
+  background: rgba(255, 209, 102, .18);
+  border-color: rgba(255, 209, 102, .38);
+  color: #8a5a00;
+}
+.labp .chip-in_progress, .labp .chip-IN_PROGRESS{
+  background: rgba(142, 202, 230, .18);
+  border-color: rgba(142, 202, 230, .38);
+  color: #0b6072;
+}
+.labp .chip-ready, .labp .chip-READY{
+  background: rgba(149, 213, 178, .22);
+  border-color: rgba(149, 213, 178, .42);
+  color: #1d6a43;
+}
+.labp .chip-cancelled, .labp .chip-CANCELLED{
+  background: rgba(255, 155, 155, .20);
+  border-color: rgba(255, 155, 155, .42);
+  color: #8b1f1f;
+}
+
+/* Urgency (if you use urgent/normal) */
+.labp .chip-urgent, .labp .chip-URGENT{
+  background: rgba(255, 155, 155, .22);
+  border-color: rgba(255, 155, 155, .42);
+  color: #8b1f1f;
+}
+.labp .chip-normal, .labp .chip-NORMAL{
+  background: rgba(162, 210, 255, .18);
+  border-color: rgba(162, 210, 255, .40);
+  color: #1e5f9f;
+}
+
+.labp .labd-empty{
+  padding: 18px;
+  text-align:center;
+  color: var(--dark-gray);
+  background:#fff;
+  border: 1px dashed rgba(0,0,0,.18);
+  border-radius: 14px;
+}
+
+/* =========================================================
+   ✅ Extra: "Seen" chip should look GREEN everywhere
+   (حتى لو قالب doctor_orders_inbox.css مو محمل)
+========================================================= */
+.labp .doi-chip-in_progress{
+  background: rgba(34,197,94,.16);
+  border: 1px solid rgba(34,197,94,.35);
+  color: #166534;
+}
+
+/* =========================================================
+   Responsive
+========================================================= */
+@media (max-width: 992px){
+  .labp .dashboard-container{ flex-direction: column; }
+  .labp .sidebar{ width:100%; }
+  .labp .main-content{ padding: 22px; }
+  .labp .dashboard-header{ flex-direction: column; align-items:flex-start; }
+  .labp .datetime-card{ width: 100%; min-width: unset; }
+}

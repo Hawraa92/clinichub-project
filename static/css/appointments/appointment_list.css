@@ -1,5 +1,6 @@
 /* ===============================
-   Appointment List Styles (Refactored)
+   Appointment List Styles (Refactored + Aligned with template)
+   File: static/css/appointments/appointment_list.css
    =============================== */
 
 /* ---------- CSS Variables ---------- */
@@ -8,12 +9,15 @@
   --color-bg-gradient-start: #ecf4fc;
   --color-bg-gradient-mid: #d0e9fa;
   --color-bg-gradient-end: #eef3fd;
+
   --color-text: #21344b;
   --color-primary: #3e60aa;
   --color-primary-accent: #4173b8;
   --color-primary-soft: #9fd8fa;
+
   --color-border: #b3d1f7cc;
   --color-border-soft: #d4e9fc8c;
+
   --color-surface-glass: rgba(255,255,255,0.63);
   --color-surface-alt: rgba(246,251,255,0.68);
   --color-table-head: rgba(201,221,255,0.59);
@@ -48,26 +52,54 @@
   --transition: .18s cubic-bezier(.4,.2,.3,1);
 }
 
+/* Minimal safe reset (بدون ما نغيّر خلفية كل الموقع) */
 html, body {
+  margin: 0;
+  padding: 0;
+}
+
+/* Bootstrap-like visually hidden (إذا base ما محمّل Bootstrap CSS) */
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+/* Focus for accessibility */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid rgba(62, 96, 170, .35);
+  outline-offset: 2px;
+  border-radius: 12px;
+}
+
+/* ---------- Layout Wrapper ---------- */
+.glass-bg-appt {
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  padding: var(--space-6) var(--space-2) var(--space-4);
+  position: relative;
+
   font-family: var(--font-base);
+  color: var(--color-text);
+
   background: linear-gradient(
     127deg,
     var(--color-bg-gradient-start) 0%,
     var(--color-bg-gradient-mid) 65%,
     var(--color-bg-gradient-end) 100%
   );
-  color: var(--color-text);
-  margin: 0;
-  padding: 0;
-}
-
-/* ---------- Layout Wrapper ---------- */
-.glass-bg-appt {
-  min-height: 100vh;
-  display: flex;
-  justify-content: center;
-  padding: var(--space-6) var(--space-2) var(--space-4);
-  position: relative;
 }
 
 /* Wave decoration */
@@ -84,6 +116,7 @@ html, body {
   width: 100%;
   max-width: 1080px;
   background: var(--color-surface-glass);
+  -webkit-backdrop-filter: blur(14px) saturate(135%);
   backdrop-filter: blur(14px) saturate(135%);
   border: 1.5px solid var(--color-border);
   border-radius: 2rem;
@@ -93,12 +126,17 @@ html, body {
   overflow: hidden;
 }
 
+/* Fallback إذا المتصفح ما يدعم backdrop-filter */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass-appt-card { background: rgba(255,255,255,0.92); }
+}
+
 /* Reduce motion adjustments */
 @media (prefers-reduced-motion: reduce) {
   .shine-anim::before,
   .shine-btn::after {
     animation: none !important;
-    opacity: 0;
+    opacity: 0 !important;
   }
 }
 
@@ -106,6 +144,8 @@ html, body {
 .glass-appt-header {
   display: flex;
   justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-4);
   padding: 2rem 2rem 1rem;
   background: linear-gradient(120deg,#c9ddff55,#d4e9fc22);
@@ -115,7 +155,7 @@ html, body {
   margin: 0;
   font-size: clamp(1.3rem,2vw,1.6rem);
   color: var(--color-primary);
-  letter-spacing: 1px;
+  letter-spacing: .6px;
   font-weight: 700;
 }
 .glass-appt-subtitle {
@@ -129,6 +169,7 @@ html, body {
 .glass-btn-new {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: .5rem;
   padding: .75rem 1.6rem;
   font-weight: 600;
@@ -140,9 +181,10 @@ html, body {
   border: 1px solid #9fd8fa;
   box-shadow: var(--shadow-soft);
   transition: var(--transition);
+  white-space: nowrap;
 }
 .glass-btn-new:hover,
-.glass-btn-new:focus {
+.glass-btn-new:focus-visible {
   background: linear-gradient(95deg,#9fd8fa,#c5e6ff 60%);
   color: #234a7a;
 }
@@ -151,8 +193,10 @@ html, body {
 .g-search-form {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   padding: 1rem 2rem 0;
   gap: var(--space-1);
+  flex-wrap: wrap;
 }
 .g-search-input {
   border: 1px solid var(--color-border);
@@ -160,9 +204,16 @@ html, body {
   border-radius: .75rem 0 0 .75rem;
   font-size: .9rem;
   width: 260px;
-  max-width: 80%;
+  max-width: 100%;
   outline: none;
+  background: rgba(255,255,255,.85);
+  transition: var(--transition);
 }
+.g-search-input:focus {
+  border-color: rgba(62,96,170,.55);
+  box-shadow: 0 0 0 6px rgba(62,96,170,.10);
+}
+
 .g-search-btn {
   padding: .65rem 1rem;
   border: 1px solid var(--color-primary-soft);
@@ -170,24 +221,29 @@ html, body {
   color: #234a7a;
   border-radius: 0 .75rem .75rem 0;
   cursor: pointer;
-  font-weight: 600;
+  font-weight: 700;
   transition: var(--transition);
 }
 .g-search-btn:hover {
   background: #79c6ee;
 }
+
 .g-clear-search {
-  padding: .65rem 0.75rem;
-  font-size: 1.2rem;
+  padding: .55rem .75rem;
+  font-size: 1.25rem;
+  line-height: 1;
   color: var(--color-primary);
   text-decoration: none;
+  border-radius: .75rem;
 }
+.g-clear-search:hover { background: rgba(159,216,250,.35); }
 
 /* ---------- Table ---------- */
 .glass-appt-table-wrap {
   padding: 2rem 2rem 1.5rem;
   overflow-x: auto;
 }
+
 .glass-appt-table {
   width: 100%;
   border-spacing: 0;
@@ -195,23 +251,46 @@ html, body {
   border: 1px solid #c2ecf770;
   border-radius: 1.25rem;
   overflow: hidden;
+  min-width: 860px; /* يخلي الـoverflow يشتغل على الشاشات المتوسطة */
 }
+
 .glass-appt-table thead th {
   background: var(--color-table-head);
   padding: .85rem;
-  font-size: .9rem;
+  font-size: .85rem;
   letter-spacing: .5px;
   text-transform: uppercase;
-  font-weight: 700;
+  font-weight: 800;
   color: var(--color-primary);
   text-align: center;
+  white-space: nowrap;
 }
+
+/* Sort links */
+.glass-appt-table thead th a {
+  color: inherit;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  padding: .25rem .55rem;
+  border-radius: .75rem;
+  transition: var(--transition);
+}
+.glass-appt-table thead th a:hover {
+  background: rgba(159,216,250,.35);
+}
+.g-sort-active {
+  background: rgba(159,216,250,.55);
+  border: 1px solid rgba(62,96,170,.18);
+}
+
 .glass-appt-table tbody td {
   padding: .9rem .6rem;
   text-align: center;
   font-size: .9rem;
   background: rgba(255,255,255,.68);
-  border-bottom: 1px solid #e1e1e1;
+  border-bottom: 1px solid rgba(179,209,247,.35);
   color: #245577;
 }
 .glass-appt-table tbody tr:nth-child(even) td {
@@ -221,44 +300,40 @@ html, body {
   background: rgba(168,219,255,.23);
 }
 
-/* Responsive (stack) */
-@media (max-width: 640px) {
-  .glass-appt-table thead { display: none; }
-  .glass-appt-table,
-  .glass-appt-table tbody,
-  .glass-appt-table tr,
-  .glass-appt-table td { display: block; width: 100%; }
-  .glass-appt-table tr {
-    margin-bottom: 1rem;
-    border: 1px solid #c2ecf7;
-    border-radius: .75rem;
-    overflow: hidden;
-  }
-  .glass-appt-table tbody td {
-    display: flex;
-    justify-content: space-between;
-    gap: 1rem;
-    text-align: left;
-    padding: .55rem .85rem;
-    font-size: .85rem;
-  }
-  .glass-appt-table tbody td::before {
-    content: attr(data-label);
-    font-weight: 600;
-    opacity: .7;
-    width: 40%;
-  }
+/* Empty row */
+.g-empty-row {
+  text-align: center !important;
+  padding: 1.2rem !important;
+  color: rgba(33, 52, 75, .75) !important;
+  background: rgba(255,255,255,.72) !important;
 }
 
+/* Amount */
+.g-amount { font-weight: 800; }
+.cur { font-weight: 700; opacity: .75; margin-left: .25rem; }
+
+/* Actions */
+.actions-col { white-space: nowrap; }
+.g-actions { white-space: nowrap; }
+.g-actions .btn { margin: 0 .15rem; border-radius: .85rem; }
+
 /* ---------- Badges ---------- */
+.g-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .35rem;
+}
+
 .g-badge-queue {
   background: linear-gradient(93deg,#9fd8fa 40%, #b3e9ff 90%);
   color: #3266c2;
-  font-weight: 700;
+  font-weight: 800;
   padding: .35rem .9rem;
   border-radius: var(--radius-pill);
   font-size: .8rem;
 }
+
 .g-badge-muted {
   background: rgba(0,0,0,.08);
   color: #555;
@@ -266,13 +341,15 @@ html, body {
   border-radius: var(--radius-pill);
   font-size: .75rem;
 }
+
+/* ---------- Status ---------- */
 .g-status {
   display: inline-block;
-  font-weight: 600;
+  font-weight: 700;
   padding: .3rem .8rem;
   border-radius: var(--radius-pill);
-  font-size: .7rem;
-  letter-spacing: .5px;
+  font-size: .72rem;
+  letter-spacing: .4px;
 }
 .g-status-pending {
   background: var(--status-pending-bg);
@@ -291,6 +368,7 @@ html, body {
 .g-pagination {
   display: flex;
   justify-content: center;
+  flex-wrap: wrap;
   gap: .6rem;
   padding: 1.8rem 0 .5rem;
 }
@@ -301,7 +379,7 @@ html, body {
   border: 1px solid var(--color-primary-soft);
   border-radius: var(--radius-pill);
   font-size: .75rem;
-  font-weight: 600;
+  font-weight: 800;
   color: var(--color-primary);
   text-decoration: none;
   transition: var(--transition);
@@ -311,8 +389,82 @@ html, body {
   color: #234a7a;
 }
 
+/* ---------- Row created highlight (نقلناه للـCSS حتى ما يبقى inline) ---------- */
+.g-row-created{
+  outline: 2px solid rgba(82, 168, 255, 0.55);
+  box-shadow: 0 0 0 6px rgba(82, 168, 255, 0.12);
+  border-radius: 14px;
+  animation: createdPulse 1.6s ease-in-out 1;
+}
+@keyframes createdPulse{
+  0%{ box-shadow: 0 0 0 0 rgba(82,168,255,0.35); }
+  100%{ box-shadow: 0 0 0 10px rgba(82,168,255,0.00); }
+}
+
+/* ---------- Responsive (stack) ---------- */
+@media (max-width: 640px) {
+  .glass-bg-appt { padding: 1.25rem .75rem 1rem; }
+  .glass-appt-header { padding: 1.25rem 1.1rem .85rem; }
+  .glass-btn-new { width: 100%; }
+
+  .g-search-form {
+    padding: .9rem 1.1rem 0;
+    justify-content: stretch;
+  }
+  .g-search-input {
+    width: 100%;
+    border-radius: .75rem;
+  }
+  .g-search-btn {
+    width: 100%;
+    border-radius: .75rem;
+  }
+  .g-clear-search {
+    width: 100%;
+    text-align: center;
+  }
+
+  .glass-appt-table-wrap { padding: 1.2rem 1.1rem 1rem; }
+
+  /* Stack table */
+  .glass-appt-table { min-width: 0; }
+  .glass-appt-table thead { display: none; }
+  .glass-appt-table,
+  .glass-appt-table tbody,
+  .glass-appt-table tr,
+  .glass-appt-table td { display: block; width: 100%; }
+
+  .glass-appt-table tr {
+    margin-bottom: 1rem;
+    border: 1px solid #c2ecf7;
+    border-radius: .95rem;
+    overflow: hidden;
+  }
+  .glass-appt-table tbody td {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    text-align: left;
+    padding: .6rem .85rem;
+    font-size: .87rem;
+  }
+  .glass-appt-table tbody td::before {
+    content: attr(data-label);
+    font-weight: 800;
+    opacity: .75;
+    width: 42%;
+    flex: 0 0 42%;
+  }
+
+  /* actions في الموبايل تكون تحت بشكل مرتب */
+  .g-actions {
+    display: flex;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: .35rem;
+  }
+}
+
 /* ---------- Utilities ---------- */
 .text-center { text-align: center; }
 .muted { opacity: .55; }
-.actions-col { white-space: nowrap; }
-.g-actions .btn { margin: 0 .15rem; }

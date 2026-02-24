@@ -9,6 +9,7 @@
 {% endblock %}
 
 {% block content %}
+{% with role=request.user.role|default:""|lower %}
 <div class="glass-bg-appt">
   <svg class="glass-bg-wave" viewBox="0 0 1440 220" fill="none" aria-hidden="true">
     <path fill="url(#grad)" fill-opacity="0.16" d="M0,80 Q720,200 1440,80 V220H0Z"/>
@@ -26,61 +27,141 @@
         <h3><i class="bi bi-calendar-check"></i> Appointment List</h3>
         <div class="glass-appt-subtitle">All booked appointments in one place</div>
       </div>
-      <a href="{% url 'appointments:create_appointment' %}" class="glass-btn-new shine-btn">
-        <i class="bi bi-plus-circle"></i> New Appointment
-      </a>
+
+      <div class="glass-appt-header-actions">
+        {# ✅ Create button: ONLY secretary/admin #}
+        {% if request.user.is_superuser or role == "secretary" %}
+          <a href="{% url 'appointments:create_appointment' %}" class="glass-btn-new shine-btn">
+            <i class="bi bi-plus-circle"></i> New Appointment
+          </a>
+        {% endif %}
+      </div>
     </div>
 
     <form method="get" class="g-search-form" role="search" aria-label="Search appointments">
       <input type="text"
              name="q"
-             value="{{ search_query }}"
+             value="{{ search_query|default:'' }}"
              placeholder="Search patient or doctor…"
              class="g-search-input"
              aria-label="Search by patient or doctor name">
-      <input type="hidden" name="sort" value="{{ current_sort }}">
-      <button type="submit" class="g-search-btn" title="Search"><i class="bi bi-search"></i></button>
+
+      {# ✅ keep sort+dir #}
+      <input type="hidden" name="sort" value="{{ current_sort|default:'scheduled_time' }}">
+      <input type="hidden" name="dir" value="{{ current_dir|default:'desc' }}">
+
+      {# ✅ Status filter (user can change) #}
+      <select name="status"
+              class="g-status-filter"
+              aria-label="Filter by status"
+              onchange="this.form.submit()">
+        <option value="all" {% if current_status|default:'all' == "all" %}selected{% endif %}>All</option>
+        <option value="pending" {% if current_status == "pending" %}selected{% endif %}>Pending</option>
+        <option value="completed" {% if current_status == "completed" %}selected{% endif %}>Completed</option>
+        <option value="cancelled" {% if current_status == "cancelled" %}selected{% endif %}>Cancelled</option>
+
+        {% if current_status == "called" %}
+          <option value="called" selected>Called</option>
+        {% else %}
+          <option value="called">Called</option>
+        {% endif %}
+
+        {% if current_status == "approved" %}
+          <option value="approved" selected>Approved</option>
+        {% else %}
+          <option value="approved">Approved</option>
+        {% endif %}
+
+        {% if current_status == "confirmed" %}
+          <option value="confirmed" selected>Confirmed</option>
+        {% else %}
+          <option value="confirmed">Confirmed</option>
+        {% endif %}
+
+        {% if current_status == "accepted" %}
+          <option value="accepted" selected>Accepted</option>
+        {% else %}
+          <option value="accepted">Accepted</option>
+        {% endif %}
+      </select>
+
+      <button type="submit" class="g-search-btn" title="Search" aria-label="Search">
+        <i class="bi bi-search"></i>
+      </button>
+
       {% if search_query %}
-        <a href="?sort={{ current_sort }}" class="g-clear-search" aria-label="Clear search">&times;</a>
+        <a href="?sort={{ current_sort|default:'scheduled_time' }}&amp;dir={{ current_dir|default:'desc' }}&amp;status={{ current_status|default:'all' }}"
+           class="g-clear-search"
+           aria-label="Clear search">&times;</a>
       {% endif %}
     </form>
 
     <div class="glass-appt-table-wrap">
       <table class="glass-appt-table">
         <caption class="visually-hidden">List of appointments with patient, doctor, time, amount and status.</caption>
+
         <thead>
           <tr>
             <th scope="col">#</th>
+
             <th scope="col">
-              <a href="?q={{ search_query }}&amp;sort=patient"
+              <a href="?q={{ search_query|urlencode }}&amp;sort=patient&amp;dir={{ current_dir|default:'desc' }}&amp;status={{ current_status|default:'all' }}"
                  class="{% if current_sort == 'patient' %}g-sort-active{% endif %}">
                 Patient
               </a>
             </th>
+
             <th scope="col">
-              <a href="?q={{ search_query }}&amp;sort=doctor"
+              <a href="?q={{ search_query|urlencode }}&amp;sort=doctor&amp;dir={{ current_dir|default:'desc' }}&amp;status={{ current_status|default:'all' }}"
                  class="{% if current_sort == 'doctor' %}g-sort-active{% endif %}">
                 Doctor
               </a>
             </th>
+
             <th scope="col">Date</th>
             <th scope="col">Time</th>
             <th scope="col">IQD</th>
             <th scope="col">Queue</th>
             <th scope="col">Status</th>
+
+            {# ✅ Sort direction toggle (matches views.py dir=asc/desc) #}
+            <th scope="col" class="dir-col">
+              {% with dir=current_dir|default:'desc' %}
+                {% if dir == "asc" %}
+                  <a class="g-dir-toggle"
+                     href="?q={{ search_query|urlencode }}&amp;sort={{ current_sort|default:'scheduled_time' }}&amp;dir=desc&amp;status={{ current_status|default:'all' }}"
+                     title="Sort descending" aria-label="Sort descending">
+                    <i class="bi bi-sort-down"></i>
+                  </a>
+                {% else %}
+                  <a class="g-dir-toggle"
+                     href="?q={{ search_query|urlencode }}&amp;sort={{ current_sort|default:'scheduled_time' }}&amp;dir=asc&amp;status={{ current_status|default:'all' }}"
+                     title="Sort ascending" aria-label="Sort ascending">
+                    <i class="bi bi-sort-up"></i>
+                  </a>
+                {% endif %}
+              {% endwith %}
+            </th>
+
             <th scope="col" class="actions-col">Actions</th>
           </tr>
         </thead>
+
         <tbody>
-          {% with start=appointments.start_index %}
+          {% with start=appointments.start_index|default:1 %}
           {% for appt in appointments %}
-            <tr>
-              <td data-label="#"> {{ start|add:forloop.counter0 }} </td>
+            <tr
+              {% if created_id and appt.pk == created_id %}
+                class="g-row-created"
+                data-created="1"
+              {% endif %}
+            >
+              <td data-label="#">{{ start|add:forloop.counter0 }}</td>
 
               <td data-label="Patient">
                 <span class="g-patient">
                   <i class="bi bi-person-circle" aria-hidden="true"></i>
-                  {{ appt.patient.full_name }}
+                  {{ appt.patient.full_name|default:"—" }}
                 </span>
               </td>
 
@@ -94,13 +175,17 @@
               <td data-label="Date">
                 {% if appt.scheduled_time %}
                   {{ appt.scheduled_time|date:"Y-m-d" }}
-                {% else %} &mdash; {% endif %}
+                {% else %}
+                  &mdash;
+                {% endif %}
               </td>
 
               <td data-label="Time">
                 {% if appt.scheduled_time %}
                   {{ appt.scheduled_time|date:"h:i A" }}
-                {% else %} &mdash; {% endif %}
+                {% else %}
+                  &mdash;
+                {% endif %}
               </td>
 
               <td data-label="IQD">
@@ -118,57 +203,81 @@
               </td>
 
               <td data-label="Status">
-                {% with appt.status as s %}
+                {% with s=appt.status|default:""|lower %}
                   {% if s == 'pending' %}
-                    <span class="g-status g-status-pending">{{ appt.get_status_display }}</span>
+                    <span class="g-status g-status-pending">{{ appt.get_status_display|default:"Pending" }}</span>
                   {% elif s == 'completed' %}
-                    <span class="g-status g-status-completed">{{ appt.get_status_display }}</span>
+                    <span class="g-status g-status-completed">{{ appt.get_status_display|default:"Completed" }}</span>
                   {% elif s == 'cancelled' %}
-                    <span class="g-status g-status-cancelled">{{ appt.get_status_display }}</span>
+                    <span class="g-status g-status-cancelled">{{ appt.get_status_display|default:"Cancelled" }}</span>
+                  {% elif s == 'called' %}
+                    <span class="g-status g-status-called">{{ appt.get_status_display|default:"Called" }}</span>
+                  {% elif s == 'approved' or s == 'confirmed' or s == 'accepted' %}
+                    <span class="g-status g-status-approved">{{ appt.get_status_display|default:"Approved" }}</span>
                   {% else %}
                     <span class="g-status">{{ appt.get_status_display|default:"Unknown" }}</span>
                   {% endif %}
                 {% endwith %}
               </td>
 
+              <td data-label="Sort" class="dir-col-cell"></td>
+
               <td class="g-actions" data-label="Actions">
-                <a href="{% url 'appointments:edit_appointment' appt.pk %}"
-                   class="btn btn-sm btn-outline-primary"
-                   title="Edit appointment" aria-label="Edit appointment">
-                   <i class="bi bi-pencil-square" aria-hidden="true"></i>
-                </a>
-
-                {% if appt.status == 'pending' %}
-                  <a href="{% url 'appointments:cancel_appointment' appt.pk %}"
-                     class="btn btn-sm btn-outline-warning"
-                     title="Cancel appointment" aria-label="Cancel appointment">
-                     <i class="bi bi-x-circle" aria-hidden="true"></i>
+                {# ✅ Staff controls: ONLY secretary/admin #}
+                {% if request.user.is_superuser or role == "secretary" %}
+                  {# Edit #}
+                  <a href="{% url 'appointments:edit_appointment' appt.pk %}"
+                     class="btn btn-sm btn-outline-primary"
+                     title="Edit appointment" aria-label="Edit appointment">
+                    <i class="bi bi-pencil-square" aria-hidden="true"></i>
                   </a>
-                {% else %}
-                  <button class="btn btn-sm btn-outline-secondary" disabled
-                          title="Cancel disabled" aria-label="Cancel disabled">
-                    <i class="bi bi-x-circle" aria-hidden="true"></i>
-                  </button>
-                {% endif %}
 
-                {% if request.user.is_superuser %}
+                  {# ✅ X = Cancel (NOT delete). Allow cancel only if not cancelled/completed. #}
+                  {% with s=appt.status|default:""|lower %}
+                    {% if s != 'cancelled' and s != 'completed' %}
+                      <a href="{% url 'appointments:cancel_appointment' appt.pk %}"
+                         class="btn btn-sm btn-outline-warning"
+                         title="Cancel appointment" aria-label="Cancel appointment">
+                        <i class="bi bi-x-circle" aria-hidden="true"></i>
+                      </a>
+                    {% else %}
+                      <button class="btn btn-sm btn-outline-secondary" disabled
+                              title="Cancel disabled" aria-label="Cancel disabled">
+                        <i class="bi bi-x-circle" aria-hidden="true"></i>
+                      </button>
+                    {% endif %}
+                  {% endwith %}
+
+                  {# View ticket #}
+                  <a href="{% url 'appointments:appointment_ticket' appt.pk %}"
+                     class="btn btn-sm btn-outline-secondary"
+                     title="View ticket" aria-label="View ticket">
+                    <i class="bi bi-eye" aria-hidden="true"></i>
+                  </a>
+
+                  {# ✅ Trash = Soft Delete to Recycle Bin (available to secretary+admin) #}
                   <a href="{% url 'appointments:delete_appointment' appt.pk %}"
                      class="btn btn-sm btn-outline-danger"
-                     title="Delete permanently" aria-label="Delete permanently">
-                     <i class="bi bi-trash" aria-hidden="true"></i>
+                     title="Move to Recycle Bin" aria-label="Move to Recycle Bin">
+                    <i class="bi bi-trash" aria-hidden="true"></i>
                   </a>
                 {% endif %}
 
-                <a href="{% url 'appointments:appointment_ticket' appt.pk %}"
-                   class="btn btn-sm btn-outline-secondary"
-                   title="Print ticket" aria-label="Print ticket">
-                   <i class="bi bi-printer" aria-hidden="true"></i>
-                </a>
+                {# Print: admin only (optional) #}
+                {% if request.user.is_superuser %}
+                  <a href="{% url 'appointments:appointment_ticket' appt.pk %}"
+                     class="btn btn-sm btn-outline-secondary"
+                     title="Print ticket" aria-label="Print ticket"
+                     target="_blank" rel="noopener">
+                    <i class="bi bi-printer" aria-hidden="true"></i>
+                  </a>
+                {% endif %}
               </td>
             </tr>
+
           {% empty %}
             <tr>
-              <td colspan="9" class="g-empty-row">
+              <td colspan="10" class="g-empty-row">
                 <i class="bi bi-emoji-frown" aria-hidden="true"></i> No appointments available.
               </td>
             </tr>
@@ -177,23 +286,49 @@
         </tbody>
       </table>
 
-      <!-- Pagination -->
       <div class="g-pagination" role="navigation" aria-label="Pagination">
         {% if appointments.has_previous %}
-          <a href="?q={{ search_query }}&amp;sort={{ current_sort }}&amp;page=1" class="g-btn-pg">First</a>
-          <a href="?q={{ search_query }}&amp;sort={{ current_sort }}&amp;page={{ appointments.previous_page_number }}" class="g-btn-pg">Previous</a>
+          <a href="?q={{ search_query|urlencode }}&amp;sort={{ current_sort|default:'scheduled_time' }}&amp;dir={{ current_dir|default:'desc' }}&amp;status={{ current_status|default:'all' }}&amp;page=1"
+             class="g-btn-pg">First</a>
+          <a href="?q={{ search_query|urlencode }}&amp;sort={{ current_sort|default:'scheduled_time' }}&amp;dir={{ current_dir|default:'desc' }}&amp;status={{ current_status|default:'all' }}&amp;page={{ appointments.previous_page_number }}"
+             class="g-btn-pg">Previous</a>
         {% endif %}
 
         <span class="g-pg-info">
-          Page {{ appointments.number }} of {{ appointments.paginator.num_pages }}
+          Page {{ appointments.number|default:1 }} of {{ appointments.paginator.num_pages|default:1 }}
         </span>
 
         {% if appointments.has_next %}
-          <a href="?q={{ search_query }}&amp;sort={{ current_sort }}&amp;page={{ appointments.next_page_number }}" class="g-btn-pg">Next</a>
-          <a href="?q={{ search_query }}&amp;sort={{ current_sort }}&amp;page={{ appointments.paginator.num_pages }}" class="g-btn-pg">Last</a>
+          <a href="?q={{ search_query|urlencode }}&amp;sort={{ current_sort|default:'scheduled_time' }}&amp;dir={{ current_dir|default:'desc' }}&amp;status={{ current_status|default:'all' }}&amp;page={{ appointments.next_page_number }}"
+             class="g-btn-pg">Next</a>
+          <a href="?q={{ search_query|urlencode }}&amp;sort={{ current_sort|default:'scheduled_time' }}&amp;dir={{ current_dir|default:'desc' }}&amp;status={{ current_status|default:'all' }}&amp;page={{ appointments.paginator.num_pages }}"
+             class="g-btn-pg">Last</a>
         {% endif %}
       </div>
     </div>
   </div>
 </div>
+{% endwith %}
+{% endblock %}
+
+{% block extra_scripts %}
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const row = document.querySelector('tr[data-created="1"]');
+      if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+      // ✅ يرجّع القائمة كاملة إذا المستخدم مسح البحث (بدون ما يضغط زر X)
+      const input = document.querySelector('.g-search-input');
+      if (input) {
+        input.addEventListener('input', function () {
+          if (!this.value) {
+            const sort = encodeURIComponent("{{ current_sort|default:'scheduled_time' }}");
+            const dir = encodeURIComponent("{{ current_dir|default:'desc' }}");
+            const status = encodeURIComponent("{{ current_status|default:'all' }}");
+            window.location.href = `?sort=${sort}&dir=${dir}&status=${status}`;
+          }
+        });
+      }
+    });
+  </script>
 {% endblock %}

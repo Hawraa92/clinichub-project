@@ -1,12 +1,10 @@
+{# templates/appointments/create_appointment.html #}
 {% extends "base.html" %}
 {% load static widget_tweaks %}
 
 {% block extra_head %}
-  <!-- Main CSS -->
   <link rel="stylesheet" href="{% static 'css/appointments/create_appointment.css' %}">
-  <!-- Icons -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-  <!-- Flatpickr CSS -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 {% endblock %}
 
@@ -55,11 +53,9 @@
             <div class="d-flex justify-content-between align-items-center">
               <label for="{{ form.patient.id_for_label }}" class="form-label required-star mb-0">Select Patient</label>
 
-              {# Quick-create patient button (shows only if quick-create URL and form are provided) #}
               {% if patient_quick_create_url and patient_form %}
                 <button type="button"
                         class="btn btn-sm btn-outline-primary qp-open-modal"
-                        data-qc-url="{{ patient_quick_create_url }}"
                         aria-haspopup="dialog"
                         aria-controls="qp-modal">
                   <i class="bi bi-person-plus"></i> Add new patient
@@ -73,122 +69,106 @@
               {% endif %}
             </div>
 
-            {% with field=form.patient %}
-              {% if field.errors %}
-                {{ field|add_class:"form-select is-invalid" }}
-              {% else %}
-                {{ field|add_class:"form-select" }}
-              {% endif %}
-              {% if field.errors %}
-                <ul class="field-errors" id="{{ field.id_for_label }}_errors">
-                  {% for e in field.errors %}<li>{{ e }}</li>{% endfor %}
-                </ul>
-              {% endif %}
-            {% endwith %}
+            {% if form.patient.errors %}
+              {{ form.patient|add_class:"form-select is-invalid" }}
+              <ul class="field-errors" id="{{ form.patient.id_for_label }}_errors">
+                {% for e in form.patient.errors %}<li>{{ e }}</li>{% endfor %}
+              </ul>
+            {% else %}
+              {{ form.patient|add_class:"form-select" }}
+            {% endif %}
           </div>
 
           <!-- Doctor -->
           <div class="col-md-6">
             <label for="{{ form.doctor.id_for_label }}" class="form-label required-star">Select Doctor</label>
-            {% with field=form.doctor %}
-              {% if field.errors %}
-                {{ field|add_class:"form-select is-invalid" }}
-              {% else %}
-                {{ field|add_class:"form-select" }}
-              {% endif %}
-              {% if field.errors %}
-                <ul class="field-errors" id="{{ field.id_for_label }}_errors">
-                  {% for e in field.errors %}<li>{{ e }}</li>{% endfor %}
-                </ul>
-              {% endif %}
-            {% endwith %}
+
+            {% if form.doctor.errors %}
+              {{ form.doctor|add_class:"form-select is-invalid" }}
+              <ul class="field-errors" id="{{ form.doctor.id_for_label }}_errors">
+                {% for e in form.doctor.errors %}<li>{{ e }}</li>{% endfor %}
+              </ul>
+            {% else %}
+              {{ form.doctor|add_class:"form-select" }}
+            {% endif %}
           </div>
 
           <!-- Scheduled Time -->
           <div class="col-md-6">
             <label for="{{ form.scheduled_time.id_for_label }}" class="form-label required-star">Appointment Time</label>
-            {% with field=form.scheduled_time %}
-              {% if field.errors %}
-                {{ field|add_class:"datetimepicker form-control is-invalid" }}
-              {% else %}
-                {{ field|add_class:"datetimepicker form-control" }}
-              {% endif %}
+
+            {% if form.scheduled_time.errors %}
+              {{ form.scheduled_time|add_class:"datetimepicker form-control is-invalid" }}
               <small class="text-muted d-block mt-1">Choose a future date &amp; time (local timezone).</small>
-              {% if field.errors %}
-                <ul class="field-errors" id="{{ field.id_for_label }}_errors">
-                  {% for e in field.errors %}<li>{{ e }}</li>{% endfor %}
-                </ul>
-              {% endif %}
-            {% endwith %}
+              <ul class="field-errors" id="{{ form.scheduled_time.id_for_label }}_errors">
+                {% for e in form.scheduled_time.errors %}<li>{{ e }}</li>{% endfor %}
+              </ul>
+            {% else %}
+              {{ form.scheduled_time|add_class:"datetimepicker form-control" }}
+              <small class="text-muted d-block mt-1">Choose a future date &amp; time (local timezone).</small>
+            {% endif %}
           </div>
 
-          <!-- Status -->
+          <!-- Status (only if exists) -->
+          {% if form.status %}
           <div class="col-md-6">
             <div class="d-flex justify-content-between align-items-center">
               <label for="{{ form.status.id_for_label }}" class="form-label">Appointment Status</label>
-              <span class="badge bg-success-subtle text-success border">
-                Default: Approved
-              </span>
+              <span class="badge bg-light text-dark border" id="statusBadge">Default: —</span>
             </div>
-            {% with field=form.status %}
-              {# We'll auto-select "Approved" by JS on load #}
-              {% if field.errors %}
-                {{ field|add_class:"form-select is-invalid" }}
-              {% else %}
-                {{ field|add_class:"form-select" }}
-              {% endif %}
-              <small class="text-muted d-block mt-1">
-                Appointments created by the secretary are approved by default and won't increase the bell counter.
-              </small>
-              {% if field.errors %}
-                <ul class="field-errors" id="{{ field.id_for_label }}_errors">
-                  {% for e in field.errors %}<li>{{ e }}</li>{% endfor %}
-                </ul>
-              {% endif %}
-            {% endwith %}
-          </div>
 
-          <!-- IQD Amount -->
+            {% if form.status.errors %}
+              {{ form.status|add_class:"form-select is-invalid" }}
+              <ul class="field-errors" id="{{ form.status.id_for_label }}_errors">
+                {% for e in form.status.errors %}<li>{{ e }}</li>{% endfor %}
+              </ul>
+            {% else %}
+              {{ form.status|add_class:"form-select" }}
+            {% endif %}
+
+            <small class="text-muted d-block mt-1">The default status depends on your model.</small>
+          </div>
+          {% endif %}
+
+          <!-- IQD Amount (only if exists) -->
+          {% if form.iqd_amount %}
           <div class="col-md-6">
             <label for="{{ form.iqd_amount.id_for_label }}" class="form-label">Amount (IQD)</label>
-            {% with field=form.iqd_amount %}
-              {% if field.errors %}
-                {{ field|add_class:"form-control is-invalid"|attr:"inputmode=numeric"|attr:"pattern=\\d*" }}
-              {% else %}
-                {{ field|add_class:"form-control"|attr:"inputmode=numeric"|attr:"pattern=\\d*" }}
-              {% endif %}
-              <small class="text-muted d-block mt-1">Set to 0 if not collected yet.</small>
-              {% if field.errors %}
-                <ul class="field-errors" id="{{ field.id_for_label }}_errors">
-                  {% for e in field.errors %}<li>{{ e }}</li>{% endfor %}
-                </ul>
-              {% endif %}
-            {% endwith %}
-          </div>
 
-          <!-- Notes -->
+            {% if form.iqd_amount.errors %}
+              {{ form.iqd_amount|add_class:"form-control is-invalid"|attr:"inputmode=numeric"|attr:"pattern=\\d*" }}
+              <ul class="field-errors" id="{{ form.iqd_amount.id_for_label }}_errors">
+                {% for e in form.iqd_amount.errors %}<li>{{ e }}</li>{% endfor %}
+              </ul>
+            {% else %}
+              {{ form.iqd_amount|add_class:"form-control"|attr:"inputmode=numeric"|attr:"pattern=\\d*" }}
+            {% endif %}
+
+            <small class="text-muted d-block mt-1">Set to 0 if not collected yet.</small>
+          </div>
+          {% endif %}
+
+          <!-- Notes (only if exists) -->
+          {% if form.notes %}
           <div class="col-12">
             <label for="{{ form.notes.id_for_label }}" class="form-label">Notes (Optional)</label>
-            {% with field=form.notes %}
-              {% if field.errors %}
-                {{ field|add_class:"form-control is-invalid" }}
-              {% else %}
-                {{ field|add_class:"form-control" }}
-              {% endif %}
-              {% if field.errors %}
-                <ul class="field-errors" id="{{ field.id_for_label }}_errors">
-                  {% for e in field.errors %}<li>{{ e }}</li>{% endfor %}
-                </ul>
-              {% endif %}
-            {% endwith %}
+
+            {% if form.notes.errors %}
+              {{ form.notes|add_class:"form-control is-invalid" }}
+              <ul class="field-errors" id="{{ form.notes.id_for_label }}_errors">
+                {% for e in form.notes.errors %}<li>{{ e }}</li>{% endfor %}
+              </ul>
+            {% else %}
+              {{ form.notes|add_class:"form-control" }}
+            {% endif %}
           </div>
+          {% endif %}
 
         </div>
 
         <div class="text-center mt-5">
           <button type="submit" class="btn btn-success px-4 py-2 shadow-lg" id="submitBtn">
-            <i class="bi bi-check-circle-fill me-2"></i>
-            Confirm Appointment
+            <i class="bi bi-check-circle-fill me-2"></i> Confirm Appointment
           </button>
         </div>
       </form>
@@ -196,44 +176,40 @@
   </div>
 </div>
 
-{# ------- Quick-create Patient Modal (only if provided) ------- #}
 {% if patient_quick_create_url and patient_form %}
-<div class="qp-modal" id="qp-modal" aria-hidden="true" role="dialog" aria-modal="false" aria-labelledby="qp-modal-title">
+<div class="qp-modal"
+     id="qp-modal"
+     aria-hidden="true"
+     role="dialog"
+     aria-modal="false"
+     aria-labelledby="qp-modal-title"
+     style="display:none;">
   <div class="qp-modal__backdrop" data-close></div>
   <div class="qp-modal__dialog" role="document">
     <div class="qp-modal__header">
       <h5 id="qp-modal-title" class="mb-0"><i class="bi bi-person-plus me-2"></i>Add New Patient</h5>
       <button type="button" class="qp-modal__close" title="Close" aria-label="Close" data-close>&times;</button>
     </div>
+
     <div class="qp-modal__body">
       <form id="quickPatientForm" data-url="{{ patient_quick_create_url }}">
         {% csrf_token %}
         <div class="row g-3">
-          {# Assuming SecretaryPatientForm exposes these fields #}
-          <div class="col-md-6">
-            <label class="form-label required-star">Full Name</label>
-            {{ patient_form.full_name|add_class:"form-control" }}
-          </div>
-          <div class="col-md-6">
-            <label class="form-label">Phone</label>
-            {{ patient_form.phone|add_class:"form-control" }}
-          </div>
-          <div class="col-md-6">
-            <label class="form-label">Date of Birth</label>
-            {{ patient_form.date_of_birth|add_class:"form-control" }}
-          </div>
-          <div class="col-md-6">
-            <label class="form-label">Gender</label>
-            {{ patient_form.gender|add_class:"form-select" }}
-          </div>
-          <div class="col-12">
-            <label class="form-label">Notes</label>
-            {{ patient_form.notes|add_class:"form-control" }}
-          </div>
+          {% for f in patient_form %}
+            <div class="col-md-6">
+              <label class="form-label">{{ f.label }}</label>
+              {{ f|add_class:"form-control" }}
+              {% if f.errors %}
+                <div class="text-danger small mt-1">{{ f.errors|striptags }}</div>
+              {% endif %}
+            </div>
+          {% endfor %}
         </div>
       </form>
+
       <div class="qp-modal__error text-danger small mt-2" id="qp-error" style="display:none;"></div>
     </div>
+
     <div class="qp-modal__footer">
       <button type="button" class="btn btn-secondary" data-close>Close</button>
       <button type="button" class="btn btn-primary" id="qp-save-btn">
@@ -247,125 +223,5 @@
 
 {% block extra_scripts %}
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-  <script>
-    document.addEventListener('DOMContentLoaded', function () {
-      // ====== Flatpickr ======
-      flatpickr(".datetimepicker", {
-        enableTime: true,
-        dateFormat: "Y-m-d\\TH:i",   // compatible with datetime-local
-        altInput: true,
-        altFormat: "Y-m-d h:i K",
-        altInputClass: "form-control datetimepicker",
-        minDate: "today",
-        minuteIncrement: 15,
-        time_24hr: false
-      });
-
-      // Focus first invalid field (if any)
-      const firstInvalid = document.querySelector('.is-invalid');
-      if (firstInvalid) firstInvalid.focus();
-
-      // Busy state on submit
-      const form = document.getElementById('createApptForm');
-      const btn = document.getElementById('submitBtn');
-      form.addEventListener('submit', () => {
-        btn.disabled = true;
-        btn.classList.add('is-busy');
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
-      });
-
-      // ====== Default status to "Approved" ======
-      (function ensureApprovedDefault(){
-        const statusEl = document.getElementById('{{ form.status.auto_id }}');
-        if (!statusEl) return;
-        // If nothing selected, auto-pick the "Approved" option by label text
-        if (!statusEl.value) {
-          const opts = Array.from(statusEl.options || []);
-          const approvedOpt = opts.find(o => (o.text || '').toLowerCase().includes('approved'));
-          if (approvedOpt) {
-            statusEl.value = approvedOpt.value;
-          }
-        }
-      })();
-
-      // ====== Quick Patient Modal (if available) ======
-      const modal = document.getElementById('qp-modal');
-      const openBtn = document.querySelector('.qp-open-modal');
-      const errorBox = document.getElementById('qp-error');
-
-      function openModal() {
-        if (!modal) return;
-        modal.setAttribute('aria-hidden', 'false');
-        modal.setAttribute('aria-modal', 'true');
-        modal.style.display = 'block';
-        document.body.classList.add('qp-modal-open');
-      }
-      function closeModal() {
-        if (!modal) return;
-        modal.setAttribute('aria-hidden', 'true');
-        modal.setAttribute('aria-modal', 'false');
-        modal.style.display = 'none';
-        document.body.classList.remove('qp-modal-open');
-        if (errorBox) { errorBox.style.display = 'none'; errorBox.textContent = ''; }
-      }
-
-      openBtn && openBtn.addEventListener('click', openModal);
-      modal && modal.addEventListener('click', function(e) {
-        if (e.target.matches('[data-close]')) closeModal();
-      });
-      document.addEventListener('keydown', function(e){
-        if (e.key === 'Escape') closeModal();
-      });
-
-      // Create patient via fetch
-      const saveBtn = document.getElementById('qp-save-btn');
-      const qpForm  = document.getElementById('quickPatientForm');
-      function getCSRFToken() {
-        const el = (qpForm || document).querySelector('input[name=csrfmiddlewaretoken]');
-        return el ? el.value : '';
-      }
-
-      async function submitQuickPatient() {
-        if (!qpForm) return;
-        const url = qpForm.getAttribute('data-url');
-        if (!url) return;
-
-        saveBtn.disabled = true;
-        saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
-
-        try {
-          const formData = new FormData(qpForm);
-          const res = await fetch(url, {
-            method: 'POST',
-            headers: { 'X-CSRFToken': getCSRFToken() },
-            body: formData
-          });
-          const data = await res.json();
-
-          if (!res.ok || !data.success) {
-            throw new Error(data.error || 'Failed to create patient.');
-          }
-
-          // Add the new patient to the select and preselect it
-          const select = document.getElementById('{{ form.patient.id_for_label }}');
-          if (select) {
-            const opt = new Option(data.full_name || ('Patient #' + data.id), data.id, true, true);
-            select.add(opt);
-            select.value = String(data.id);
-          }
-          closeModal();
-        } catch (err) {
-          if (errorBox) {
-            errorBox.textContent = (err && err.message) || 'Error creating patient.';
-            errorBox.style.display = 'block';
-          }
-        } finally {
-          saveBtn.disabled = false;
-          saveBtn.innerHTML = '<i class="bi bi-save me-1"></i>Save Patient';
-        }
-      }
-
-      saveBtn && saveBtn.addEventListener('click', submitQuickPatient);
-    });
-  </script>
+  <script src="{% static 'js/appointments/create_appointment.js' %}"></script>
 {% endblock %}

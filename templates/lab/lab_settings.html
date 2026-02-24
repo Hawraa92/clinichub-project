@@ -1,0 +1,116 @@
+{# lab/templates/lab/lab_settings.html #}
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Lab Settings | ClinicHub{% endblock %}
+
+{% block extra_head %}
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/lab/lab_base.css' %}">
+   <link rel="stylesheet" href="{% static 'css/lab/lab_settings.css' %}"> 
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+{% endblock %}
+
+{% block content %}
+<div class="labp">
+  <div class="page-bg">
+    <div class="dashboard-container">
+
+      <!-- Sidebar -->
+      <aside class="sidebar" aria-label="Lab Sidebar Navigation">
+        <div class="brand-container">
+          <div class="lab-avatar">
+            <i class="bi bi-gear"></i>
+          </div>
+          <div class="brand-text">
+            <h3>Lab Panel</h3>
+            <p>Settings</p>
+          </div>
+        </div>
+
+        <nav class="nav-menu">
+          <a class="nav-item" href="{% url 'lab:dashboard' %}">
+            <i class="bi bi-speedometer2"></i> Dashboard
+          </a>
+
+          <a class="nav-item" href="{% url 'lab:lab_inbox' %}">
+            <i class="bi bi-inbox"></i> Orders Inbox
+          </a>
+
+          <a class="nav-item active" href="{% url 'lab:lab_settings' %}">
+            <i class="bi bi-gear"></i> Settings
+          </a>
+        </nav>
+
+        <div class="logout-container">
+          <form method="post" action="{% url 'accounts:logout' %}">
+            {% csrf_token %}
+            <button type="submit" class="nav-item" style="width:100%; background:transparent; border:0; text-align:left;">
+              <i class="bi bi-box-arrow-right"></i> Logout
+            </button>
+          </form>
+        </div>
+      </aside>
+
+      <!-- Main -->
+      <main class="main-content">
+
+        <div class="dashboard-header">
+          <div class="welcome-section">
+            <h1>Lab Settings</h1>
+            <p class="inspiration">Configure lab branding, uploads, workflow, and defaults.</p>
+          </div>
+
+          <div class="datetime-card" aria-label="Info">
+            <div class="clock-icon">
+              <i class="bi bi-sliders"></i>
+            </div>
+            <div>
+              <div class="clock" style="font-size:16px;font-weight:900;">Operational Settings</div>
+              <div class="date" style="margin-top:6px;">Saved settings affect all lab users</div>
+            </div>
+          </div>
+        </div>
+
+        <section class="archives-section">
+          <div class="section-header">
+            <i class="bi bi-wrench-adjustable-circle"></i>
+            <h2>Configuration</h2>
+          </div>
+
+          <form method="post" enctype="multipart/form-data" class="labd-form">
+            {% csrf_token %}
+
+            <div class="labd-form-body">
+              {{ form.as_p }}
+            </div>
+
+            <div class="labd-actions">
+              <button class="labd-btn primary" type="submit">
+                <i class="bi bi-check2-circle"></i> Save Settings
+              </button>
+
+              <a class="labd-btn" href="{% url 'lab:dashboard' %}">
+                <i class="bi bi-arrow-left"></i> Back to Dashboard
+              </a>
+            </div>
+          </form>
+
+          {% if settings_obj.lab_logo %}
+            <div style="margin-top:12px;">
+              <div class="section-header" style="margin-bottom:10px;">
+                <i class="bi bi-image"></i>
+                <h2>Current Logo</h2>
+              </div>
+              <div style="background:#fff; border:1px solid rgba(0,0,0,.06); border-radius:14px; padding:14px; box-shadow:0 1px 0 rgba(0,0,0,.03);">
+                <img src="{{ settings_obj.lab_logo.url }}" alt="Lab Logo" style="max-height:90px; width:auto; display:block;">
+              </div>
+            </div>
+          {% endif %}
+        </section>
+
+      </main>
+    </div>
+  </div>
+</div>
+{% endblock %}

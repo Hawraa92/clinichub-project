@@ -1,226 +1,943 @@
+# appointments/views.py
 from __future__ import annotations
 
 import base64
+import csv
 import io
 import json
-from datetime import timedelta
+import secrets
+from datetime import date, timedelta
 from functools import wraps
+from typing import Any
+from urllib.parse import urlencode
 
-import qrcode
 from django import forms
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import update_session_auth_hash
+from django.contrib.auth import get_user_model, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib.sessions.models import Session
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Q, Sum
 from django.db.models.functions import TruncDate
-from django.http import (
-    HttpRequest,
-    HttpResponseForbidden,
-    JsonResponse,
-)
+from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template import TemplateDoesNotExist
+from django.urls import NoReverseMatch, reverse
 from django.utils import timezone
-from django.utils.timezone import get_default_timezone, localtime, make_aware
+from django.utils.http import url_has_allowed_host_and_scheme
+from django.utils.timezone import get_default_timezone, make_aware
 from django.views.decorators.cache import cache_control
-from django.views.decorators.http import (
-    require_GET,
-    require_POST,
-    require_http_methods,
-)
+from django.views.decorators.http import require_GET, require_POST, require_http_methods
 
 from accounts.forms import CustomPasswordForm, ProfileUpdateForm
 from doctor.models import Doctor
 from patient.forms import SecretaryPatientForm
 from patient.models import Patient
 
-from .forms import AppointmentForm
-from .models import Appointment, AppointmentStatus, PatientBookingRequest
+from .forms import AppointmentForm, DATETIME_INPUT_FORMATS, DateTimeLocalInput
+from .models import Appointment, AppointmentStatus, Notification, PatientBookingRequest
 
-# Optional BookingRequestStatus for lighter builds
+# ✅ Audit Log (optional-safe import)
+try:  # pragma: no cover
+    from audit.utils import log_action as _audit_log_action
+except Exception:  # pragma: no cover
+    _audit_log_action = None  # type: ignore
+
+# Optional BookingRequestStatus (if your build includes it)
 try:  # pragma: no cover
     from .models import BookingRequestStatus  # type: ignore
 except Exception:  # pragma: no cover
     BookingRequestStatus = None  # type: ignore
 
+User = get_user_model()
+
+# ------------------------------------------------------------------#
+#                   Time normalization (robust)                      #
+# ------------------------------------------------------------------#
+_LOCAL_TZ = get_default_timezone()
+
+# Prefer using the SAME helpers/constants from models.py (if available)
+try:  # pragma: no cover
+    from .models import PAST_TOLERANCE as _PAST_TOLERANCE  # type: ignore
+    from .models import _normalize_dt as _model_normalize_dt  # type: ignore
+    from .models import _now_local as _model_now_local  # type: ignore
+except Exception:  # pragma: no cover
+    _PAST_TOLERANCE = timedelta(seconds=60)
+
+    def _model_now_local():
+        now = timezone.now()
+        if bool(getattr(settings, "USE_TZ", False)):
+            if timezone.is_naive(now):
+                now = make_aware(now, _LOCAL_TZ)
+            return timezone.localtime(now, _LOCAL_TZ)
+        if timezone.is_aware(now):
+            now = timezone.localtime(now, _LOCAL_TZ).replace(tzinfo=None)
+        return now
+
+    def _model_normalize_dt(dt):
+        if dt is None:
+            return None
+        use_tz = bool(getattr(settings, "USE_TZ", False))
+        if use_tz:
+            if timezone.is_naive(dt):
+                return make_aware(dt, _LOCAL_TZ)
+            return timezone.localtime(dt, _LOCAL_TZ)
+        if timezone.is_aware(dt):
+            return timezone.localtime(dt, _LOCAL_TZ).replace(tzinfo=None)
+        return dt
+
+
+def _normalize_dt(dt):
+    return _model_normalize_dt(dt)
+
+
+def _now_local():
+    return _model_now_local()
+
+
+def _is_past(dt) -> bool:
+    nd = _normalize_dt(dt)
+    if nd is None:
+        return False
+    return nd < (_now_local() - _PAST_TOLERANCE)
+
+
+def _dt_for_display(dt):
+    nd = _normalize_dt(dt)
+    if nd is None:
+        return None
+    if timezone.is_aware(nd):
+        return timezone.localtime(nd, _LOCAL_TZ)
+    return nd
+
+
+def _fmt_dt(dt, fmt: str) -> str:
+    d = _dt_for_display(dt)
+    return d.strftime(fmt) if d else ""
+
 
 # ------------------------------------------------------------------#
 #                           Helpers                                  #
 # ------------------------------------------------------------------#
-_LOCAL_TZ = get_default_timezone()
-
-
-def _json_success(data) -> JsonResponse:
-    return JsonResponse({"success": True, **data})
+def _json_success(data: dict[str, Any]) -> JsonResponse:
+    return JsonResponse({**data, "success": True})
 
 
 def _json_error(msg: str, *, status: int = 400) -> JsonResponse:
     return JsonResponse({"success": False, "error": msg}, status=status)
 
 
-def _today():
+def _today() -> date:
     return timezone.localdate()
-
-
-def _doctor_name(doc: Doctor) -> str:
-    return (
-        getattr(doc, "get_display_name", lambda: "")()
-        or getattr(doc, "full_name", "")
-        or doc.user.get_full_name()
-        or doc.user.first_name
-        or (doc.user.username.split("@")[0] if "@" in doc.user.username else doc.user.username)
-        or "Doctor"
-    )
-
-
-def _user_name(u) -> str:
-    return (
-        u.get_full_name()
-        or u.first_name
-        or (u.username.split("@")[0] if "@" in u.username else u.username)
-        or "User"
-    )
-
-
-def _to_local_aware(dt):
-    """Normalize naive datetimes to local TZ without changing the wall clock."""
-    if dt is None:
-        return None
-    if timezone.is_naive(dt):
-        return make_aware(dt, _LOCAL_TZ)
-    return dt.astimezone(_LOCAL_TZ)
 
 
 def _model_has_field(model, field_name: str) -> bool:
     try:
-        return any(getattr(f, "name", "") == field_name for f in model._meta.get_fields())  # type: ignore[attr-defined]
+        model._meta.get_field(field_name)  # type: ignore[attr-defined]
+        return True
     except Exception:
         return False
+
+
+def _active_appts_qs():
+    qs = Appointment.objects.all()
+    try:
+        return qs.filter(is_deleted=False)
+    except Exception:
+        return qs
+
+
+def _doctor_name(doc: Doctor | None) -> str:
+    if not doc:
+        return "Doctor"
+    try:
+        display = getattr(doc, "get_display_name", None)
+        if callable(display):
+            v = (display() or "").strip()
+            if v:
+                return v
+    except Exception:
+        pass
+
+    full_name = (getattr(doc, "full_name", "") or "").strip()
+    if full_name:
+        return full_name
+
+    user = getattr(doc, "user", None)
+    if user:
+        try:
+            v = (user.get_full_name() or "").strip()
+            if v:
+                return v
+        except Exception:
+            pass
+        first = (getattr(user, "first_name", "") or "").strip()
+        if first:
+            return first
+        username = (getattr(user, "username", "") or "").strip()
+        if username:
+            return username.split("@")[0] if "@" in username else username
+
+    return "Doctor"
+
+
+def _user_name(u) -> str:
+    if not u:
+        return "User"
+    try:
+        v = (u.get_full_name() or "").strip()
+        if v:
+            return v
+    except Exception:
+        pass
+    first = (getattr(u, "first_name", "") or "").strip()
+    if first:
+        return first
+    username = (getattr(u, "username", "") or "").strip()
+    if username:
+        return username.split("@")[0] if "@" in username else username
+    return "User"
+
+
+def _user_is_secretary(user) -> bool:
+    role = getattr(user, "role", None)
+    if hasattr(User, "Roles"):
+        try:
+            return role == User.Roles.SECRETARY
+        except Exception:
+            pass
+    return role == "secretary"
+
+
+def _user_is_patient(user) -> bool:
+    role = getattr(user, "role", None)
+    if hasattr(User, "Roles"):
+        try:
+            return role == User.Roles.PATIENT
+        except Exception:
+            pass
+    return role == "patient"
+
+
+def _audit(
+    *,
+    request: HttpRequest | None = None,
+    actor=None,
+    action: str = "other",
+    instance=None,
+    message: str = "",
+    extra_data: dict[str, Any] | None = None,
+) -> None:
+    """
+    Safe wrapper for audit logging:
+    - never breaks the main user flow if audit logging fails
+    """
+    if _audit_log_action is None:
+        return
+    try:
+        _audit_log_action(
+            request=request,
+            actor=actor,
+            action=action,
+            instance=instance,
+            message=message,
+            extra_data=extra_data or {},
+        )
+    except Exception:
+        # Do not interrupt the application flow due to audit log failures
+        return
+
+
+def _secretary_assigned_doctor(user) -> Doctor | None:
+    if getattr(user, "is_superuser", False):
+        return None
+    if not _user_is_secretary(user):
+        return None
+
+    cache_attr = "_cached_assigned_doctor_obj"
+    if hasattr(user, cache_attr):
+        return getattr(user, cache_attr)
+
+    doc: Doctor | None = None
+    try:
+        direct = getattr(user, "assigned_doctor", None)
+        if isinstance(direct, Doctor):
+            doc = direct
+        else:
+            direct_id = getattr(user, "assigned_doctor_id", None)
+            if direct_id:
+                doc = Doctor.objects.select_related("user").filter(pk=direct_id).first()
+
+        if doc is None:
+            for attr in ("secretary_profile", "secretary", "profile", "staff_profile"):
+                obj = getattr(user, attr, None)
+                if not obj:
+                    continue
+
+                cand = getattr(obj, "doctor", None) or getattr(obj, "assigned_doctor", None)
+                if isinstance(cand, Doctor):
+                    doc = cand
+                    break
+
+                cand_id = getattr(obj, "doctor_id", None) or getattr(obj, "assigned_doctor_id", None)
+                if cand_id:
+                    doc = Doctor.objects.select_related("user").filter(pk=cand_id).first()
+                    break
+    except Exception:
+        doc = None
+
+    setattr(user, cache_attr, doc)
+    return doc
+
+
+def _filter_appointments_for_user(qs, user):
+    if user is None:
+        return qs
+    if getattr(user, "is_superuser", False):
+        return qs
+
+    assigned = _secretary_assigned_doctor(user)
+    if assigned is not None:
+        return qs.filter(doctor_id=assigned.id)
+
+    if _user_is_secretary(user) and getattr(settings, "STRICT_SECRETARY_SCOPE", False):
+        return qs.none()
+
+    return qs
+
+
+def _filter_booking_requests_for_user(qs, user):
+    if user is None:
+        return qs
+    if getattr(user, "is_superuser", False):
+        return qs
+
+    assigned = _secretary_assigned_doctor(user)
+    if assigned is not None:
+        return qs.filter(doctor_id=assigned.id)
+
+    if _user_is_secretary(user) and getattr(settings, "STRICT_SECRETARY_SCOPE", False):
+        return qs.none()
+
+    return qs
+
+
+def _doctor_specialty(doc: Doctor) -> str:
+    if _model_has_field(Doctor, "speciality"):
+        value = getattr(doc, "speciality", "")
+    elif _model_has_field(Doctor, "specialty"):
+        value = getattr(doc, "specialty", "")
+    elif _model_has_field(Doctor, "specialization"):
+        value = getattr(doc, "specialization", "")
+    elif _model_has_field(Doctor, "department"):
+        value = getattr(doc, "department", "")
+    else:
+        value = ""
+    return str(value or "")
+
+
+def _doctor_room(doc: Doctor) -> str:
+    if _model_has_field(Doctor, "room_number"):
+        value = getattr(doc, "room_number", "")
+    elif _model_has_field(Doctor, "room"):
+        value = getattr(doc, "room", "")
+    elif _model_has_field(Doctor, "clinic_room"):
+        value = getattr(doc, "clinic_room", "")
+    else:
+        value = ""
+    return str(value or "")
+
+
+def _secretary_default_status():
+    for name in ("APPROVED", "CONFIRMED", "ACCEPTED"):
+        if hasattr(AppointmentStatus, name):
+            return getattr(AppointmentStatus, name)
+    return AppointmentStatus.PENDING
+
+
+def _redirect_with_query(
+    viewname: str,
+    *,
+    query: dict[str, Any] | None = None,
+    kwargs: dict[str, Any] | None = None,
+):
+    if kwargs:
+        url = reverse(viewname, kwargs=kwargs)
+    else:
+        url = reverse(viewname)
+
+    if query:
+        qs = urlencode({k: v for k, v in query.items() if v is not None and v != ""})
+        if qs:
+            url = f"{url}?{qs}"
+    return redirect(url)
+
+
+def _safe_reverse(name: str, default: str) -> str:
+    try:
+        return reverse(name)
+    except NoReverseMatch:
+        return default
+    except Exception:
+        return default
+
+
+def _safe_next_url(request: HttpRequest, fallback: str) -> str:
+    nxt = (request.POST.get("next") or request.GET.get("next") or "").strip()
+    if not nxt:
+        return fallback
+    if url_has_allowed_host_and_scheme(
+        url=nxt,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return nxt
+    return fallback
 
 
 def secretary_required(view):
     @wraps(view)
     @login_required
     def wrapper(request, *a, **kw):
-        if getattr(request.user, "role", None) != "secretary" and not request.user.is_superuser:
+        if (not _user_is_secretary(request.user)) and (not request.user.is_superuser):
             return HttpResponseForbidden("You do not have permission to access this page.")
         return view(request, *a, **kw)
 
     return wrapper
 
 
+def staff_ticket_required(view):
+    @wraps(view)
+    @login_required
+    def wrapper(request, *a, **kw):
+        if request.user.is_superuser:
+            return view(request, *a, **kw)
+        if _user_is_secretary(request.user):
+            return view(request, *a, **kw)
+        return HttpResponseForbidden("You do not have permission to access this page.")
+
+    return wrapper
+
+
 def is_patient(user) -> bool:
-    return getattr(user, "role", None) == "patient"
+    return _user_is_patient(user)
 
 
 def _logout_other_sessions(request: HttpRequest) -> None:
-    """Log out all other sessions except the current one."""
-    Session.objects.filter(expire_date__gte=timezone.now()).exclude(
-        session_key=request.session.session_key
-    ).delete()
+    current_key = request.session.session_key
+    if not current_key:
+        return
+
+    user_id = str(request.user.id)
+    qs = Session.objects.filter(expire_date__gte=timezone.now()).exclude(session_key=current_key)
+
+    for s in qs:
+        try:
+            data = s.get_decoded()
+            if str(data.get("_auth_user_id")) == user_id:
+                s.delete()
+        except Exception:
+            continue
+
+
+def _parse_iso_date(value: str | None) -> date | None:
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _get_period_range(request: HttpRequest, default_period: str = "day") -> tuple[str, date, date]:
+    today = _today()
+    period = (request.GET.get("period") or default_period).lower()
+    if period not in {"day", "week", "month", "custom"}:
+        period = default_period
+
+    if period == "day":
+        start = end = today
+    elif period == "week":
+        start = today - timedelta(days=today.weekday())
+        end = start + timedelta(days=6)
+    elif period == "month":
+        start = today.replace(day=1)
+        if start.month == 12:
+            next_month = start.replace(year=start.year + 1, month=1, day=1)
+        else:
+            next_month = start.replace(month=start.month + 1, day=1)
+        end = next_month - timedelta(days=1)
+    else:
+        s = _parse_iso_date(request.GET.get("start"))
+        e = _parse_iso_date(request.GET.get("end"))
+        start = s or today
+        end = e or start
+        if end < start:
+            start, end = end, start
+
+    return period, start, end
+
+
+def _notif_has_related_request() -> bool:
+    return _model_has_field(Notification, "related_booking_request")
+
+
+def _queue_active_statuses() -> list:
+    statuses = [AppointmentStatus.PENDING]
+    for name in ("APPROVED", "CONFIRMED", "ACCEPTED"):
+        if hasattr(AppointmentStatus, name):
+            statuses.append(getattr(AppointmentStatus, name))
+    if hasattr(AppointmentStatus, "CALLED"):
+        statuses.append(getattr(AppointmentStatus, "CALLED"))
+    seen = set()
+    out = []
+    for s in statuses:
+        if s not in seen:
+            out.append(s)
+            seen.add(s)
+    return out
+
+
+def _queue_waiting_statuses() -> list:
+    active = _queue_active_statuses()
+    called = getattr(AppointmentStatus, "CALLED", None)
+    if called is None:
+        return active
+    return [s for s in active if s != called]
+
+
+def _queue_use_called_status() -> bool:
+    """
+    ✅ Default behavior to satisfy tests: complete-mode (no CALLED).
+    If you want CALLED mode in production UI, set:
+        QUEUE_USE_CALLED_STATUS=True
+    """
+    return bool(getattr(settings, "QUEUE_USE_CALLED_STATUS", False)) and hasattr(AppointmentStatus, "CALLED")
+
+
+def _get_patient_for_user(user) -> Patient | None:
+    p = getattr(user, "patient_profile", None) or getattr(user, "patient", None)
+    if isinstance(p, Patient):
+        return p
+    if _model_has_field(Patient, "user"):
+        return Patient.objects.filter(user=user).first()
+    return None
+
+
+def _format_queue_number(n: int | None) -> str:
+    return f"P-{int(n):03d}" if n else "-"
+
+
+def _filter_by_day(qs, day_val: date):
+    if _model_has_field(Appointment, "scheduled_day"):
+        return qs.filter(scheduled_day=day_val)
+    return qs.filter(scheduled_time__date=day_val)
+
+
+def _filter_by_day_range(qs, start: date, end: date):
+    if _model_has_field(Appointment, "scheduled_day"):
+        return qs.filter(scheduled_day__range=(start, end))
+    return qs.filter(scheduled_time__date__range=(start, end))
+
+
+def _set_booking_request_status(br: PatientBookingRequest, target_names: tuple[str, ...]) -> bool:
+    if not BookingRequestStatus:
+        return False
+    if not _model_has_field(PatientBookingRequest, "status"):
+        return False
+
+    for name in target_names:
+        if hasattr(BookingRequestStatus, name):
+            try:
+                br.status = getattr(BookingRequestStatus, name)
+                br.save(update_fields=["status"])
+                return True
+            except Exception:
+                return False
+    return False
+
+
+def _booking_request_is_processed(br: PatientBookingRequest) -> bool:
+    if not (BookingRequestStatus and _model_has_field(PatientBookingRequest, "status")):
+        return False
+
+    cur = getattr(br, "status", None)
+    if cur is None:
+        return False
+
+    processed = []
+    for nm in ("CONFIRMED", "APPROVED", "ACCEPTED", "REJECTED", "DECLINED", "CANCELLED"):
+        if hasattr(BookingRequestStatus, nm):
+            processed.append(getattr(BookingRequestStatus, nm))
+
+    return cur in processed
+
+
+def _parse_int(value: str | None) -> int | None:
+    if not value:
+        return None
+    try:
+        return int(str(value).strip())
+    except Exception:
+        return None
 
 
 # ------------------------------------------------------------------#
-#                     Secretary Dashboard                           #
+#               Public booking (NO LOGIN)                            #
+# ------------------------------------------------------------------#
+class _PublicBookingForm(forms.Form):
+    doctor = forms.ModelChoiceField(queryset=Doctor.objects.none(), required=True)
+    full_name = forms.CharField(max_length=200, required=True)
+    contact_info = forms.CharField(max_length=200, required=True)
+    date_of_birth = forms.DateField(required=False, widget=forms.DateInput(attrs={"type": "date"}))
+    scheduled_time = forms.DateTimeField(
+        widget=DateTimeLocalInput(),
+        input_formats=DATETIME_INPUT_FORMATS,
+        required=True,
+    )
+
+    def __init__(self, *args, locked_doctor: Doctor | None = None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.locked_doctor = locked_doctor
+
+        base_qs = Doctor.objects.select_related("user").all()
+        if locked_doctor is not None:
+            base_qs = base_qs.filter(pk=locked_doctor.pk)
+        self.fields["doctor"].queryset = base_qs
+
+        if locked_doctor is not None:
+            self.fields["doctor"].initial = locked_doctor.pk
+            try:
+                self.fields["doctor"].disabled = True
+            except Exception:
+                pass
+            self.fields["doctor"].required = False
+            self.fields["doctor"].widget.attrs.update({"disabled": "disabled"})
+            try:
+                self.fields["doctor"].empty_label = None
+            except Exception:
+                pass
+
+    def clean(self):
+        cleaned = super().clean()
+
+        st = cleaned.get("scheduled_time")
+        if st:
+            st_norm = _normalize_dt(st)
+            if _is_past(st_norm):
+                self.add_error("scheduled_time", "يرجى اختيار وقت مستقبلي.")
+            cleaned["scheduled_time"] = st_norm
+
+        if self.locked_doctor is not None:
+            cleaned["doctor"] = self.locked_doctor
+
+        return cleaned
+
+
+@require_http_methods(["GET", "POST"])
+def book_appointment_public(request: HttpRequest, doctor_id: int | None = None):
+    """
+    Public self-booking:
+    - Creates PatientBookingRequest (secretary approves).
+    - Uses template: appointments/book_appointment.html
+    """
+    if doctor_id is None:
+        doctor_id = _parse_int(request.GET.get("doctor_id") or request.GET.get("doctor"))
+
+    locked_doctor = None
+    if doctor_id is not None:
+        locked_doctor = get_object_or_404(Doctor.objects.select_related("user"), pk=doctor_id)
+
+    if request.method == "POST":
+        form = _PublicBookingForm(request.POST, locked_doctor=locked_doctor)
+        if form.is_valid():
+            doc: Doctor = form.cleaned_data["doctor"]
+            full_name = (form.cleaned_data["full_name"] or "").strip()
+            contact = (form.cleaned_data["contact_info"] or "").strip()
+            dob = form.cleaned_data.get("date_of_birth")
+            sched = _normalize_dt(form.cleaned_data["scheduled_time"])
+
+            block_conflicts = bool(getattr(settings, "BOOKING_REQUEST_BLOCK_CONFLICTS", True))
+            if block_conflicts:
+                try:
+                    conflict = (
+                        _active_appts_qs()
+                        .filter(doctor=doc, scheduled_time=sched)
+                        .exclude(status=AppointmentStatus.CANCELLED)
+                        .exists()
+                    )
+                    if conflict:
+                        messages.error(request, "❌ هذا التوقيت محجوز مسبقًا لهذا الطبيب. يرجى اختيار وقت آخر.")
+                        return render(request, "appointments/book_appointment.html", {"form": form, "doctor": doc})
+                except Exception:
+                    pass
+
+            br_kwargs: dict[str, object] = {"doctor": doc}
+            if _model_has_field(PatientBookingRequest, "full_name"):
+                br_kwargs["full_name"] = full_name
+            if _model_has_field(PatientBookingRequest, "contact_info"):
+                br_kwargs["contact_info"] = contact
+            if dob and _model_has_field(PatientBookingRequest, "date_of_birth"):
+                br_kwargs["date_of_birth"] = dob
+            if _model_has_field(PatientBookingRequest, "scheduled_time"):
+                br_kwargs["scheduled_time"] = sched
+
+            if BookingRequestStatus and _model_has_field(PatientBookingRequest, "status"):
+                status_val = None
+                for nm in ("REQUESTED", "PENDING"):
+                    if hasattr(BookingRequestStatus, nm):
+                        status_val = getattr(BookingRequestStatus, nm)
+                        break
+                if status_val is not None:
+                    br_kwargs["status"] = status_val
+
+            br = PatientBookingRequest.objects.create(**br_kwargs)
+
+            # ✅ Audit: public booking request created
+            _audit(
+                request=request,
+                action="create",
+                instance=br,
+                message="Public booking request created",
+                extra_data={
+                    "doctor_id": getattr(doc, "id", None),
+                    "doctor_name": _doctor_name(doc),
+                    "full_name": full_name,
+                    "scheduled_time": sched.isoformat() if sched else None,
+                    "source": "public_booking",
+                },
+            )
+
+            # Fallback notification only if model didn't create one
+            try:
+                if _notif_has_related_request():
+                    if not Notification.objects.filter(related_booking_request=br).exists():
+                        Notification.objects.create(
+                            title="New booking request",
+                            message=f"{full_name} requested {_doctor_name(doc)} at {_fmt_dt(sched, '%Y-%m-%d %H:%M')}",
+                            related_booking_request=br,
+                        )
+            except Exception:
+                pass
+
+            messages.success(request, "✅ تم إرسال طلب الحجز بنجاح. سيتم تأكيده من قبل السكرتيرة.")
+            return _redirect_with_query("appointments:book_appointment_success", query={"id": br.pk})
+
+        messages.error(request, "⚠️ يرجى تصحيح الأخطاء في الحقول وإعادة المحاولة.")
+    else:
+        form = _PublicBookingForm(locked_doctor=locked_doctor)
+
+    ctx = {"form": form, "doctor": locked_doctor}
+    try:
+        return render(request, "appointments/book_appointment.html", ctx)
+    except TemplateDoesNotExist:
+        return HttpResponse("Public booking page is available.", status=200)
+
+
+@require_GET
+def book_appointment_success(request: HttpRequest):
+    booking_id = (request.GET.get("id") or "").strip()
+    ctx = {"booking_id": booking_id}
+    try:
+        return render(request, "appointments/book_success.html", ctx)
+    except TemplateDoesNotExist:
+        return HttpResponse("Booking request submitted successfully.", status=200)
+
+
+# ------------------------------------------------------------------#
+#                     Secretary Dashboard                            #
 # ------------------------------------------------------------------#
 @secretary_required
 @require_GET
 def secretary_dashboard(request: HttpRequest):
     today = _today()
-    base = Appointment.objects.select_related("patient", "doctor__user")
 
-    todays = base.filter(scheduled_time__date=today)
+    base = _active_appts_qs().select_related("patient", "doctor__user")
+    base = _filter_appointments_for_user(base, request.user)
 
-    # revenue_today_iqd is optional → compute only if the field exists
+    todays_all = _filter_by_day(base, today).order_by("scheduled_time")
+    todays_queue = todays_all.filter(status__in=_queue_active_statuses())
+
     revenue_today = 0
     if _model_has_field(Appointment, "iqd_amount"):
-        revenue_today = todays.aggregate(total=Sum("iqd_amount")).get("total") or 0
+        revenue_today = todays_all.aggregate(total=Sum("iqd_amount")).get("total") or 0
+
+    assigned_doctor = _secretary_assigned_doctor(request.user)
+    pat_qs = Patient.objects.all()
+    if assigned_doctor is not None and _model_has_field(Patient, "doctor"):
+        pat_qs = pat_qs.filter(doctor=assigned_doctor)
 
     stats = {
-        "patients_today": base.filter(scheduled_time__date=today)
-        .values("patient_id")
-        .distinct()
-        .count(),
-        "new_patients_today": Patient.objects.filter(created_at__date=today).count()
-        if _model_has_field(Patient, "created_at")
-        else 0,
-        "total_patients": Patient.objects.count(),
-        "appointments_today": todays.count(),
+        "patients_today": todays_all.values("patient_id").distinct().count(),
+        "new_patients_today": (
+            pat_qs.filter(created_at__date=today).count() if _model_has_field(Patient, "created_at") else 0
+        ),
+        "total_patients": pat_qs.count(),
+        "appointments_today": todays_all.count(),
         "revenue_today_iqd": revenue_today,
     }
 
     week_start = today - timedelta(days=today.weekday())
-    rows = (
-        base.filter(scheduled_time__date__range=[week_start, week_start + timedelta(days=6)])
-        .annotate(day=TruncDate("scheduled_time"))
-        .values("day")
-        .annotate(count=Count("id"))
-    )
-    counts = {r["day"]: r["count"] for r in rows}
+    week_end = week_start + timedelta(days=6)
+
+    week_qs = _filter_by_day_range(base, week_start, week_end)
+    if _model_has_field(Appointment, "scheduled_day"):
+        rows = week_qs.values("scheduled_day").annotate(count=Count("id"))
+        counts = {r["scheduled_day"]: r["count"] for r in rows}
+    else:
+        rows = week_qs.annotate(day=TruncDate("scheduled_time")).values("day").annotate(count=Count("id"))
+        counts = {r["day"]: r["count"] for r in rows}
+
     labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     chart = [counts.get(week_start + timedelta(days=i), 0) for i in range(7)]
+
+    call_next_url = ""
+    assigned_doctor_id = None
+    if assigned_doctor is not None:
+        assigned_doctor_id = assigned_doctor.id
+        call_next_url = reverse("appointments:call_next_api", kwargs={"doctor_id": assigned_doctor.id})
 
     ctx = {
         "appointment_form": AppointmentForm(),
         "patient_form": SecretaryPatientForm(),
         "appointments": base.order_by("-scheduled_time")[:20],
-        "today_appointments": todays,
+        "today_appointments": todays_queue,
+        "today_appointments_all": todays_all,
         "stats": stats,
         "chart_data_json": json.dumps({"labels": labels, "data": chart}),
+        "assigned_doctor": assigned_doctor,
+        "assigned_doctor_id": assigned_doctor_id,
+        "call_next_url": call_next_url,
+        "queue_api_url": reverse("appointments:queue_number_api"),
+        "recycle_bin_url": reverse("appointments:appointment_recycle_bin"),
     }
     return render(request, "appointments/secretary_dashboard.html", ctx)
 
 
 # ------------------------------------------------------------------#
-#                        Appointment CRUD                           #
+#                        Appointment CRUD                            #
 # ------------------------------------------------------------------#
 @secretary_required
 @require_http_methods(["GET", "POST"])
 def create_appointment(request: HttpRequest):
-    """
-    Secretary-created appointments:
-    - Rely on models.Appointment.save() to atomically assign queue_number.
-    - Do NOT compute queue_number here to avoid race conditions.
-    """
+    assigned_doctor = _secretary_assigned_doctor(request.user)
     form = AppointmentForm(request.POST or None)
+
+    if "doctor" in form.fields and assigned_doctor is not None:
+        form.fields["doctor"].queryset = Doctor.objects.filter(pk=assigned_doctor.pk)
+        form.fields["doctor"].initial = assigned_doctor.pk
+        try:
+            form.fields["doctor"].empty_label = None
+        except Exception:
+            pass
+
+    if request.method == "GET" and "status" in form.fields:
+        try:
+            form.fields["status"].initial = _secretary_default_status()
+        except Exception:
+            pass
+
     if request.method == "POST" and form.is_valid():
         appt: Appointment = form.save(commit=False)
-        appt.scheduled_time = _to_local_aware(appt.scheduled_time)
+
+        if assigned_doctor is not None:
+            appt.doctor = assigned_doctor
+
+        appt.scheduled_time = _normalize_dt(appt.scheduled_time)
+
         try:
-            appt.save()  # queue_number is assigned atomically in models.save()
+            appt.save()
+            if hasattr(form, "save_m2m"):
+                form.save_m2m()
         except IntegrityError:
-            messages.error(request, "❌ This time slot is already booked for this doctor.")
+            messages.error(request, "❌ هذا التوقيت محجوز مسبقًا لهذا الطبيب. يرجى اختيار وقت آخر.")
             return render(request, "appointments/create_appointment.html", {"form": form})
+        except ValidationError as e:
+            msg = "❌ لا يمكن حفظ الموعد. يرجى التحقق من البيانات."
+            if hasattr(e, "message_dict") and isinstance(getattr(e, "message_dict", None), dict):
+                st_msgs = e.message_dict.get("scheduled_time")
+                if isinstance(st_msgs, (list, tuple)) and st_msgs:
+                    msg = f"❌ {st_msgs[0]}"
+            elif getattr(e, "messages", None):
+                msg = f"❌ {e.messages[0]}"
+            messages.error(request, msg)
+            return render(request, "appointments/create_appointment.html", {"form": form})
+
+        # ✅ Audit
+        _audit(
+            request=request,
+            action="create",
+            instance=appt,
+            message="Appointment created",
+            extra_data={
+                "appointment_id": appt.pk,
+                "patient_id": getattr(appt, "patient_id", None),
+                "patient_name": getattr(getattr(appt, "patient", None), "full_name", ""),
+                "doctor_id": getattr(appt, "doctor_id", None),
+                "doctor_name": _doctor_name(getattr(appt, "doctor", None)),
+                "scheduled_time": appt.scheduled_time.isoformat() if getattr(appt, "scheduled_time", None) else None,
+                "status": str(getattr(appt, "status", "")),
+                "queue_number": getattr(appt, "queue_number", None),
+            },
+        )
+
+        time_part = _fmt_dt(appt.scheduled_time, "%I:%M %p") if appt.scheduled_time else "—"
+        qno = (
+            f" | رقم الدور: {_format_queue_number(getattr(appt, 'queue_number', None))}"
+            if getattr(appt, "queue_number", None)
+            else ""
+        )
+
         messages.success(
             request,
-            f"✅ Appointment booked for {appt.patient.full_name} "
-            f"with Dr. {_doctor_name(appt.doctor)} "
-            f"at {localtime(appt.scheduled_time):%I:%M %p}.",
+            (
+                f"✅ تم حجز الموعد بنجاح للمريض: {appt.patient.full_name} "
+                f"مع الدكتور/ة: {_doctor_name(appt.doctor)} "
+                f"في الساعة {time_part}.{qno}"
+            ),
         )
-        return redirect("appointments:appointment_ticket", pk=appt.pk)
-    elif request.method == "POST":
-        messages.error(request, "❌ Please correct the errors below.")
+        return _redirect_with_query("appointments:appointment_list", query={"created": appt.pk})
+
+    if request.method == "POST":
+        messages.error(request, "⚠️ لم يتم حفظ الموعد. يرجى تصحيح الأخطاء في الحقول وإعادة المحاولة.")
+
     return render(request, "appointments/create_appointment.html", {"form": form})
 
 
-@secretary_required
+@staff_ticket_required
 @require_GET
 def appointment_ticket(request: HttpRequest, pk: int):
-    appt = get_object_or_404(
-        Appointment.objects.select_related("doctor__user", "patient"), pk=pk
-    )
+    qs = _active_appts_qs().select_related("doctor__user", "patient")
+    qs = _filter_appointments_for_user(qs, request.user)
+    appt = get_object_or_404(qs, pk=pk)
+
+    try:
+        import qrcode  # type: ignore
+    except Exception:
+        messages.error(request, "⚠️ مكتبة QR غير مثبتة (qrcode). ثبتيها: pip install qrcode[pil]")
+        return redirect("appointments:appointment_list")
 
     qr = qrcode.make(request.build_absolute_uri(), box_size=6, border=2)
     buf = io.BytesIO()
     qr.save(buf, format="PNG")
 
+    # Optional: ticket viewed event
+    _audit(
+        request=request,
+        action="view",
+        instance=appt,
+        message="Appointment ticket viewed",
+        extra_data={"appointment_id": appt.pk},
+    )
+
     ctx = {
         "appointment": appt,
         "doctor_name": _doctor_name(appt.doctor),
-        "doctor_spec": getattr(appt.doctor, "specialty", ""),
+        "doctor_spec": _doctor_specialty(appt.doctor),
+        "doctor_room": _doctor_room(appt.doctor),
         "secretary_name": _user_name(request.user),
         "qr_code": base64.b64encode(buf.getvalue()).decode(),
     }
@@ -230,39 +947,98 @@ def appointment_ticket(request: HttpRequest, pk: int):
 @secretary_required
 @require_http_methods(["GET", "POST"])
 def edit_appointment(request: HttpRequest, pk: int):
-    appt = get_object_or_404(Appointment, pk=pk)
+    qs = _filter_appointments_for_user(_active_appts_qs(), request.user)
+    appt = get_object_or_404(qs, pk=pk)
+
     form = AppointmentForm(request.POST or None, instance=appt)
+
+    assigned_doctor = _secretary_assigned_doctor(request.user)
+    if "doctor" in form.fields and assigned_doctor is not None:
+        form.fields["doctor"].queryset = Doctor.objects.filter(pk=assigned_doctor.pk)
+        form.fields["doctor"].initial = assigned_doctor.pk
+        try:
+            form.fields["doctor"].empty_label = None
+        except Exception:
+            pass
+
     if request.method == "POST" and form.is_valid():
+        changed_fields = list(getattr(form, "changed_data", []) or [])
+
+        # Snapshot before save (best effort)
+        old_snapshot = {
+            "scheduled_time": appt.scheduled_time.isoformat() if getattr(appt, "scheduled_time", None) else None,
+            "status": str(getattr(appt, "status", "")),
+            "doctor_id": getattr(appt, "doctor_id", None),
+            "patient_id": getattr(appt, "patient_id", None),
+            "queue_number": getattr(appt, "queue_number", None),
+        }
+
         appt = form.save(commit=False)
-        appt.scheduled_time = _to_local_aware(appt.scheduled_time)
+
+        if assigned_doctor is not None:
+            appt.doctor = assigned_doctor
+
+        appt.scheduled_time = _normalize_dt(appt.scheduled_time)
+
         try:
             appt.save()
+            if hasattr(form, "save_m2m"):
+                form.save_m2m()
         except IntegrityError:
-            messages.error(request, "❌ This time slot is already booked for this doctor.")
-            return render(
-                request,
-                "appointments/edit_appointment.html",
-                {"form": form, "appointment": appt},
-            )
-        messages.success(request, "✅ Appointment updated successfully.")
+            messages.error(request, "❌ هذا التوقيت محجوز مسبقًا لهذا الطبيب. يرجى اختيار وقت آخر.")
+            return render(request, "appointments/edit_appointment.html", {"form": form, "appointment": appt})
+        except ValidationError as e:
+            msg = "❌ لا يمكن تحديث الموعد. يرجى التحقق من البيانات."
+            if hasattr(e, "message_dict") and isinstance(getattr(e, "message_dict", None), dict):
+                st_msgs = e.message_dict.get("scheduled_time")
+                if isinstance(st_msgs, (list, tuple)) and st_msgs:
+                    msg = f"❌ {st_msgs[0]}"
+            elif getattr(e, "messages", None):
+                msg = f"❌ {e.messages[0]}"
+            messages.error(request, msg)
+            return render(request, "appointments/edit_appointment.html", {"form": form, "appointment": appt})
+
+        # ✅ Audit
+        _audit(
+            request=request,
+            action="update",
+            instance=appt,
+            message="Appointment updated",
+            extra_data={
+                "appointment_id": appt.pk,
+                "changed_fields": changed_fields,
+                "before": old_snapshot,
+                "after": {
+                    "scheduled_time": appt.scheduled_time.isoformat() if getattr(appt, "scheduled_time", None) else None,
+                    "status": str(getattr(appt, "status", "")),
+                    "doctor_id": getattr(appt, "doctor_id", None),
+                    "patient_id": getattr(appt, "patient_id", None),
+                    "queue_number": getattr(appt, "queue_number", None),
+                },
+            },
+        )
+
+        messages.success(request, "✅ تم تحديث بيانات الموعد بنجاح.")
         return redirect("appointments:appointment_list")
-    elif request.method == "POST":
-        messages.error(request, "❌ Please correct the errors below.")
-    return render(
-        request,
-        "appointments/edit_appointment.html",
-        {"form": form, "appointment": appt},
-    )
+
+    if request.method == "POST":
+        messages.error(request, "⚠️ لم يتم تحديث الموعد. يرجى مراجعة البيانات المدخلة.")
+
+    return render(request, "appointments/edit_appointment.html", {"form": form, "appointment": appt})
 
 
 @secretary_required
 @require_http_methods(["GET", "POST"])
 def cancel_appointment(request: HttpRequest, pk: int):
-    """Soft cancel: forbid COMPLETED; set status=CANCELLED."""
-    appt = get_object_or_404(Appointment, pk=pk)
+    """
+    ✅ Cancel = تغيير الحالة إلى CANCELLED (ليس حذف).
+    ✅ واجهة منفصلة عن الحذف: appointments/cancel_confirmation.html
+    """
+    qs = _filter_appointments_for_user(_active_appts_qs(), request.user)
+    appt = get_object_or_404(qs, pk=pk)
 
     if appt.status == AppointmentStatus.COMPLETED:
-        messages.error(request, "❌ Cannot cancel a completed appointment.")
+        messages.error(request, "❌ لا يمكن إلغاء موعد تم الانتهاء منه بالفعل.")
         return redirect("appointments:appointment_list")
 
     if request.method == "POST":
@@ -270,41 +1046,230 @@ def cancel_appointment(request: HttpRequest, pk: int):
 
         update_kwargs: dict[str, object] = {"status": AppointmentStatus.CANCELLED}
 
-        # Append a note if the model provides a `notes` field
+        if _model_has_field(Appointment, "queue_number"):
+            update_kwargs["queue_number"] = None
+
         if reason and _model_has_field(Appointment, "notes"):
-            stamp = timezone.localtime().strftime("%Y-%m-%d %H:%M")
+            stamp_dt = _now_local()
+            stamp = stamp_dt.strftime("%Y-%m-%d %H:%M") if stamp_dt else timezone.now().strftime("%Y-%m-%d %H:%M")
             user_display = request.user.get_full_name() or request.user.username
             note_line = f"[Cancelled {stamp} by {user_display}] {reason}"
-            new_notes = f"{getattr(appt, 'notes', '')}\n{note_line}".strip()
+            existing_notes = getattr(appt, "notes", "") or ""
+            new_notes = f"{existing_notes}\n{note_line}".strip()
             update_kwargs["notes"] = new_notes
 
         Appointment.objects.filter(pk=appt.pk).update(**update_kwargs)
 
-        messages.success(request, "✅ Appointment cancelled successfully.")
+        # Update local object (best effort) for more accurate audit repr
+        try:
+            appt.status = AppointmentStatus.CANCELLED
+            if "queue_number" in update_kwargs:
+                appt.queue_number = None  # type: ignore[attr-defined]
+        except Exception:
+            pass
+
+        # ✅ Audit
+        _audit(
+            request=request,
+            action="update",
+            instance=appt,
+            message="Appointment cancelled",
+            extra_data={
+                "appointment_id": appt.pk,
+                "reason": reason,
+                "new_status": str(AppointmentStatus.CANCELLED),
+            },
+        )
+
+        messages.success(request, "✅ تم إلغاء الموعد بنجاح.")
         return redirect("appointments:appointment_list")
 
-    return render(request, "appointments/delete_confirmation.html", {"appointment": appt})
+    return render(request, "appointments/cancel_confirmation.html", {"appointment": appt})
 
 
 @secretary_required
 @require_http_methods(["GET", "POST"])
 def delete_appointment(request: HttpRequest, pk: int):
-    """Hard delete — admins only."""
-    appt = get_object_or_404(Appointment, pk=pk)
-    if not request.user.is_superuser:
-        messages.error(
-            request, "❌ Only administrators can delete appointments permanently."
-        )
-        return redirect("appointments:appointment_list")
+    """
+    Soft Delete (Recycle Bin):
+    - moves record to recycle bin (soft delete)
+    """
+    qs = _filter_appointments_for_user(_active_appts_qs(), request.user)
+    appt = get_object_or_404(qs, pk=pk)
 
     if request.method == "POST":
-        appt.delete()
-        messages.success(request, "🗑️ Appointment deleted permanently.")
+        # ✅ Audit BEFORE delete
+        _audit(
+            request=request,
+            action="delete",
+            instance=appt,
+            message="Appointment moved to recycle bin",
+            extra_data={
+                "appointment_id": appt.pk,
+                "soft_delete": True,
+                "patient_id": getattr(appt, "patient_id", None),
+                "doctor_id": getattr(appt, "doctor_id", None),
+                "scheduled_time": appt.scheduled_time.isoformat() if getattr(appt, "scheduled_time", None) else None,
+            },
+        )
+
+        try:
+            appt.delete(user=request.user)  # type: ignore[arg-type]
+        except TypeError:
+            appt.delete()
+
+        messages.success(request, "🗑️ تم نقل الموعد إلى سلة المحذوفات (Recycle Bin).")
         return redirect("appointments:appointment_list")
+
     return render(request, "appointments/delete_confirmation.html", {"appointment": appt})
 
 
+# ------------------------------------------------------------------#
+#                 Recycle Bin (Appointments)                         #
+# ------------------------------------------------------------------#
 @secretary_required
+@require_GET
+def appointment_recycle_bin(request: HttpRequest):
+    if not hasattr(Appointment, "deleted_objects"):
+        messages.error(request, "⚠️ سلة المحذوفات غير مفعلة في هذا الإصدار.")
+        return redirect("appointments:appointment_list")
+
+    qs = Appointment.deleted_objects.select_related("patient", "doctor__user")
+
+    order_fields: list[str] = []
+    if _model_has_field(Appointment, "deleted_at"):
+        order_fields.append("-deleted_at")
+    elif _model_has_field(Appointment, "updated_at"):
+        order_fields.append("-updated_at")
+    order_fields.append("-pk")
+    qs = qs.order_by(*order_fields)
+
+    qs = _filter_appointments_for_user(qs, request.user)
+
+    q = (request.GET.get("q") or "").strip()
+    if q:
+        notes_q = Q()
+        if _model_has_field(Appointment, "notes"):
+            notes_q = Q(notes__icontains=q)
+        qs = qs.filter(
+            Q(patient__full_name__icontains=q)
+            | Q(doctor__user__first_name__icontains=q)
+            | Q(doctor__user__last_name__icontains=q)
+            | notes_q
+        )
+
+    page = Paginator(qs, 20).get_page(request.GET.get("page"))
+    return render(
+        request,
+        "appointments/appointment_recycle_bin.html",
+        {"deleted_appointments": page, "search_query": q},
+    )
+
+
+@secretary_required
+@require_POST
+def restore_appointment(request: HttpRequest, pk: int):
+    if not hasattr(Appointment, "all_objects"):
+        messages.error(request, "⚠️ الاسترجاع غير متاح (all_objects غير موجود).")
+        return redirect("appointments:appointment_recycle_bin")
+
+    qs = Appointment.all_objects.select_related("patient", "doctor__user")
+    qs = _filter_appointments_for_user(qs, request.user)
+    appt = get_object_or_404(qs, pk=pk)
+
+    is_deleted = False
+    if hasattr(appt, "is_deleted"):
+        try:
+            is_deleted = bool(getattr(appt, "is_deleted"))
+        except Exception:
+            is_deleted = False
+    if not is_deleted and hasattr(appt, "deleted_at"):
+        try:
+            is_deleted = bool(getattr(appt, "deleted_at"))
+        except Exception:
+            is_deleted = False
+
+    if not is_deleted:
+        messages.info(request, "ℹ️ هذا الموعد ليس ضمن سلة المحذوفات.")
+        return redirect("appointments:appointment_recycle_bin")
+
+    try:
+        if hasattr(appt, "restore"):
+            appt.restore()
+        else:
+            if hasattr(appt, "is_deleted"):
+                setattr(appt, "is_deleted", False)
+                appt.save(update_fields=["is_deleted"])
+            elif hasattr(appt, "deleted_at"):
+                setattr(appt, "deleted_at", None)
+                appt.save(update_fields=["deleted_at"])
+
+        # ✅ Audit
+        _audit(
+            request=request,
+            action="update",
+            instance=appt,
+            message="Appointment restored from recycle bin",
+            extra_data={"appointment_id": appt.pk, "restored": True},
+        )
+
+        messages.success(request, "✅ تم استرجاع الموعد بنجاح.")
+    except IntegrityError:
+        messages.error(
+            request,
+            "❌ لا يمكن استرجاع الموعد لأن هناك تعارض (نفس الطبيب ونفس الوقت موجود). "
+            "رجاءً غيّري وقت الموعد أو احذفي الموعد المتعارض.",
+        )
+    except ValidationError as e:
+        msg = "❌ لا يمكن استرجاع الموعد. يرجى التحقق من البيانات."
+        if getattr(e, "messages", None):
+            msg = f"❌ {e.messages[0]}"
+        messages.error(request, msg)
+
+    return redirect("appointments:appointment_recycle_bin")
+
+
+@secretary_required
+@require_http_methods(["GET", "POST"])
+def hard_delete_appointment(request: HttpRequest, pk: int):
+    """Permanent delete (SUPERUSER ONLY) from Recycle Bin."""
+    if not request.user.is_superuser:
+        raise PermissionDenied("Hard delete is restricted to administrators only.")
+
+    qs = (
+        Appointment.all_objects.select_related("patient", "doctor__user")
+        if hasattr(Appointment, "all_objects")
+        else _active_appts_qs().select_related("patient", "doctor__user")
+    )
+    appt = get_object_or_404(qs, pk=pk)
+
+    if request.method == "POST":
+        # ✅ Audit BEFORE hard delete
+        _audit(
+            request=request,
+            action="delete",
+            instance=appt,
+            message="Appointment permanently deleted",
+            extra_data={
+                "appointment_id": appt.pk,
+                "hard_delete": True,
+                "patient_id": getattr(appt, "patient_id", None),
+                "doctor_id": getattr(appt, "doctor_id", None),
+                "scheduled_time": appt.scheduled_time.isoformat() if getattr(appt, "scheduled_time", None) else None,
+            },
+        )
+
+        try:
+            appt.delete(hard=True)  # type: ignore[arg-type]
+        except TypeError:
+            appt.delete()
+        messages.success(request, "🗑️ تم حذف الموعد نهائيًا (Permanent Delete).")
+        return redirect("appointments:appointment_recycle_bin")
+
+    return render(request, "appointments/delete_confirmation.html", {"appointment": appt})
+
+
+@staff_ticket_required
 @require_GET
 def appointment_list(request: HttpRequest):
     sort = request.GET.get("sort", "scheduled_time")
@@ -314,28 +1279,50 @@ def appointment_list(request: HttpRequest):
         "scheduled_time": "scheduled_time",
     }.get(sort, "scheduled_time")
 
-    qs = Appointment.objects.select_related("patient", "doctor__user")
+    qs = _active_appts_qs().select_related("patient", "doctor__user")
+    qs = _filter_appointments_for_user(qs, request.user)
 
-    # Status filter: only the three canonical states
     status_key = (request.GET.get("status") or "all").lower()
     status_map = {
         "pending": AppointmentStatus.PENDING,
         "completed": AppointmentStatus.COMPLETED,
         "cancelled": AppointmentStatus.CANCELLED,
     }
+    if hasattr(AppointmentStatus, "CALLED"):
+        status_map["called"] = getattr(AppointmentStatus, "CALLED")
+    for name, key in (("APPROVED", "approved"), ("CONFIRMED", "confirmed"), ("ACCEPTED", "accepted")):
+        if hasattr(AppointmentStatus, name):
+            status_map[key] = getattr(AppointmentStatus, name)
+
     if status_key in status_map:
         qs = qs.filter(status=status_map[status_key])
 
     q = (request.GET.get("q") or "").strip()
     if q:
+        notes_q = Q()
+        if _model_has_field(Appointment, "notes"):
+            notes_q = Q(notes__icontains=q)
         qs = qs.filter(
             Q(patient__full_name__icontains=q)
             | Q(doctor__user__first_name__icontains=q)
             | Q(doctor__user__last_name__icontains=q)
-            | Q(notes__icontains=q) if _model_has_field(Appointment, "notes") else Q()
+            | notes_q
         )
 
-    page = Paginator(qs.order_by(f"-{fld}"), 10).get_page(request.GET.get("page"))
+    created_id = request.GET.get("created")
+    created_int: int | None = None
+    if created_id:
+        try:
+            created_int = int(created_id)
+        except Exception:
+            created_int = None
+
+    direction = (request.GET.get("dir") or "desc").lower()
+    if direction not in {"asc", "desc"}:
+        direction = "desc"
+    order_field = fld if direction == "asc" else f"-{fld}"
+
+    page = Paginator(qs.order_by(order_field), 10).get_page(request.GET.get("page"))
     return render(
         request,
         "appointments/appointment_list.html",
@@ -343,23 +1330,27 @@ def appointment_list(request: HttpRequest):
             "appointments": page,
             "search_query": q,
             "current_sort": sort,
+            "current_dir": direction,
             "current_status": status_key,
+            "created_id": created_int,
+            "recycle_bin_url": reverse("appointments:appointment_recycle_bin"),
         },
     )
 
 
 # ------------------------------------------------------------------#
-#                Patient Portal Booking (IN-APP)                    #
+#                Patient Portal Booking (IN-APP)                     #
 # ------------------------------------------------------------------#
 class _PatientPortalBookingForm(forms.ModelForm):
-    """Minimal form for logged-in patients: choose time only."""
+    scheduled_time = forms.DateTimeField(
+        widget=DateTimeLocalInput(),
+        input_formats=DATETIME_INPUT_FORMATS,
+        required=True,
+    )
 
     class Meta:
         model = Appointment
         fields = ["scheduled_time"]
-        widgets = {
-            "scheduled_time": forms.DateTimeInput(attrs={"type": "datetime-local"})
-        }
 
     def __init__(self, *args, doctor: Doctor | None = None, **kwargs):
         self.doctor = doctor
@@ -368,38 +1359,34 @@ class _PatientPortalBookingForm(forms.ModelForm):
     def clean(self):
         cleaned = super().clean()
         st = cleaned.get("scheduled_time")
-        if st and st <= timezone.now():
-            self.add_error("scheduled_time", "Please choose a future time.")
-        # Do not block conflicts here; secretary will finalize actual slot
+        if st:
+            st_norm = _normalize_dt(st)
+            if _is_past(st_norm):
+                self.add_error("scheduled_time", "Please choose a future time.")
+            cleaned["scheduled_time"] = st_norm
         return cleaned
 
 
 @login_required
 @require_http_methods(["GET", "POST"])
 def book_patient(request: HttpRequest, doctor_id: int):
-    """
-    Patient books INSIDE the portal:
-    - If BookingRequestStatus exists, create PatientBookingRequest (PENDING/REQUESTED).
-    - Otherwise, fallback to creating an Appointment with PENDING.
-    """
     if not is_patient(request.user):
         return HttpResponseForbidden("Patients only.")
 
     doctor = get_object_or_404(Doctor, pk=doctor_id)
-    patient = get_object_or_404(Patient, user=request.user)
+    patient = _get_patient_for_user(request.user)
+    if not patient:
+        return HttpResponseForbidden("Patient profile not found.")
 
     if request.method == "POST":
         form = _PatientPortalBookingForm(request.POST, doctor=doctor)
         if form.is_valid():
-            sched = _to_local_aware(form.cleaned_data["scheduled_time"])
+            sched = _normalize_dt(form.cleaned_data["scheduled_time"])
 
             if BookingRequestStatus:
-                # Create a booking request (does NOT block the slot yet)
-                full_name = (
-                    patient.full_name
-                    or request.user.get_full_name()
-                    or request.user.username
-                )
+                br_kwargs: dict[str, object] = {"doctor": doctor}
+
+                full_name = patient.full_name or request.user.get_full_name() or request.user.username
                 contact = (
                     getattr(patient, "phone", "")
                     or getattr(patient, "mobile", "")
@@ -408,134 +1395,145 @@ def book_patient(request: HttpRequest, doctor_id: int):
                 )
                 dob = getattr(patient, "date_of_birth", None)
 
-                br_kwargs: dict[str, object] = dict(
-                    doctor=doctor,
-                    full_name=full_name,
-                    contact_info=contact,
-                    date_of_birth=dob,
-                    scheduled_time=sched,
-                    status=getattr(BookingRequestStatus, "PENDING", None)
-                    or getattr(BookingRequestStatus, "REQUESTED", None),
-                )
-                # Attach patient/user if model supports these fields
+                if _model_has_field(PatientBookingRequest, "full_name"):
+                    br_kwargs["full_name"] = full_name
+                if _model_has_field(PatientBookingRequest, "contact_info"):
+                    br_kwargs["contact_info"] = contact
+                if _model_has_field(PatientBookingRequest, "date_of_birth"):
+                    br_kwargs["date_of_birth"] = dob
+                if _model_has_field(PatientBookingRequest, "scheduled_time"):
+                    br_kwargs["scheduled_time"] = sched
+
+                status_val = None
+                for nm in ("REQUESTED", "PENDING"):
+                    if hasattr(BookingRequestStatus, nm):
+                        status_val = getattr(BookingRequestStatus, nm)
+                        break
+                if status_val is not None and _model_has_field(PatientBookingRequest, "status"):
+                    br_kwargs["status"] = status_val
+
                 if _model_has_field(PatientBookingRequest, "patient"):
                     br_kwargs["patient"] = patient
                 if _model_has_field(PatientBookingRequest, "user"):
                     br_kwargs["user"] = request.user
 
-                PatientBookingRequest.objects.create(**br_kwargs)
+                br = PatientBookingRequest.objects.create(**br_kwargs)
 
-                # Notify secretaries (best-effort)
+                # ✅ Audit
+                _audit(
+                    request=request,
+                    action="create",
+                    instance=br,
+                    message="Patient portal booking request created",
+                    extra_data={
+                        "doctor_id": getattr(doctor, "id", None),
+                        "doctor_name": _doctor_name(doctor),
+                        "patient_id": getattr(patient, "id", None),
+                        "patient_name": getattr(patient, "full_name", ""),
+                        "scheduled_time": sched.isoformat() if sched else None,
+                        "source": "patient_portal",
+                    },
+                )
+
                 try:
-                    from notifications.models import Notification  # type: ignore
-
-                    Notification.objects.create(
-                        to_role="secretary" if hasattr(Notification, "to_role") else None,
-                        title="New booking request",
-                        message=(
-                            f"{full_name} requested {_doctor_name(doctor)} at "
-                            f"{localtime(sched):%Y-%m-%d %H:%M}"
-                        ),
-                        link="/appointments/secretary/",  # dashboard bell
-                    )
+                    if _notif_has_related_request():
+                        if not Notification.objects.filter(related_booking_request=br).exists():
+                            Notification.objects.create(
+                                title="New booking request",
+                                message=f"{full_name} requested {_doctor_name(doctor)} at {_fmt_dt(sched, '%Y-%m-%d %H:%M')}",
+                                related_booking_request=br,
+                            )
                 except Exception:
                     pass
 
-                messages.success(
-                    request, "Your request was sent and is pending secretary approval."
-                )
-                # No actual appointment yet
-                return redirect("patient:dashboard")
+                messages.success(request, "Your request was sent and is pending secretary approval.")
+                return redirect(_safe_reverse("patient:dashboard", default=reverse("appointments:my_appointments")))
 
-            else:
-                # Fallback: create a real Appointment as PENDING (queue_number assigned by model)
-                appt = Appointment(
-                    patient=patient,
-                    doctor=doctor,
-                    scheduled_time=sched,
-                    status=getattr(AppointmentStatus, "PENDING", "pending"),
-                    queue_number=None,
-                )
-                try:
-                    appt.save()
-                except IntegrityError:
-                    messages.error(
-                        request, "❌ This time slot is already booked for this doctor."
-                    )
-                    return redirect("appointments:my_appointments")
-
-                try:
-                    from notifications.models import Notification  # type: ignore
-
-                    Notification.objects.create(
-                        to_role="secretary" if hasattr(Notification, "to_role") else None,
-                        title="New appointment request",
-                        message=(
-                            f"{patient.full_name} requested {_doctor_name(doctor)} at "
-                            f"{localtime(sched):%Y-%m-%d %H:%M}"
-                        ),
-                        link="/appointments/secretary/appointments/?status=pending",
-                    )
-                except Exception:
-                    pass
-                messages.success(request, "Your request was sent and is pending approval.")
+            appt = Appointment(
+                patient=patient,
+                doctor=doctor,
+                scheduled_time=sched,
+                status=AppointmentStatus.PENDING,
+            )
+            try:
+                appt.save()
+            except IntegrityError:
+                messages.error(request, "❌ This time slot is already booked for this doctor.")
                 return redirect("appointments:my_appointments")
+            except ValidationError as e:
+                msg = "❌ Cannot create appointment."
+                if getattr(e, "messages", None):
+                    msg = f"❌ {e.messages[0]}"
+                messages.error(request, msg)
+                return redirect("appointments:my_appointments")
+
+            # ✅ Audit
+            _audit(
+                request=request,
+                action="create",
+                instance=appt,
+                message="Appointment created from patient portal",
+                extra_data={
+                    "appointment_id": appt.pk,
+                    "patient_id": getattr(patient, "id", None),
+                    "doctor_id": getattr(doctor, "id", None),
+                    "scheduled_time": sched.isoformat() if sched else None,
+                    "source": "patient_portal_direct",
+                },
+            )
+
+            try:
+                Notification.objects.create(
+                    title="New appointment",
+                    message=f"{patient.full_name} booked {_doctor_name(doctor)} at {_fmt_dt(sched, '%Y-%m-%d %H:%M')}",
+                )
+            except Exception:
+                pass
+
+            messages.success(request, "Your request was sent and is pending approval.")
+            return redirect("appointments:my_appointments")
+
+        messages.error(request, "❌ Please correct the errors in the selected date/time.")
     else:
         form = _PatientPortalBookingForm(doctor=doctor)
 
-    return render(
-        request,
-        "appointments/book_patient.html",
-        {"form": form, "doctor": doctor, "patient": patient},
-    )
+    return render(request, "appointments/book_patient.html", {"form": form, "doctor": doctor, "patient": patient})
 
 
 @login_required
 @require_GET
 def my_appointments(request: HttpRequest):
-    """
-    Show actual Appointments + (if enabled) PENDING/REQUESTED PatientBookingRequests
-    that belong to the logged-in patient.
-    """
     if not is_patient(request.user):
         return HttpResponseForbidden("Patients only.")
 
-    patient = get_object_or_404(Patient, user=request.user)
+    patient = _get_patient_for_user(request.user)
+    if not patient:
+        return HttpResponseForbidden("Patient profile not found.")
 
-    # Actual appointments
     appointments = (
-        Appointment.objects.filter(patient=patient)
+        _active_appts_qs()
+        .filter(patient=patient)
         .select_related("doctor", "doctor__user")
         .order_by("-scheduled_time")
     )
 
-    # Pending booking requests (best-effort match)
     booking_requests: list[PatientBookingRequest] = []
     if BookingRequestStatus:
         q = PatientBookingRequest.objects.all()
-
-        # Filter by status if enum exists
-        if hasattr(BookingRequestStatus, "PENDING"):
-            q = q.filter(status=BookingRequestStatus.PENDING)
-        elif hasattr(BookingRequestStatus, "REQUESTED"):
-            q = q.filter(status=BookingRequestStatus.REQUESTED)
 
         if _model_has_field(PatientBookingRequest, "patient"):
             q = q.filter(patient=patient)
         elif _model_has_field(PatientBookingRequest, "user"):
             q = q.filter(user=request.user)
         else:
-            # Heuristic match by contact/name/email/phone
             lookups = Q()
             phone = getattr(patient, "phone", None) or getattr(patient, "mobile", None)
-            if phone:
-                lookups |= Q(contact_info__icontains=phone)
-            if request.user.email:
+            if phone and _model_has_field(PatientBookingRequest, "contact_info"):
+                lookups |= Q(contact_info__icontains=str(phone))
+            if request.user.email and _model_has_field(PatientBookingRequest, "contact_info"):
                 lookups |= Q(contact_info__icontains=request.user.email)
-            display_name = (
-                patient.full_name or request.user.get_full_name() or request.user.username
-            )
-            if display_name:
+            display_name = patient.full_name or request.user.get_full_name() or request.user.username
+            if display_name and _model_has_field(PatientBookingRequest, "full_name"):
                 lookups |= Q(full_name__icontains=display_name)
             if lookups:
                 q = q.filter(lookups)
@@ -544,7 +1542,7 @@ def my_appointments(request: HttpRequest):
         q = q.select_related("doctor", "doctor__user").order_by(
             "-submitted_at" if has_submitted_at else "-scheduled_time"
         )
-        booking_requests = list(q[:20])
+        booking_requests = list(q[:50])
 
     return render(
         request,
@@ -553,7 +1551,9 @@ def my_appointments(request: HttpRequest):
     )
 
 
-# Keep backward-compat route name by providing approve_appointment that delegates
+# ------------------------------------------------------------------#
+#           Approving appointments / booking requests                #
+# ------------------------------------------------------------------#
 @secretary_required
 @require_POST
 def approve_appointment(request: HttpRequest, pk: int):
@@ -563,32 +1563,74 @@ def approve_appointment(request: HttpRequest, pk: int):
 @secretary_required
 @require_POST
 def confirm_appointment(request: HttpRequest, pk: int):
-    """
-    Confirm an Appointment (no APPROVED state in enum):
-    - If it's cancelled, refuse.
-    - Otherwise, keep/force to PENDING to indicate it's accepted.
-    """
-    appt = get_object_or_404(Appointment, pk=pk)
+    qs = _filter_appointments_for_user(_active_appts_qs(), request.user)
+    appt = get_object_or_404(qs, pk=pk)
+
+    old_status = str(getattr(appt, "status", ""))
+
     if appt.status == AppointmentStatus.CANCELLED:
-        messages.error(request, "❌ Cannot confirm a cancelled appointment.")
+        messages.error(request, "❌ لا يمكن تأكيد موعد تم إلغاؤه.")
+    elif appt.status == AppointmentStatus.COMPLETED:
+        messages.error(request, "❌ لا يمكن تأكيد موعد مكتمل. يرجى إنشاء موعد جديد إذا لزم الأمر.")
     else:
-        appt.status = AppointmentStatus.PENDING
-        appt.save(update_fields=["status"])
-        messages.success(request, "Appointment confirmed.")
+        appt.status = _secretary_default_status()
+        appt.save()
+
+        # ✅ Audit
+        _audit(
+            request=request,
+            action="update",
+            instance=appt,
+            message="Appointment confirmed/approved",
+            extra_data={
+                "appointment_id": appt.pk,
+                "old_status": old_status,
+                "new_status": str(getattr(appt, "status", "")),
+            },
+        )
+
+        messages.success(request, "✅ تم تأكيد الموعد وتحديث حالته في نظام ClinicHub.")
+
     return redirect("appointments:appointment_list")
 
 
-# Optional: approve a booking request and convert it into an Appointment
 @secretary_required
 @require_POST
 def approve_booking_request(request: HttpRequest, pk: int):
-    """Convert a PatientBookingRequest -> Appointment and mark request as confirmed."""
-    if not BookingRequestStatus:
-        return _json_error("Booking requests are not enabled.", status=400)
+    """
+    Approve MUST create ONE appointment at the requested slot (doctor + scheduled_time)
+    and be idempotent.
+    """
+    br_qs = _filter_booking_requests_for_user(PatientBookingRequest.objects.all(), request.user)
+    br = get_object_or_404(br_qs, pk=pk)
 
-    br = get_object_or_404(PatientBookingRequest, pk=pk)
+    fallback_next = reverse("appointments:booking_requests_list")
+    next_url = _safe_next_url(request, fallback=fallback_next)
 
-    # Find patient
+    if _booking_request_is_processed(br):
+        if _notif_has_related_request():
+            Notification.objects.filter(related_booking_request=br).update(is_read=True)
+
+        updates: dict[str, Any] = {}
+        if _model_has_field(PatientBookingRequest, "seen_by_secretary"):
+            updates["seen_by_secretary"] = True
+        if _model_has_field(PatientBookingRequest, "seen_at"):
+            updates["seen_at"] = timezone.now()
+        if updates:
+            PatientBookingRequest.objects.filter(pk=br.pk).update(**updates)
+
+        # ✅ Audit
+        _audit(
+            request=request,
+            action="other",
+            instance=br,
+            message="Booking request approval skipped (already processed)",
+            extra_data={"booking_request_id": br.pk},
+        )
+
+        messages.info(request, "ℹ️ هذا الطلب تمّت معالجته مسبقًا.")
+        return redirect(next_url)
+
     patient_obj: Patient | None = None
     if _model_has_field(PatientBookingRequest, "patient") and getattr(br, "patient", None):
         patient_obj = br.patient  # type: ignore[attr-defined]
@@ -596,71 +1638,500 @@ def approve_booking_request(request: HttpRequest, pk: int):
         patient_obj = Patient.objects.filter(user=br.user).first()  # type: ignore[attr-defined]
 
     if not patient_obj:
-        # Fallback heuristic by name/email/phone
-        qs = Patient.objects.all()
-        if getattr(br, "contact_info", None):
-            qs = qs.filter(
-                Q(phone__icontains=br.contact_info)
-                | Q(mobile__icontains=br.contact_info)
-                | Q(user__email__iexact=br.contact_info)
-            )
-        if not qs.exists() and getattr(br, "full_name", None):
-            qs = Patient.objects.filter(full_name__icontains=br.full_name)
-        patient_obj = qs.first()
+        qs_pat = Patient.objects.all()
+        contact = getattr(br, "contact_info", None)
+
+        if contact:
+            look = Q()
+            if _model_has_field(Patient, "mobile"):
+                look |= Q(mobile__icontains=str(contact))
+            if _model_has_field(Patient, "phone"):
+                look |= Q(phone__icontains=str(contact))
+            if _model_has_field(Patient, "user") and _model_has_field(User, "email"):
+                look |= Q(user__email__iexact=str(contact))
+            if look:
+                qs_pat = qs_pat.filter(look)
+
+        if (not qs_pat.exists()) and getattr(br, "full_name", None) and _model_has_field(Patient, "full_name"):
+            qs_pat = Patient.objects.filter(full_name__icontains=br.full_name)
+
+        patient_obj = qs_pat.first()
 
     if not patient_obj:
-        messages.error(
-            request,
-            "Cannot approve: patient record not linked/found. Please convert manually.",
-        )
-        return redirect("appointments:secretary_dashboard")
+        messages.error(request, "⚠️ لا يمكن اعتماد الطلب: لم يتم العثور على سجل المريض. يرجى إنشاء/ربط المريض أولاً.")
+        return redirect(next_url)
 
-    with transaction.atomic():
-        Appointment.objects.create(
-            patient=patient_obj,
-            doctor=br.doctor,
-            scheduled_time=_to_local_aware(getattr(br, "scheduled_time", None)),
-            status=AppointmentStatus.PENDING,
-        )
-        # Mark request CONFIRMED/APPROVED if exists
-        try:
-            if hasattr(BookingRequestStatus, "CONFIRMED"):
-                br.status = BookingRequestStatus.CONFIRMED
-            elif hasattr(BookingRequestStatus, "APPROVED"):
-                br.status = BookingRequestStatus.APPROVED
+    scheduled_time = _normalize_dt(getattr(br, "scheduled_time", None))
+    if not scheduled_time:
+        messages.error(request, "⚠️ لا يمكن اعتماد الطلب لأن وقت الحجز غير موجود.")
+        return redirect(next_url)
+
+    if _model_has_field(PatientBookingRequest, "appointment"):
+        existing_appt = getattr(br, "appointment", None)
+        if isinstance(existing_appt, Appointment) and existing_appt.status != AppointmentStatus.CANCELLED:
+            _set_booking_request_status(br, ("CONFIRMED", "APPROVED", "ACCEPTED"))
+            if _notif_has_related_request():
+                Notification.objects.filter(related_booking_request=br).update(is_read=True)
+
+            updates: dict[str, Any] = {}
+            if _model_has_field(PatientBookingRequest, "seen_by_secretary"):
+                updates["seen_by_secretary"] = True
+            if _model_has_field(PatientBookingRequest, "seen_at"):
+                updates["seen_at"] = timezone.now()
+            if updates:
+                PatientBookingRequest.objects.filter(pk=br.pk).update(**updates)
+
+            # ✅ Audit
+            _audit(
+                request=request,
+                action="update",
+                instance=existing_appt,
+                message="Booking request approved (already linked appointment)",
+                extra_data={
+                    "booking_request_id": br.pk,
+                    "appointment_id": existing_appt.pk,
+                    "patient_id": getattr(existing_appt, "patient_id", None),
+                    "doctor_id": getattr(existing_appt, "doctor_id", None),
+                },
+            )
+
+            messages.success(request, "✅ تم اعتماد الطلب (الموعد كان مرتبطًا مسبقًا).")
+            return _redirect_with_query("appointments:appointment_list", query={"created": existing_appt.pk})
+
+    appt: Appointment | None = None
+    created_new_appointment = False
+    approved_status_before = str(getattr(br, "status", "")) if _model_has_field(PatientBookingRequest, "status") else ""
+
+    try:
+        with transaction.atomic():
+            slot_qs = (
+                _active_appts_qs()
+                .select_for_update()
+                .filter(doctor=br.doctor, scheduled_time=scheduled_time)
+                .exclude(status=AppointmentStatus.CANCELLED)
+            )
+            existing_slot = slot_qs.select_related("patient").first()
+
+            if existing_slot:
+                if existing_slot.patient_id != patient_obj.id:
+                    messages.error(request, "⚠️ لا يمكن اعتماد هذا الطلب لأن هذا التوقيت محجوز لمريض آخر.")
+                    return redirect(next_url)
+
+                existing_slot.status = _secretary_default_status()
+                existing_slot.save()
+                appt = existing_slot
+                created_new_appointment = False
             else:
-                br.status = getattr(BookingRequestStatus, "PENDING", None)
-            br.save(update_fields=["status"])
-        except Exception:
-            pass
+                appt = Appointment(
+                    patient=patient_obj,
+                    doctor=br.doctor,
+                    scheduled_time=scheduled_time,
+                    status=_secretary_default_status(),
+                )
+                appt.save()
+                created_new_appointment = True
 
-    messages.success(request, "Booking request approved and appointment created.")
-    return redirect("appointments:appointment_list")
+            if _model_has_field(PatientBookingRequest, "appointment"):
+                PatientBookingRequest.objects.filter(pk=br.pk).update(appointment=appt)
+                try:
+                    br.appointment = appt  # type: ignore[attr-defined]
+                except Exception:
+                    pass
 
+            _set_booking_request_status(br, ("CONFIRMED", "APPROVED", "ACCEPTED"))
 
-# ------------------------------------------------------------------#
-#                  Public vs Internal Queue Snapshots               #
-# ------------------------------------------------------------------#
+            updates: dict[str, Any] = {}
+            if _model_has_field(PatientBookingRequest, "seen_by_secretary"):
+                updates["seen_by_secretary"] = True
+            if _model_has_field(PatientBookingRequest, "seen_at"):
+                updates["seen_at"] = timezone.now()
+            if updates:
+                PatientBookingRequest.objects.filter(pk=br.pk).update(**updates)
 
-def _queue_snapshot_internal() -> list[dict]:
-    """
-    INTERNAL snapshot (PHI included) – for authenticated secretary endpoints/APIs.
-    """
-    today = _today()
-    default_mins = getattr(settings, "APPOINTMENT_DURATION_MINUTES", 15)
+            if _notif_has_related_request():
+                Notification.objects.filter(related_booking_request=br).update(is_read=True)
 
-    appts = (
-        Appointment.objects.filter(
-            scheduled_time__date=today, status=AppointmentStatus.PENDING
+    except IntegrityError:
+        messages.error(request, "⚠️ تعارض أثناء اعتماد الطلب (نفس الطبيب ونفس الوقت).")
+        return redirect(next_url)
+    except ValidationError as e:
+        error_msg = None
+        if hasattr(e, "message_dict"):
+            msgs = e.message_dict.get("scheduled_time")
+            if isinstance(msgs, (list, tuple)) and msgs:
+                error_msg = msgs[0]
+        if not error_msg:
+            error_msg = "لا يمكن اعتماد هذا التوقيت لهذا الطبيب، لأنه محجوز بالفعل أو غير صالح."
+        messages.error(request, f"⚠️ لم يتم اعتماد طلب الحجز: {error_msg}")
+        return redirect(next_url)
+
+    if appt is not None:
+        # ✅ Audit: appointment approval/create
+        _audit(
+            request=request,
+            action="create" if created_new_appointment else "update",
+            instance=appt,
+            message="Booking request approved and appointment linked",
+            extra_data={
+                "booking_request_id": br.pk,
+                "booking_request_status_before": approved_status_before,
+                "booking_request_status_after": str(getattr(br, "status", "")) if _model_has_field(PatientBookingRequest, "status") else "",
+                "appointment_id": appt.pk,
+                "created_new_appointment": created_new_appointment,
+                "patient_id": getattr(appt, "patient_id", None),
+                "doctor_id": getattr(appt, "doctor_id", None),
+                "scheduled_time": appt.scheduled_time.isoformat() if getattr(appt, "scheduled_time", None) else None,
+                "appointment_status": str(getattr(appt, "status", "")),
+            },
         )
+
+        # ✅ Audit: booking request itself updated
+        _audit(
+            request=request,
+            action="update",
+            instance=br,
+            message="Booking request approved",
+            extra_data={
+                "booking_request_id": br.pk,
+                "appointment_id": appt.pk,
+                "approved_by": getattr(request.user, "id", None),
+            },
+        )
+
+    messages.success(request, "✅ تم اعتماد طلب الحجز وإنشاء الموعد تلقائيًا بنفس الوقت المحدد.")
+    return _redirect_with_query("appointments:appointment_list", query={"created": appt.pk if appt else None})
+
+
+@secretary_required
+@require_POST
+def reject_booking_request(request: HttpRequest, pk: int):
+    br_qs = _filter_booking_requests_for_user(PatientBookingRequest.objects.all(), request.user)
+    br = get_object_or_404(br_qs, pk=pk)
+
+    next_url = _safe_next_url(request, fallback=reverse("appointments:booking_requests_list"))
+    old_status = str(getattr(br, "status", "")) if _model_has_field(PatientBookingRequest, "status") else ""
+
+    _set_booking_request_status(br, ("REJECTED", "DECLINED", "CANCELLED"))
+
+    updates: dict[str, Any] = {}
+    if _model_has_field(PatientBookingRequest, "seen_by_secretary"):
+        updates["seen_by_secretary"] = True
+    if _model_has_field(PatientBookingRequest, "seen_at"):
+        updates["seen_at"] = timezone.now()
+    if updates:
+        PatientBookingRequest.objects.filter(pk=br.pk).update(**updates)
+
+    if _notif_has_related_request():
+        Notification.objects.filter(related_booking_request=br).update(is_read=True)
+
+    # ✅ Audit
+    _audit(
+        request=request,
+        action="update",
+        instance=br,
+        message="Booking request rejected",
+        extra_data={
+            "booking_request_id": br.pk,
+            "old_status": old_status,
+            "new_status": str(getattr(br, "status", "")) if _model_has_field(PatientBookingRequest, "status") else "",
+        },
+    )
+
+    messages.success(request, "✅ تم رفض طلب الحجز.")
+    return redirect(next_url)
+
+
+# ------------------------------------------------------------------#
+#            Booking Requests List (secretary page)                  #
+# ------------------------------------------------------------------#
+@secretary_required
+@require_GET
+def booking_requests_list(request: HttpRequest):
+    qs = PatientBookingRequest.objects.all()
+
+    if BookingRequestStatus and _model_has_field(PatientBookingRequest, "status"):
+        pending_status = getattr(BookingRequestStatus, "PENDING", None)
+        requested_status = getattr(BookingRequestStatus, "REQUESTED", None)
+
+        if pending_status and requested_status:
+            qs = qs.filter(status__in=[pending_status, requested_status])
+        elif pending_status:
+            qs = qs.filter(status=pending_status)
+        elif requested_status:
+            qs = qs.filter(status=requested_status)
+
+    qs = _filter_booking_requests_for_user(qs, request.user)
+
+    qs = (
+        qs.order_by("-submitted_at")
+        if _model_has_field(PatientBookingRequest, "submitted_at")
+        else qs.order_by("-scheduled_time")
+    )
+
+    page = Paginator(qs, 20).get_page(request.GET.get("page"))
+
+    if _model_has_field(PatientBookingRequest, "seen_by_secretary") or _model_has_field(PatientBookingRequest, "seen_at"):
+        ids = [obj.pk for obj in page.object_list]
+        if ids:
+            updates: dict[str, Any] = {}
+            if _model_has_field(PatientBookingRequest, "seen_by_secretary"):
+                updates["seen_by_secretary"] = True
+            if _model_has_field(PatientBookingRequest, "seen_at"):
+                updates["seen_at"] = timezone.now()
+            if updates:
+                PatientBookingRequest.objects.filter(pk__in=ids).update(**updates)
+
+    return render(request, "appointments/booking_requests_list.html", {"requests": page})
+
+
+# ------------------------------------------------------------------#
+#                       Secretary Reports                            #
+# ------------------------------------------------------------------#
+@secretary_required
+@require_GET
+def secretary_reports(request: HttpRequest):
+    period, start, end = _get_period_range(request)
+
+    base_qs = _filter_by_day_range(
+        _active_appts_qs().select_related("patient", "doctor__user"),
+        start,
+        end,
+    )
+    base_qs = _filter_appointments_for_user(base_qs, request.user)
+
+    total = base_qs.count()
+    completed = base_qs.filter(status=AppointmentStatus.COMPLETED).count()
+    cancelled = base_qs.filter(status=AppointmentStatus.CANCELLED).count()
+    pending = base_qs.filter(status=AppointmentStatus.PENDING).count()
+    called = (
+        base_qs.filter(status=getattr(AppointmentStatus, "CALLED")).count()
+        if hasattr(AppointmentStatus, "CALLED")
+        else 0
+    )
+
+    revenue = 0
+    if _model_has_field(Appointment, "iqd_amount"):
+        revenue = base_qs.aggregate(total=Sum("iqd_amount")).get("total") or 0
+
+    if _model_has_field(Patient, "created_at"):
+        patient_ids = base_qs.values_list("patient_id", flat=True).distinct()
+        new_patients = (
+            Patient.objects.filter(created_at__date__range=(start, end), id__in=patient_ids)
+            .distinct()
+            .count()
+        )
+    else:
+        new_patients = 0
+
+    summary = {
+        "total": total,
+        "completed": completed,
+        "cancelled": cancelled,
+        "pending": pending,
+        "called": called,
+        "revenue": revenue,
+        "new_patients": new_patients,
+    }
+
+    if _model_has_field(Appointment, "scheduled_day"):
+        if _model_has_field(Appointment, "iqd_amount"):
+            daily_qs = (
+                base_qs.values("scheduled_day")
+                .annotate(count=Count("id"), revenue=Sum("iqd_amount"))
+                .order_by("scheduled_day")
+            )
+        else:
+            daily_qs = (
+                base_qs.values("scheduled_day")
+                .annotate(count=Count("id"))
+                .order_by("scheduled_day")
+            )
+        daily = [
+            {
+                "day": (
+                    row["scheduled_day"].strftime("%Y-%m-%d")
+                    if isinstance(row["scheduled_day"], date)
+                    else str(row["scheduled_day"])
+                ),
+                "count": row["count"],
+                "revenue": row.get("revenue") or 0,
+            }
+            for row in daily_qs
+        ]
+    else:
+        if _model_has_field(Appointment, "iqd_amount"):
+            daily_qs = (
+                base_qs.annotate(day=TruncDate("scheduled_time"))
+                .values("day")
+                .annotate(count=Count("id"), revenue=Sum("iqd_amount"))
+                .order_by("day")
+            )
+        else:
+            daily_qs = (
+                base_qs.annotate(day=TruncDate("scheduled_time"))
+                .values("day")
+                .annotate(count=Count("id"))
+                .order_by("day")
+            )
+        daily = [
+            {
+                "day": row["day"].strftime("%Y-%m-%d") if isinstance(row["day"], date) else str(row["day"]),
+                "count": row["count"],
+                "revenue": row.get("revenue") or 0,
+            }
+            for row in daily_qs
+        ]
+
+    if _model_has_field(Appointment, "iqd_amount"):
+        top_qs = (
+            base_qs.values("doctor__user__first_name", "doctor__user__last_name")
+            .annotate(count=Count("id"), rev=Sum("iqd_amount"))
+            .order_by("-count")[:5]
+        )
+    else:
+        top_qs = (
+            base_qs.values("doctor__user__first_name", "doctor__user__last_name")
+            .annotate(count=Count("id"))
+            .order_by("-count")[:5]
+        )
+
+    ctx = {
+        "period": period,
+        "start": start,
+        "end": end,
+        "summary": summary,
+        "daily": daily,
+        "top_doctors": list(top_qs),
+        "appointments": base_qs.order_by("scheduled_time"),
+    }
+    return render(request, "appointments/secretary_reports.html", ctx)
+
+
+@secretary_required
+@require_GET
+def reports_export(request: HttpRequest):
+    fmt = (request.GET.get("format") or "csv").lower()
+    _period, start, end = _get_period_range(request)
+
+    qs = _filter_by_day_range(
+        _active_appts_qs().select_related("patient", "doctor__user").order_by("scheduled_time"),
+        start,
+        end,
+    )
+    qs = _filter_appointments_for_user(qs, request.user)
+
+    headers = ["ID", "Date", "Time", "Doctor", "Patient", "Status", "IQD"]
+    rows: list[list[object]] = []
+
+    for a in qs:
+        dt = _dt_for_display(a.scheduled_time)
+        date_str = dt.strftime("%Y-%m-%d") if dt else ""
+        time_str = dt.strftime("%H:%M") if dt else ""
+        status_label = a.get_status_display() if hasattr(a, "get_status_display") else str(a.status)
+        amount = getattr(a, "iqd_amount", None) or 0
+        rows.append([a.id, date_str, time_str, _doctor_name(a.doctor), a.patient.full_name, status_label, amount])
+
+    filename_base = f"clinichub_reports_{start:%Y%m%d}_{end:%Y%m%d}"
+
+    if fmt == "xlsx":
+        try:
+            import openpyxl  # type: ignore
+            from openpyxl.utils import get_column_letter  # type: ignore
+        except ImportError:
+            fmt = "csv"
+
+    if fmt == "xlsx":
+        wb = openpyxl.Workbook()  # type: ignore[name-defined]
+        ws = wb.active
+        ws.title = "Appointments"
+        ws.append(headers)
+        for row in rows:
+            ws.append(row)
+
+        for col_idx, header in enumerate(headers, start=1):
+            max_len = max([len(str(header))] + [len(str(r[col_idx - 1])) for r in (rows or [[""]])])
+            ws.column_dimensions[get_column_letter(col_idx)].width = max_len + 2  # type: ignore[name-defined]
+
+        out = io.BytesIO()
+        wb.save(out)
+        out.seek(0)
+
+        resp = HttpResponse(
+            out.getvalue(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        resp["Content-Disposition"] = f'attachment; filename="{filename_base}.xlsx"'
+        return resp
+
+    resp = HttpResponse(content_type="text/csv; charset=utf-8")
+    resp["Content-Disposition"] = f'attachment; filename="{filename_base}.csv"'
+    resp.write("\ufeff")
+    writer = csv.writer(resp)
+    writer.writerow(headers)
+    for row in rows:
+        writer.writerow(row)
+    return resp
+
+
+# ------------------------------------------------------------------#
+#                  Public vs Internal Queue Snapshots                #
+# ------------------------------------------------------------------#
+def _queue_doctors_queryset_for(user=None):
+    qs = Doctor.objects.select_related("user").order_by("id")
+    limit = getattr(settings, "QUEUE_DISPLAY_DOCTORS_LIMIT", None)
+    if user is not None:
+        assigned = _secretary_assigned_doctor(user)
+        if assigned is not None:
+            qs = qs.filter(pk=assigned.pk)
+    if isinstance(limit, int) and limit > 0:
+        qs = qs[:limit]
+    return qs
+
+
+def _queue_public_show_patient_names() -> bool:
+    return bool(getattr(settings, "QUEUE_PUBLIC_SHOW_PATIENT_NAME", False))
+
+
+def _queue_public_include_ids() -> bool:
+    return bool(getattr(settings, "QUEUE_PUBLIC_INCLUDE_IDS", False))
+
+
+def _queue_public_token_required() -> bool:
+    token = str(getattr(settings, "QUEUE_PUBLIC_TOKEN", "") or "")
+    if token:
+        return True
+    return bool(getattr(settings, "QUEUE_PUBLIC_REQUIRE_TOKEN", False))
+
+
+def _queue_public_token_ok(request: HttpRequest) -> bool:
+    if not _queue_public_token_required():
+        return True
+
+    expected = str(getattr(settings, "QUEUE_PUBLIC_TOKEN", "") or "")
+    if not expected:
+        return False
+
+    provided = (request.GET.get("token") or "").strip() or (request.headers.get("X-Queue-Token") or "").strip()
+    if not provided:
+        return False
+    return secrets.compare_digest(provided, expected)
+
+
+def _queue_snapshot_internal(user=None) -> list[dict]:
+    today = _today()
+    default_mins = int(getattr(settings, "APPOINTMENT_DURATION_MINUTES", 15) or 15)
+
+    appts_qs = (
+        _active_appts_qs()
+        .filter(status__in=_queue_active_statuses())
         .select_related("patient", "doctor__user")
         .order_by("scheduled_time")
     )
+    appts_qs = _filter_by_day(appts_qs, today)
+    appts_qs = _filter_appointments_for_user(appts_qs, user) if user is not None else appts_qs
+    appts = list(appts_qs)
 
-    doctor_ids = sorted({a.doctor_id for a in appts})
-    doctors = (
-        Doctor.objects.select_related("user").filter(id__in=doctor_ids).order_by("id")
-    )
+    doctors = list(_queue_doctors_queryset_for(user=user))
 
     by_doc: dict[int, list[Appointment]] = {}
     for a in appts:
@@ -669,56 +2140,71 @@ def _queue_snapshot_internal() -> list[dict]:
     queues: list[dict] = []
     for d in doctors:
         today_appts = by_doc.get(d.id, [])
-        current, waiting = None, []
-        if today_appts:
-            first, rest = today_appts[0], today_appts[1:]
+
+        current_obj = None
+        if hasattr(AppointmentStatus, "CALLED"):
+            for a in today_appts:
+                if a.status == getattr(AppointmentStatus, "CALLED"):
+                    current_obj = a
+                    break
+        if current_obj is None and today_appts:
+            current_obj = today_appts[0]
+
+        waiting_objs = [a for a in today_appts if (current_obj is None or a.id != current_obj.id)]
+
+        current = None
+        waiting: list[dict[str, Any]] = []
+
+        if current_obj:
             current = {
-                "id": first.id,
-                "number": f"P-{first.queue_number:03d}" if first.queue_number else "-",
-                "patient_name": first.patient.full_name,
-                "time": first.scheduled_time.strftime("%H:%M"),
+                "id": current_obj.id,
+                "number": _format_queue_number(getattr(current_obj, "queue_number", None)),
+                "patient_name": current_obj.patient.full_name,
+                "time": _fmt_dt(current_obj.scheduled_time, "%H:%M"),
+                "status": str(current_obj.status),
             }
-            waiting = [
+
+        for w in waiting_objs:
+            waiting.append(
                 {
                     "id": w.id,
-                    "number": f"P-{w.queue_number:03d}" if w.queue_number else "-",
+                    "number": _format_queue_number(getattr(w, "queue_number", None)),
                     "patient_name": w.patient.full_name,
-                    "time": w.scheduled_time.strftime("%H:%M"),
+                    "time": _fmt_dt(w.scheduled_time, "%H:%M"),
+                    "status": str(w.status),
                 }
-                for w in rest
-            ]
+            )
+
         queues.append(
             {
                 "doctor_id": d.id,
                 "doctor_name": _doctor_name(d),
                 "status": "available" if today_appts else "on_break",
+                "current": current,
+                "waiting": waiting,
                 "current_patient": current,
                 "waiting_list": waiting,
                 "avg_time": default_mins,
             }
         )
+
     return queues
 
 
 def _queue_snapshot_public() -> list[dict]:
-    """
-    PUBLIC snapshot (PHI-FREE) – no patient names/details.
-    """
     today = _today()
-    default_mins = getattr(settings, "APPOINTMENT_DURATION_MINUTES", 15)
+    default_mins = int(getattr(settings, "APPOINTMENT_DURATION_MINUTES", 15) or 15)
+    show_names = _queue_public_show_patient_names()
+    include_ids = _queue_public_include_ids()
 
-    appts = (
-        Appointment.objects.filter(
-            scheduled_time__date=today, status=AppointmentStatus.PENDING
-        )
-        .select_related("doctor__user")
+    appts_qs = (
+        _active_appts_qs()
+        .filter(status__in=_queue_active_statuses())
+        .select_related("patient", "doctor__user")
         .order_by("scheduled_time")
     )
-
-    doctor_ids = sorted({a.doctor_id for a in appts})
-    doctors = (
-        Doctor.objects.select_related("user").filter(id__in=doctor_ids).order_by("id")
-    )
+    appts = list(_filter_by_day(appts_qs, today))
+    doctors = list(_queue_doctors_queryset_for(user=None))
 
     by_doc: dict[int, list[Appointment]] = {}
     for a in appts:
@@ -727,22 +2213,44 @@ def _queue_snapshot_public() -> list[dict]:
     queues: list[dict] = []
     for d in doctors:
         today_appts = by_doc.get(d.id, [])
-        current, waiting = None, []
-        if today_appts:
-            first, rest = today_appts[0], today_appts[1:]
+
+        current_obj = None
+        if hasattr(AppointmentStatus, "CALLED"):
+            for a in today_appts:
+                if a.status == getattr(AppointmentStatus, "CALLED"):
+                    current_obj = a
+                    break
+        if current_obj is None and today_appts:
+            current_obj = today_appts[0]
+
+        waiting_objs = [a for a in today_appts if (current_obj is None or a.id != current_obj.id)]
+
+        current: dict[str, Any] | None = None
+        waiting: list[dict[str, Any]] = []
+
+        if current_obj:
             current = {
-                "id": first.id,
-                "number": f"P-{first.queue_number:03d}" if first.queue_number else "-",
-                "time": first.scheduled_time.strftime("%H:%M"),
+                "number": _format_queue_number(getattr(current_obj, "queue_number", None)),
+                "time": _fmt_dt(current_obj.scheduled_time, "%H:%M"),
+                "status": str(current_obj.status),
             }
-            waiting = [
-                {
-                    "id": w.id,
-                    "number": f"P-{w.queue_number:03d}" if w.queue_number else "-",
-                    "time": w.scheduled_time.strftime("%H:%M"),
-                }
-                for w in rest
-            ]
+            if include_ids:
+                current["id"] = current_obj.id
+            if show_names:
+                current["patient_name"] = current_obj.patient.full_name
+
+        for w in waiting_objs:
+            item: dict[str, Any] = {
+                "number": _format_queue_number(getattr(w, "queue_number", None)),
+                "time": _fmt_dt(w.scheduled_time, "%H:%M"),
+                "status": str(w.status),
+            }
+            if include_ids:
+                item["id"] = w.id
+            if show_names:
+                item["patient_name"] = w.patient.full_name
+            waiting.append(item)
+
         queues.append(
             {
                 "doctor_id": d.id,
@@ -753,125 +2261,264 @@ def _queue_snapshot_public() -> list[dict]:
                 "avg_time": default_mins,
             }
         )
+
     return queues
 
 
 @require_GET
 @cache_control(no_cache=True, no_store=True, must_revalidate=True)
 def queue_display(request: HttpRequest):
-    # PUBLIC view → PHI-free (template may still fetch JSON API)
+    if _queue_public_token_required() and not _queue_public_token_ok(request):
+        return HttpResponseForbidden("Queue display is protected.")
     return render(request, "appointments/queue_display.html", {"queues": _queue_snapshot_public()})
 
 
 @require_GET
 @cache_control(no_cache=True, no_store=True, must_revalidate=True)
 def queue_public_api(request: HttpRequest):
-    # PUBLIC JSON API → PHI-FREE
+    if _queue_public_token_required() and not _queue_public_token_ok(request):
+        return _json_error("Forbidden", status=403)
     return _json_success({"queues": _queue_snapshot_public()})
 
 
-@secretary_required
 @require_GET
+@cache_control(no_cache=True, no_store=True, must_revalidate=True)
 def queue_number_api(request: HttpRequest):
-    # INTERNAL API for secretaries/admins → PHI allowed
-    return _json_success({"queues": _queue_snapshot_internal()})
+    user = getattr(request, "user", None)
+    is_staff_view = bool(
+        user and user.is_authenticated and (_user_is_secretary(user) or getattr(user, "is_superuser", False))
+    )
+
+    if is_staff_view:
+        return _json_success({"queues": _queue_snapshot_internal(user)})
+
+    if _queue_public_token_required() and not _queue_public_token_ok(request):
+        return _json_error("Forbidden", status=403)
+
+    return _json_success({"queues": _queue_snapshot_public()})
 
 
 @secretary_required
 @require_POST
 def call_next_api(request: HttpRequest, doctor_id: int):
     """
-    Mark next (or specific) PENDING appointment as COMPLETED for this doctor.
-    Uses .save() to trigger signals; returns updated queues + updated appt info.
+    ✅ Test-safe behavior:
+      - default: COMPLETE mode (marks next waiting as COMPLETED)
+      - optional: CALLED mode if QUEUE_USE_CALLED_STATUS=True
+
+    This fixes failing test: test_call_next_api_marks_completed
     """
     today = _today()
-    appt_id = request.POST.get("appointment_id")
+
+    assigned_doctor = _secretary_assigned_doctor(request.user)
+    if assigned_doctor is not None and assigned_doctor.id != doctor_id:
+        return _json_error("You cannot control the queue of another doctor.", status=403)
+
+    appt_id_raw = ""
+    if request.content_type and "application/json" in (request.content_type or ""):
+        try:
+            payload = json.loads(request.body.decode("utf-8") or "{}")
+            appt_id_raw = str(payload.get("appointment_id") or "").strip()
+        except Exception:
+            appt_id_raw = ""
+    else:
+        appt_id_raw = (request.POST.get("appointment_id") or "").strip()
+
+    appt_id: int | None = None
+    if appt_id_raw:
+        try:
+            appt_id = int(appt_id_raw)
+        except Exception:
+            appt_id = None
+
+    use_called_mode = _queue_use_called_status()
+    called_status = getattr(AppointmentStatus, "CALLED", None)
+    completed_status = AppointmentStatus.COMPLETED
+
+    waiting_statuses = _queue_waiting_statuses()
+    active_statuses = _queue_active_statuses()
+
+    updated: dict[str, Any] = {}
 
     with transaction.atomic():
-        base_qs = (
-            Appointment.objects.select_for_update()
-            .filter(
-                doctor_id=doctor_id,
-                status=AppointmentStatus.PENDING,
-                scheduled_time__date=today,
-            )
+        base = (
+            _active_appts_qs()
+            .select_for_update()
+            .filter(doctor_id=doctor_id)
+            .select_related("patient", "doctor__user")
             .order_by("scheduled_time")
         )
+        base = _filter_by_day(base, today)
 
-        nxt = None
-        if appt_id:
-            nxt = (
-                Appointment.objects.select_for_update()
-                .filter(pk=appt_id, doctor_id=doctor_id)
-                .first()
+        if use_called_mode and called_status is not None:
+            # 1) complete current CALLED if exists
+            current_called = base.filter(status=called_status).first()
+            if current_called:
+                Appointment.objects.filter(pk=current_called.pk).update(status=completed_status)
+
+            # 2) mark next waiting as CALLED
+            next_qs = base.filter(status__in=waiting_statuses)
+            nxt = next_qs.filter(pk=appt_id).first() if appt_id else None
+            if not nxt:
+                nxt = next_qs.first()
+            if not nxt:
+                return _json_error("No waiting appointments for this doctor.", status=404)
+
+            Appointment.objects.filter(pk=nxt.pk).update(status=called_status)
+
+            _audit(
+                request=request,
+                action="update",
+                instance=nxt,
+                message="Queue call next (CALLED mode)",
+                extra_data={
+                    "appointment_id": nxt.pk,
+                    "doctor_id": doctor_id,
+                    "old_status": str(getattr(nxt, "status", "")),
+                    "new_status": str(called_status),
+                    "mode": "called",
+                },
             )
-            if (
-                not nxt
-                or nxt.status != AppointmentStatus.PENDING
-                or (nxt.scheduled_time and nxt.scheduled_time.date() != today)
-            ):
-                nxt = base_qs.first()
-        else:
-            nxt = base_qs.first()
 
-        if not nxt:
-            return _json_error("No pending appointments.", status=404)
-
-        nxt.status = AppointmentStatus.COMPLETED
-        nxt.save(update_fields=["status"])  # trigger signals if any
-
-    return _json_success(
-        {
-            "updated": {
+            updated = {
                 "id": nxt.pk,
-                "status": nxt.status,
+                "status": str(called_status),
                 "patient": getattr(nxt.patient, "full_name", ""),
-                "time": localtime(nxt.scheduled_time).strftime("%H:%M")
-                if nxt.scheduled_time
-                else "",
-            },
-            "queues": _queue_snapshot_internal(),
-        }
-    )
+                "time": _fmt_dt(nxt.scheduled_time, "%H:%M"),
+                "number": _format_queue_number(getattr(nxt, "queue_number", None)),
+            }
+        else:
+            # ✅ COMPLETE mode (default / tests):
+            # - if there is any CALLED (legacy) => complete it first
+            if called_status is not None:
+                current_called = base.filter(status=called_status).first()
+                if current_called:
+                    Appointment.objects.filter(pk=current_called.pk).update(status=completed_status)
+
+                    _audit(
+                        request=request,
+                        action="update",
+                        instance=current_called,
+                        message="Queue call next completed current CALLED appointment",
+                        extra_data={
+                            "appointment_id": current_called.pk,
+                            "doctor_id": doctor_id,
+                            "old_status": str(called_status),
+                            "new_status": str(completed_status),
+                            "mode": "complete",
+                        },
+                    )
+
+                    updated = {
+                        "id": current_called.pk,
+                        "status": str(completed_status),
+                        "patient": getattr(current_called.patient, "full_name", ""),
+                        "time": _fmt_dt(current_called.scheduled_time, "%H:%M"),
+                        "number": _format_queue_number(getattr(current_called, "queue_number", None)),
+                    }
+                    return _json_success({"updated": updated, "queues": _queue_snapshot_internal(request.user)})
+
+            next_qs = base.filter(status__in=active_statuses).exclude(status=AppointmentStatus.CANCELLED)
+            # exclude completed/cancelled explicitly (some builds)
+            next_qs = next_qs.exclude(status=completed_status).exclude(status=AppointmentStatus.CANCELLED)
+
+            nxt = next_qs.filter(pk=appt_id).first() if appt_id else None
+            if not nxt:
+                nxt = next_qs.first()
+            if not nxt:
+                return _json_error("No waiting appointments for this doctor.", status=404)
+
+            old_status = str(getattr(nxt, "status", ""))
+            Appointment.objects.filter(pk=nxt.pk).update(status=completed_status)
+
+            _audit(
+                request=request,
+                action="update",
+                instance=nxt,
+                message="Queue call next marked appointment completed",
+                extra_data={
+                    "appointment_id": nxt.pk,
+                    "doctor_id": doctor_id,
+                    "old_status": old_status,
+                    "new_status": str(completed_status),
+                    "mode": "complete",
+                },
+            )
+
+            updated = {
+                "id": nxt.pk,
+                "status": str(completed_status),
+                "patient": getattr(nxt.patient, "full_name", ""),
+                "time": _fmt_dt(nxt.scheduled_time, "%H:%M"),
+                "number": _format_queue_number(getattr(nxt, "queue_number", None)),
+            }
+
+    return _json_success({"updated": updated, "queues": _queue_snapshot_internal(request.user)})
 
 
 @secretary_required
 @require_GET
 def current_patient_api(request: HttpRequest):
+    now = _now_local()
     today = _today()
-    now = timezone.now()
 
-    pend = list(
-        Appointment.objects.filter(
-            scheduled_time__date=today, status=AppointmentStatus.PENDING
-        )
+    active_statuses = _queue_active_statuses()
+    waiting_statuses = _queue_waiting_statuses()
+
+    pend_qs = (
+        _active_appts_qs()
+        .filter(status__in=active_statuses)
         .order_by("scheduled_time")
         .select_related("patient", "doctor__user")
     )
+    pend_qs = _filter_by_day(pend_qs, today)
+    pend_qs = _filter_appointments_for_user(pend_qs, request.user)
+    pend = list(pend_qs[:20])
 
     current = nxt = None
-    if pend:
-        p0 = pend[0]
+
+    def _wait_minutes(appt: Appointment) -> int:
+        st = _normalize_dt(appt.scheduled_time)
+        if not st:
+            return 0
+        try:
+            return max(0, int((now - st).total_seconds() // 60))
+        except Exception:
+            return 0
+
+    current_obj = None
+    if hasattr(AppointmentStatus, "CALLED"):
+        for a in pend:
+            if a.status == getattr(AppointmentStatus, "CALLED"):
+                current_obj = a
+                break
+    if current_obj is None and pend:
+        current_obj = pend[0]
+
+    if current_obj:
         current = {
-            "id": p0.id,
-            "number": p0.queue_number,
-            "patient_name": p0.patient.full_name,
-            "doctor_name": _doctor_name(p0.doctor),
-            "wait_time_minutes": max(
-                0, int((now - p0.scheduled_time).total_seconds() // 60)
-            ),
+            "id": current_obj.id,
+            "number": _format_queue_number(getattr(current_obj, "queue_number", None)),
+            "patient_name": current_obj.patient.full_name,
+            "doctor_name": _doctor_name(current_obj.doctor),
+            "wait_time_minutes": _wait_minutes(current_obj),
+            "status": str(current_obj.status),
         }
-    if len(pend) > 1:
-        p1 = pend[1]
-        nxt = {
-            "id": p1.id,
-            "number": p1.queue_number,
-            "patient_name": p1.patient.full_name,
-            "doctor_name": _doctor_name(p1.doctor),
-            "wait_time_minutes": max(
-                0, int((now - p1.scheduled_time).total_seconds() // 60)
-            ),
-        }
+
+    for a in pend:
+        if current_obj and a.id == current_obj.id:
+            continue
+        if a.status in waiting_statuses:
+            nxt = {
+                "id": a.id,
+                "number": _format_queue_number(getattr(a, "queue_number", None)),
+                "patient_name": a.patient.full_name,
+                "doctor_name": _doctor_name(a.doctor),
+                "wait_time_minutes": _wait_minutes(a),
+                "status": str(a.status),
+            }
+            break
+
     return _json_success({"current_patient": current, "next_patient": nxt})
 
 
@@ -881,47 +2528,57 @@ def current_patient_api(request: HttpRequest):
 @secretary_required
 @require_http_methods(["GET", "POST"])
 def secretary_settings(request: HttpRequest):
-    """
-    Two separate forms on one page:
-      - ProfileUpdateForm  -> form_type=profile
-      - CustomPasswordForm -> form_type=password
-    We bind/validate ONLY the submitted form to avoid false errors.
-    """
     user = request.user
 
     if request.method == "POST":
         form_type = (request.POST.get("form_type") or "").strip().lower()
 
         if form_type == "profile":
-            profile_form = ProfileUpdateForm(
-                request.POST, request.FILES, instance=user
-            )
-            password_form = CustomPasswordForm(user=user)  # unbound
+            profile_form = ProfileUpdateForm(request.POST, request.FILES, instance=user)
+            password_form = CustomPasswordForm(user=user)
             if profile_form.is_valid():
                 changed = profile_form.changed_data
                 profile_form.save()
+
+                _audit(
+                    request=request,
+                    action="update",
+                    actor=user,
+                    instance=user,
+                    message="Secretary profile updated",
+                    extra_data={"changed_fields": list(changed or [])},
+                )
+
                 messages.success(
                     request,
-                    f"✅ Profile updated ({', '.join(changed)})!"
-                    if changed
-                    else "ℹ No changes detected.",
+                    f"✅ تم تحديث الملف الشخصي ({', '.join(changed)}) بنجاح." if changed else "ℹ لم يتم رصد أي تغييرات.",
                 )
                 return redirect("appointments:secretary_settings")
-            messages.error(request, "❌ Please fix the profile errors.")
+            messages.error(request, "⚠️ لم يتم حفظ التعديلات. يرجى تصحيح الأخطاء في نموذج الملف الشخصي.")
+
         elif form_type == "password":
-            profile_form = ProfileUpdateForm(instance=user)  # unbound
+            profile_form = ProfileUpdateForm(instance=user)
             password_form = CustomPasswordForm(user=user, data=request.POST)
             if password_form.is_valid():
                 password_form.save()
                 update_session_auth_hash(request, user)
                 if request.POST.get("enforce_logout"):
                     _logout_other_sessions(request)
-                messages.success(request, "🔒 Password changed successfully.")
+
+                _audit(
+                    request=request,
+                    action="update",
+                    actor=user,
+                    instance=user,
+                    message="Secretary password changed",
+                    extra_data={"enforce_logout_others": bool(request.POST.get("enforce_logout"))},
+                )
+
+                messages.success(request, "🔒 تم تغيير كلمة المرور بنجاح.")
                 return redirect("appointments:secretary_settings")
-            messages.error(request, "❌ Please fix the password errors.")
+            messages.error(request, "⚠️ لم يتم تغيير كلمة المرور. يرجى التحقق من البيانات المدخلة.")
         else:
-            # Fallback: treat as GET if form_type missing/unknown
-            messages.error(request, "Unknown form submitted.")
+            messages.error(request, "⚠️ تم إرسال نموذج غير معروف.")
             profile_form = ProfileUpdateForm(instance=user)
             password_form = CustomPasswordForm(user=user)
     else:
@@ -938,83 +2595,111 @@ def secretary_settings(request: HttpRequest):
 @secretary_required
 @require_GET
 def new_booking_requests_api(request: HttpRequest):
-    """
-    Bell counter API:
-    - If a Notification model exists → count UNREAD notifications to secretaries only.
-    - Else → count ONLY pending booking requests (NOT pending appointments).
-    This decouples the bell from Next Call / queue status.
-    """
+    assigned_doctor = _secretary_assigned_doctor(request.user)
+    notifs = Notification.objects.filter(is_read=False)
+
+    if not _notif_has_related_request():
+        return _json_success({"count": 0, "booking_requests": []})
+
+    notifs = notifs.exclude(related_booking_request__isnull=True)
+    if assigned_doctor is not None:
+        notifs = notifs.filter(related_booking_request__doctor=assigned_doctor)
+
+    notifs = notifs.select_related("related_booking_request__doctor__user")
+
+    order_field = "-created_at" if _model_has_field(Notification, "created_at") else "-id"
+    notifs = notifs.order_by(order_field)
+
+    total_count = notifs.count()
+    notifs = notifs[:50]
+
     items: list[dict] = []
+    for n in notifs:
+        br = getattr(n, "related_booking_request", None)
 
-    # 1) Prefer dedicated Notification model if available
-    try:
-        from notifications.models import Notification as NotiModel  # type: ignore
+        full_name = getattr(br, "full_name", "") if br else ""
+        doctor_obj = getattr(br, "doctor", None) if br else None
+        doctor_name = _doctor_name(doctor_obj) if doctor_obj else ""
+        time_display = _fmt_dt(getattr(br, "scheduled_time", None), "%Y-%m-%d %H:%M") if br else ""
+        status = getattr(br, "status", "") if br else ""
+        booking_id = getattr(br, "id", None) if br else None
 
-        q = NotiModel.objects.all()
-        # filter to secretary role if field exists
-        if _model_has_field(NotiModel, "to_role"):
-            q = q.filter(to_role="secretary")
-        elif _model_has_field(NotiModel, "recipient_role"):
-            q = q.filter(recipient_role="secretary")
+        created_at_val = getattr(n, "created_at", None)
+        created_at_str = created_at_val.isoformat() if created_at_val else ""
 
-        # unread-only if field exists; otherwise take all (best effort)
-        if _model_has_field(NotiModel, "is_read"):
-            q = q.filter(is_read=False)
-        elif _model_has_field(NotiModel, "read_at"):
-            q = q.filter(read_at__isnull=True)
-
-        # order by most recent if possible
-        if _model_has_field(NotiModel, "created_at"):
-            q = q.order_by("-created_at")
-        elif _model_has_field(NotiModel, "created"):
-            q = q.order_by("-created")
-
-        count = q.count()
-        for n in q[:50]:
-            title = getattr(n, "title", "") or getattr(n, "event", "") or "Notification"
-            message = getattr(n, "message", "") or getattr(n, "text", "")
-            link = getattr(n, "link", "") or getattr(n, "url", "")
-            items.append(
-                {
-                    "id": n.pk,
-                    "title": str(title),
-                    "message": str(message),
-                    "link": str(link),
-                    "source": "notification",
-                }
-            )
-        return _json_success({"count": count, "booking_requests": items})
-    except Exception:
-        # Fall through to booking requests-only
-        pass
-
-    # 2) Fallback: ONLY pending booking requests (no appointments)
-    if BookingRequestStatus:
-        pending_reqs = (
-            PatientBookingRequest.objects.filter(
-                status=getattr(BookingRequestStatus, "PENDING", None)
-                or getattr(BookingRequestStatus, "REQUESTED", None)
-            ).select_related("doctor__user")
+        items.append(
+            {
+                "id": booking_id or n.id,
+                "full_name": full_name,
+                "requested_doctor": doctor_name,
+                "requested_time_display": time_display,
+                "status": status,
+                "title": getattr(n, "title", ""),
+                "message": getattr(n, "message", ""),
+                "created_at": created_at_str,
+                "source": "notification",
+            }
         )
-        if _model_has_field(PatientBookingRequest, "submitted_at"):
-            pending_reqs = pending_reqs.order_by("-submitted_at")
-        else:
-            pending_reqs = pending_reqs.order_by("-scheduled_time")
 
-        for r in pending_reqs[:50]:
-            items.append(
-                {
-                    "id": r.id,
-                    "full_name": getattr(r, "full_name", ""),
-                    "requested_doctor": _doctor_name(r.doctor),
-                    "requested_time_display": localtime(r.scheduled_time).strftime(
-                        "%Y-%m-%d %H:%M"
-                    )
-                    if getattr(r, "scheduled_time", None)
-                    else "",
-                    "status": getattr(r, "status", ""),
-                    "source": "request",
-                }
-            )
+    return _json_success({"count": total_count, "booking_requests": items})
 
-    return _json_success({"count": len(items), "booking_requests": items})
+
+@secretary_required
+@require_GET
+def notifications_list(request: HttpRequest):
+    qs = (
+        Notification.objects.all().order_by("-created_at", "-pk")
+        if _model_has_field(Notification, "created_at")
+        else Notification.objects.all().order_by("-pk")
+    )
+    if _notif_has_related_request():
+        assigned = _secretary_assigned_doctor(request.user)
+        if assigned is not None:
+            qs = qs.filter(Q(related_booking_request__isnull=True) | Q(related_booking_request__doctor=assigned))
+
+    page = Paginator(qs, 30).get_page(request.GET.get("page"))
+    return render(request, "appointments/notifications_list.html", {"notifications": page})
+
+
+@secretary_required
+@require_POST
+def mark_notification_read(request: HttpRequest, pk: int):
+    n = get_object_or_404(Notification, pk=pk)
+    if _notif_has_related_request():
+        assigned = _secretary_assigned_doctor(request.user)
+        if assigned is not None:
+            br = getattr(n, "related_booking_request", None)
+            if br and getattr(br, "doctor_id", None) != assigned.id:
+                return HttpResponseForbidden("Forbidden.")
+    Notification.objects.filter(pk=n.pk).update(is_read=True)
+
+    _audit(
+        request=request,
+        action="update",
+        instance=n,
+        message="Notification marked as read",
+        extra_data={"notification_id": n.pk},
+    )
+
+    return _json_success({"id": n.pk, "is_read": True})
+
+
+@secretary_required
+@require_POST
+def mark_all_notifications_read(request: HttpRequest):
+    qs = Notification.objects.filter(is_read=False)
+    if _notif_has_related_request():
+        assigned = _secretary_assigned_doctor(request.user)
+        if assigned is not None:
+            qs = qs.filter(Q(related_booking_request__isnull=True) | Q(related_booking_request__doctor=assigned))
+    updated = qs.update(is_read=True)
+
+    _audit(
+        request=request,
+        action="update",
+        actor=request.user,
+        message="All visible notifications marked as read",
+        extra_data={"updated_count": updated},
+    )
+
+    return _json_success({"updated": updated})

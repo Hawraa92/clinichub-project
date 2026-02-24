@@ -1,141 +1,244 @@
+{# File: templates/base.html #}
 {% load static %}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ request.LANGUAGE_CODE|default:'en' }}" data-theme="light">
 <head>
   <meta charset="UTF-8">
-  <title>ClinicHub</title>
+
+  <title>{% block title %}ClinicHub - Advanced Healthcare Platform{% endblock %}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <!-- Bootstrap CSS -->
-  <link
-    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
-    rel="stylesheet"
-  >
-  <link rel="stylesheet" href="{% static 'css/global/base.css' %}">
+  <!-- Meta -->
+  <meta name="theme-color" content="#0ea5e9">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="{% block meta_description %}Advanced healthcare platform connecting patients with medical professionals through innovative technology.{% endblock %}">
 
-  <style>
-    .toast-container {
-      position: fixed;
-      top: 1rem;
-      right: 1rem;
-      z-index: 1055;
-    }
-  </style>
+  <!-- ✅ Favicons (STATIC) -->
+  {# عندك الملف موجود: static/images/favicon.png #}
+  <link rel="icon" href="{% static 'images/favicon.png' %}" type="image/png">
+  <link rel="shortcut icon" href="{% static 'images/favicon.png' %}" type="image/png">
+  <link rel="icon" type="image/png" sizes="32x32" href="{% static 'images/favicon.png' %}">
+  <link rel="icon" type="image/png" sizes="16x16" href="{% static 'images/favicon.png' %}">
+  <link rel="apple-touch-icon" sizes="180x180" href="{% static 'images/favicon.png' %}">
+
+  <!-- ✅ Skip Loader (EARLY) -->
+  <script>
+    (function () {
+      try {
+        if (sessionStorage.getItem('ch_skip_loader') === '1') {
+          document.documentElement.classList.add('ch-skip-loader');
+          sessionStorage.removeItem('ch_skip_loader');
+        }
+      } catch (e) {}
+    })();
+  </script>
+
+  <!-- Theme Script (Early Execution) -->
+  <script>
+    (function() {
+      try {
+        const saved = localStorage.getItem('clinichub-theme');
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const theme = saved || (prefersDark ? 'dark' : 'light');
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch(e) {}
+    })();
+  </script>
+
+  <!-- Vendor CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+  <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+
+  <!-- App CSS -->
+  <link rel="stylesheet" href="{% static 'css/global/base.css' %}?v=12">
+  <link rel="stylesheet" href="{% static 'css/theme/dark_mode.css' %}?v=12">
 
   {% block extra_head %}{% endblock %}
 </head>
 
-<body>
+<body class="has-fixed-footer">
 
-  <!-- Navbar -->
-  <nav class="navbar navbar-expand-lg navbar-light bg-white shadow fixed-top">
+  <!-- Loading Overlay -->
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-content">
+      <div class="loading-icon" aria-hidden="true">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+        </svg>
+      </div>
+      <div class="loading-text">ClinicHub</div>
+      <div class="loading-subtext">Advanced Healthcare Platform</div>
+    </div>
+  </div>
+
+  <!-- Navigation -->
+  <nav class="navbar navbar-expand-lg fixed-top navbar-light" id="mainNav">
     <div class="container">
-      <a class="navbar-brand fw-bold" href="{% url 'home:index' %}">
-        ClinicHub
+
+      <a class="navbar-brand" href="{% url 'home:index' %}">
+        <div class="brand-logo" aria-hidden="true">
+          <img
+            src="{% static 'images/favicon.png' %}"
+            alt="ClinicHub"
+            width="28"
+            height="28"
+            loading="eager"
+            style="display:block;"
+          >
+        </div>
+        <span class="brand-text">ClinicHub</span>
       </a>
-      <button
-        class="navbar-toggler"
-        type="button"
-        data-bs-toggle="collapse"
-        data-bs-target="#navbarNav"
-      >
+
+      <button class="navbar-toggler"
+              type="button"
+              data-bs-toggle="collapse"
+              data-bs-target="#navbarContent"
+              aria-controls="navbarContent"
+              aria-expanded="false"
+              aria-label="Toggle navigation">
         <span class="navbar-toggler-icon"></span>
       </button>
-      <div class="collapse navbar-collapse" id="navbarNav">
-        <ul class="navbar-nav ms-auto">
+
+      <div class="collapse navbar-collapse" id="navbarContent">
+        <ul class="navbar-nav ms-auto align-items-lg-center">
+
           {% if user.is_authenticated %}
-            {% if user.groups.all.0.name == "Doctors" %}
-              <li class="nav-item">
-                <a class="nav-link" href="{% url 'prescription:create' appointment_id=0 %}">
-                  🖋 New Prescription
-                </a>
-              </li>
-              <li class="nav-item">
-                <a class="nav-link text-primary" href="{% url 'doctor:dashboard' %}">
-                  👨‍⚕️ Doctor Dashboard
-                </a>
-              </li>
-            {% elif user.groups.all.0.name == "secretary" %}
-              <li class="nav-item">
-                <a class="nav-link" href="{% url 'patient:create_patient' %}">🆕 New Patient</a>
-              </li>
-              <li class="nav-item">
-                <a class="nav-link" href="{% url 'appointments:secretary_dashboard' %}">📅 Book Appointment</a>
-              </li>
-              <li class="nav-item">
-                <a class="nav-link" href="{% url 'appointments:list' %}">📋 Appointments List</a>
-              </li>
-            {% elif user.groups.all.0.name == "patient" %}
-              <li class="nav-item">
-                <a class="nav-link text-info" href="{% url 'patient:dashboard' %}">👤 My Dashboard</a>
-              </li>
-            {% endif %}
-            <li class="nav-item">
-              <span class="nav-link disabled">👋 Welcome, {{ user.username }}</span>
+
+            {# ✅ بدون فلتر first (غير موجود افتراضيًا) - نستخدم index .0 #}
+            {% with groups=user.groups.all %}
+              {% if groups and groups.0 and groups.0.name %}
+                {% with gname=groups.0.name|lower %}
+                  {% if gname == 'doctors' %}
+                    <li class="nav-item">
+                      <a class="nav-link" href="{% url 'doctor:dashboard' %}">
+                        <i class="bi bi-clipboard-pulse me-1"></i>
+                        Dashboard
+                      </a>
+                    </li>
+                  {% elif gname == 'patients' %}
+                    <li class="nav-item">
+                      <a class="nav-link" href="{% url 'patient:dashboard' %}">
+                        <i class="bi bi-person-heart me-1"></i>
+                        My Health
+                      </a>
+                    </li>
+                  {% else %}
+                    <li class="nav-item">
+                      <a class="nav-link" href="{% url 'appointments:secretary_dashboard' %}">
+                        <i class="bi bi-calendar-check me-1"></i>
+                        Dashboard
+                      </a>
+                    </li>
+                  {% endif %}
+                {% endwith %}
+              {% else %}
+                {# لو ما عنده Groups #}
+                <li class="nav-item">
+                  <a class="nav-link" href="{% url 'appointments:secretary_dashboard' %}">
+                    <i class="bi bi-calendar-check me-1"></i>
+                    Dashboard
+                  </a>
+                </li>
+              {% endif %}
+            {% endwith %}
+
+            <!-- Theme Toggle -->
+            <li class="nav-item ms-2">
+              <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle theme">
+                <span class="theme-icon">
+                  <i class="bi bi-moon-stars"></i>
+                </span>
+              </button>
             </li>
-            <li class="nav-item">
-              <a class="nav-link text-danger" href="{% url 'accounts:logout' %}">🚪 Logout</a>
+
+            <!-- User Menu -->
+            <li class="nav-item dropdown ms-2">
+              <a class="user-avatar dropdown-toggle" href="#" data-bs-toggle="dropdown" aria-label="User menu">
+                <div class="avatar-circle">
+                  {{ user.username|default:"U"|slice:":1"|upper }}
+                </div>
+              </a>
+              <ul class="dropdown-menu dropdown-menu-end">
+                <li><h6 class="dropdown-header">{{ user.username }}</h6></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><a class="dropdown-item" href="#"><i class="bi bi-person me-2"></i>Profile</a></li>
+                <li><a class="dropdown-item" href="#"><i class="bi bi-gear me-2"></i>Settings</a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li>
+                  <a class="dropdown-item text-danger" href="{% url 'accounts:logout' %}">
+                    <i class="bi bi-box-arrow-right me-2"></i>Logout
+                  </a>
+                </li>
+              </ul>
             </li>
+
           {% else %}
+
             <li class="nav-item">
-              <a class="nav-link" href="{% url 'accounts:patient_login' %}">🔐 Patient Login</a>
+              <a class="nav-link" href="{% url 'accounts:patient_login' %}">
+                <i class="bi bi-shield-check me-1"></i>
+                Patient Login
+              </a>
             </li>
+
             <li class="nav-item">
-              <a class="nav-link" href="{% url 'accounts:register' %}">📝 Register as Patient</a>
+              <a class="nav-link btn-register" href="{% url 'accounts:register' %}">
+                <i class="bi bi-person-plus me-1"></i>
+                Register
+              </a>
             </li>
+
+            <!-- Theme Toggle -->
+            <li class="nav-item ms-2">
+              <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle theme">
+                <span class="theme-icon">
+                  <i class="bi bi-moon-stars"></i>
+                </span>
+              </button>
+            </li>
+
           {% endif %}
+
         </ul>
       </div>
     </div>
   </nav>
 
   <!-- Main Content -->
-  <main class="main-content" style="margin-top: 80px;">
+  <main class="main-content">
     {% block content %}{% endblock %}
   </main>
 
-  <!-- Toasts -->
+  <!-- Messages/Toasts -->
   <div class="toast-container">
     {% if messages %}
       {% for message in messages %}
-        <div
-          class="toast align-items-center text-bg-{{ message.tags }} border-0 shadow mb-3"
-          role="alert"
-          aria-live="assertive"
-          aria-atomic="true"
-        >
-          <div class="d-flex">
-            <div class="toast-body">{{ message }}</div>
-            <button
-              type="button"
-              class="btn-close btn-close-white me-2 m-auto"
-              data-bs-dismiss="toast"
-              aria-label="Close"
-            ></button>
+        <div class="toast {{ message.tags|default:message.level_tag }}" role="status" aria-live="polite">
+          <div class="toast-content">
+            <i class="toast-icon bi
+              {% if message.level_tag == 'error' %}bi-exclamation-circle
+              {% elif message.level_tag == 'warning' %}bi-exclamation-triangle
+              {% elif message.level_tag == 'success' %}bi-check-circle
+              {% else %}bi-info-circle{% endif %}"></i>
+            <span class="toast-message">{{ message }}</span>
           </div>
+          <button class="toast-close" type="button" aria-label="Close">&times;</button>
         </div>
       {% endfor %}
     {% endif %}
   </div>
 
-  <!-- Footer -->
-  <footer class="site-footer text-center py-4">
-    <p>&copy; {% now "Y" %} ClinicHub. All rights reserved. Designed by Hawraa 💙</p>
-  </footer>
+  {# ✅ Footer واحد فقط لكل الصفحات #}
+  {% include "partials/footer.html" %}
 
-  <!-- Core Scripts -->
+  <!-- Vendor Scripts -->
   <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
-  <script
-    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
-  ></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
 
-  <!-- Activate Toasts -->
-  <script>
-    document.addEventListener('DOMContentLoaded', function () {
-      document.querySelectorAll('.toast')
-        .forEach(el => new bootstrap.Toast(el, { delay: 3000 }).show());
-    });
-  </script>
+  <!-- App Script -->
+  <script src="{% static 'js/global/base.js' %}?v=12"></script>
 
   {% block extra_scripts %}{% endblock %}
   {% block extra_js %}{% endblock %}

@@ -1,0 +1,9 @@
+-r requirements.txt
+bandit==1.9.3
+pip_audit==2.10.0
+ruff==0.15.2
+mypy==1.19.1
+django-stubs==5.2.9
+django-stubs-ext==5.2.9
+factory_boy==3.3.3
+Faker==40.4.0
