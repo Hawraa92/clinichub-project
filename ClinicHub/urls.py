@@ -16,9 +16,7 @@ Including another URLconf
 """
 
 
-"""
-URL configuration for ClinicHub project.
-"""
+
 
 from django.contrib import admin
 from django.urls import path, include
