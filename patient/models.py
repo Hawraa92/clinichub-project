@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from datetime import date
-from typing import Final, Optional
+from typing import Final
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -21,8 +21,41 @@ try:
 except ImportError:
     _HAS_PN = False
 
+
 # يسمح: + اختياري + أرقام فقط (بعد التنظيف)
 MOBILE_REGEX = re.compile(r"^\+?\d{7,15}$")
+
+
+def _soft_update_fields_only(update_fields) -> bool:
+    """
+    True when save(update_fields=...) is only touching soft-delete fields.
+    In that case we skip normalization/full_clean to avoid side effects.
+    """
+    if update_fields is None:
+        return False
+    uf = set(update_fields)
+    soft_fields = {"is_deleted", "deleted_at", "deleted_by"}
+    return bool(uf) and uf.issubset(soft_fields)
+
+
+def _normalize_spaces(value: str) -> str:
+    """Collapse repeated whitespace and trim."""
+    return " ".join((value or "").split()).strip()
+
+
+def _normalize_optional_text(value: str | None, *, lower: bool = False) -> str | None:
+    """
+    Normalize optional text fields:
+    - trim/collapse spaces
+    - optionally lowercase
+    - empty string -> None
+    """
+    if value is None:
+        return None
+    v = _normalize_spaces(value)
+    if lower:
+        v = v.lower()
+    return v or None
 
 
 def _normalize_mobile(value: str) -> str:
@@ -33,18 +66,20 @@ def _normalize_mobile(value: str) -> str:
     """
     if not value:
         return ""
+
     v = value.strip()
     if not v:
         return ""
 
-    # keep + only if it is leading; remove all other non-digit chars
+    # Remove common separators first
     v = v.replace(" ", "").replace("-", "").replace("(", "").replace(")", "").replace(".", "")
-    # also remove any weird characters except digits and +
+
+    # Keep only digits and plus
     v = re.sub(r"[^\d+]", "", v)
 
-    # allow only one leading '+'
+    # Only one leading '+' is allowed
     if "+" in v and not v.startswith("+"):
-        v = v.replace("+", "")  # keep digits only
+        v = v.replace("+", "")
     if v.startswith("+"):
         v = "+" + re.sub(r"[^\d]", "", v[1:])
     else:
@@ -63,8 +98,13 @@ def validate_mobile(value: str) -> None:
         return
 
     normalized = _normalize_mobile(value)
+
+    # ✅ إذا المستخدم كتب شيء غير فارغ لكن بعد التنظيف صار فارغ -> مدخل غير صالح
     if not normalized:
-        return
+        raise ValidationError(
+            _("%(value)s is not a valid phone number."),
+            params={"value": value},
+        )
 
     if _HAS_PN:
         try:
@@ -89,7 +129,8 @@ def validate_mobile(value: str) -> None:
 
 
 def validate_dob(value) -> None:  # noqa: ANN001
-    if value and value > date.today():
+    # ✅ استخدام localdate أفضل من date.today مع timezone
+    if value and value > timezone.localdate():
         raise ValidationError(_("Date of birth cannot be in the future."))
 
 
@@ -155,7 +196,7 @@ class IncomeLevel(models.IntegerChoices):
 
 class Patient(SoftDeleteModel):
     """
-    ✅ Patient now supports Soft Delete + Restore via SoftDeleteModel.
+    ✅ Patient supports Soft Delete + Restore via SoftDeleteModel.
     IMPORTANT:
     - Unique constraints (mobile/email) are enforced only for ACTIVE records (is_deleted=False).
     """
@@ -354,39 +395,44 @@ class Patient(SoftDeleteModel):
 
     def clean(self):
         super().clean()
+
+        # ✅ Name cannot be only whitespace
         if (self.full_name or "").strip() == "":
             raise ValidationError({"full_name": _("Full name cannot be empty.")})
 
+        # ✅ Keep derived field in sync during validation (not only save)
+        if self.date_of_birth:
+            years = _calc_age_years(self.date_of_birth)
+            self.age_group = _years_to_group(years)
+        else:
+            self.age_group = None
+
+        # ✅ Optional lightweight JSON shape check (safe, non-strict)
+        if self.prediction_proba is not None and not isinstance(self.prediction_proba, dict):
+            raise ValidationError({"prediction_proba": _("Prediction probabilities must be a JSON object.")})
+
     def save(self, *args, **kwargs):
         # ✅ IMPORTANT: when soft-delete/restore updates only soft fields, skip normalization/full_clean
-        update_fields = kwargs.get("update_fields")
-        if update_fields is not None:
-            uf = set(update_fields)
-            soft_fields = {"is_deleted", "deleted_at", "deleted_by"}
-            if uf.issubset(soft_fields):
-                return super().save(*args, **kwargs)
+        if _soft_update_fields_only(kwargs.get("update_fields")):
+            return super().save(*args, **kwargs)
 
         # optional bypass (useful for bulk imports if needed)
         skip_full_clean = bool(kwargs.pop("skip_full_clean", False))
 
-        if self.full_name:
-            self.full_name = " ".join(self.full_name.split()).strip()
+        update_fields = kwargs.get("update_fields")
+        uf: set[str] | None = None
+        if update_fields is not None:
+            uf = set(update_fields)
 
-        # ✅ normalize empty -> None
-        if self.email is not None:
-            self.email = self.email.strip().lower()
-            if self.email == "":
-                self.email = None
+        # -----------------------------
+        # Normalize input fields
+        # -----------------------------
+        if self.full_name is not None:
+            self.full_name = _normalize_spaces(self.full_name)
 
-        if self.nationality is not None:
-            self.nationality = " ".join(self.nationality.split()).strip()
-            if self.nationality == "":
-                self.nationality = None
-
-        if self.address is not None:
-            self.address = " ".join(self.address.split()).strip()
-            if self.address == "":
-                self.address = None
+        self.email = _normalize_optional_text(self.email, lower=True)
+        self.nationality = _normalize_optional_text(self.nationality)
+        self.address = _normalize_optional_text(self.address)
 
         if self.mobile is not None:
             normalized = _normalize_mobile(self.mobile)
@@ -398,28 +444,37 @@ class Patient(SoftDeleteModel):
                         parsed = _pn.parse(normalized, "IQ")
                         normalized = _pn.format_number(parsed, _pn.PhoneNumberFormat.E164)
                     except Exception:
+                        # keep normalized fallback if phonenumbers parse/format fails
                         pass
                 self.mobile = normalized
 
+        # Derived field
         if self.date_of_birth:
             years = _calc_age_years(self.date_of_birth)
             self.age_group = _years_to_group(years)
         else:
             self.age_group = None
 
-        if not skip_full_clean:
-            self.full_clean(exclude=None)
+        # ✅ Critical fix for partial updates:
+        # if date_of_birth changes, derived age_group must be included in update_fields
+        if uf is not None:
+            if "date_of_birth" in uf:
+                uf.add("age_group")
+            kwargs["update_fields"] = sorted(uf)
 
-        super().save(*args, **kwargs)
+        if not skip_full_clean:
+            self.full_clean()
+
+        return super().save(*args, **kwargs)
 
     @property
-    def age(self) -> Optional[int]:
+    def age(self) -> int | None:
         if self.date_of_birth:
             return _calc_age_years(self.date_of_birth)
         return None
 
     @property
-    def display_age(self) -> Optional[int]:
+    def display_age(self) -> int | None:
         return self.age
 
     def __str__(self) -> str:
@@ -435,6 +490,10 @@ def _calc_age_years(dob: date) -> int:
 
 
 def _years_to_group(years: int) -> int:
+    """
+    Maps age to BRFSS-style age groups.
+    Note: ages <18 are mapped to the first bucket (18–24) by design.
+    """
     bins = [
         (24, 1),
         (29, 2),

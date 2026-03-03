@@ -2,12 +2,13 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
+import logging
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models, transaction
-from django.db.models import Q, Max
+from django.db.models import Max, Q
 from django.utils import timezone
 from django.utils.timezone import get_default_timezone, make_aware, make_naive
 from django.utils.translation import gettext_lazy as _
@@ -15,6 +16,8 @@ from django.utils.translation import gettext_lazy as _
 from core.models import SoftDeleteModel  # ✅ Soft Delete base
 from doctor.models import Doctor
 from patient.models import Patient
+
+logger = logging.getLogger(__name__)
 
 # ------------------------------------------------------------------#
 #                           Settings / Utils                         #
@@ -36,24 +39,41 @@ def _safe_int_setting(name: str, default: int, minimum: int = 0) -> int:
     return max(minimum, val_int)
 
 
-# ✅ Past margin/tolerance (used for "now()" micro-flakes)
-PAST_MARGIN_MIN = _safe_int_setting("APPOINTMENT_PAST_MARGIN_MINUTES", default=1, minimum=0)
-PAST_MARGIN = timedelta(minutes=PAST_MARGIN_MIN)
+def _safe_bool_setting(name: str, default: bool = False) -> bool:
+    """
+    Read boolean setting safely (supports bool / string / int).
+    """
+    val = getattr(settings, name, default)
+    if isinstance(val, bool):
+        return val
+    if val is None:
+        return default
+    return str(val).strip().lower() in {"true", "1", "yes", "y", "on"}
 
-# Always allow at least 60 seconds tolerance to prevent "now()" becoming "past" during validation.
-PAST_TOLERANCE = max(PAST_MARGIN, timedelta(seconds=60))
 
-# Gap minutes between appointments for same doctor
-APPOINTMENT_GAP_MIN = _safe_int_setting("APPOINTMENT_GAP_MINUTES", default=1, minimum=0)
+def _past_margin_minutes() -> int:
+    return _safe_int_setting("APPOINTMENT_PAST_MARGIN_MINUTES", default=1, minimum=0)
 
-# If True: PatientBookingRequest will reject times that are already booked.
-# If False: allow requests even if the slot is already taken (secretary decides later).
-BOOKING_REQUEST_BLOCK_CONFLICTS = getattr(settings, "BOOKING_REQUEST_BLOCK_CONFLICTS", True)
 
-# ✅ IMPORTANT:
-# Tests عادة تتوقع منع أي وقت "بالماضي" حتى لو نفس اليوم.
-# إذا تحتاج سلوك مختلف داخلياً تقدر تفعّله من settings صراحةً.
-ALLOW_SAME_DAY_PAST_APPOINTMENTS = getattr(settings, "ALLOW_SAME_DAY_PAST_APPOINTMENTS", False)
+def _past_tolerance() -> timedelta:
+    # Always allow at least 60 seconds tolerance to prevent "now()" micro-flakes.
+    return max(timedelta(minutes=_past_margin_minutes()), timedelta(seconds=60))
+
+
+def _appointment_gap_minutes() -> int:
+    # Gap minutes between appointments for same doctor
+    return _safe_int_setting("APPOINTMENT_GAP_MINUTES", default=1, minimum=0)
+
+
+def _booking_request_block_conflicts() -> bool:
+    # If True: PatientBookingRequest rejects times already booked.
+    # If False: allow requests even if slot is taken (secretary decides later).
+    return _safe_bool_setting("BOOKING_REQUEST_BLOCK_CONFLICTS", True)
+
+
+def _allow_same_day_past_appointments() -> bool:
+    # Tests غالبًا تتوقع منع أي وقت بالماضي حتى لو نفس اليوم.
+    return _safe_bool_setting("ALLOW_SAME_DAY_PAST_APPOINTMENTS", False)
 
 
 def _use_tz() -> bool:
@@ -117,6 +137,15 @@ def _local_date_from_dt(dt) -> date | None:
     return dt.date()  # naive local
 
 
+def _unfiltered_qs(model_cls: type[models.Model]):
+    """
+    Return an unfiltered queryset (important for restore / soft-deleted rows).
+    Uses _base_manager when available.
+    """
+    manager = getattr(model_cls, "_base_manager", None) or model_cls._default_manager
+    return manager.all()
+
+
 def _active_appointments_qs():
     """
     Base queryset for ACTIVE (non-soft-deleted) appointments.
@@ -127,6 +156,14 @@ def _active_appointments_qs():
         return qs.filter(is_deleted=False)
     except Exception:
         return qs
+
+
+def _soft_update_fields_only(update_fields) -> bool:
+    if update_fields is None:
+        return False
+    uf = set(update_fields)
+    soft_fields = {"is_deleted", "deleted_at", "deleted_by"}
+    return bool(uf) and uf.issubset(soft_fields)
 
 
 # ------------------------------------------------------------------#
@@ -232,21 +269,27 @@ class Appointment(SoftDeleteModel):
     def clean(self):
         super().clean()
 
+        # ✅ Keep derived fields consistent even when incomplete
+        self.scheduled_time = _normalize_dt(self.scheduled_time)
+        self.scheduled_day = _local_date_from_dt(self.scheduled_time)
+
+        # ✅ CRITICAL FIX:
+        # If there's no scheduled_time OR no doctor, queue_number must not remain set.
         if not self.scheduled_time or not self.doctor_id:
+            self.queue_number = None
             return
 
-        norm_dt = _normalize_dt(self.scheduled_time)
-        self.scheduled_time = norm_dt
-        self.scheduled_day = _local_date_from_dt(norm_dt)
+        norm_dt = self.scheduled_time
 
         time_changed = True
         doctor_changed = True
         if self.pk:
-            old = Appointment.objects.filter(pk=self.pk).only("scheduled_time", "doctor_id").first()
+            # ✅ Use unfiltered queryset so restore() works even if default manager hides soft-deleted rows
+            old = _unfiltered_qs(type(self)).filter(pk=self.pk).only("scheduled_time", "doctor_id").first()
             if old:
                 old_time = _normalize_dt(old.scheduled_time) if old.scheduled_time else None
-                time_changed = (old_time != norm_dt)
-                doctor_changed = (old.doctor_id != self.doctor_id)
+                time_changed = old_time != norm_dt
+                doctor_changed = old.doctor_id != self.doctor_id
 
         # ✅ If cancelled: skip collision/gap rules
         if self.status == AppointmentStatus.CANCELLED:
@@ -255,9 +298,9 @@ class Appointment(SoftDeleteModel):
         # ✅ Past validation only when create or change time/doctor
         if (self.pk is None) or time_changed or doctor_changed:
             now_local = _now_local()
-            if norm_dt < (now_local - PAST_TOLERANCE):
+            if norm_dt < (now_local - _past_tolerance()):
                 if not (
-                    ALLOW_SAME_DAY_PAST_APPOINTMENTS
+                    _allow_same_day_past_appointments()
                     and self.scheduled_day is not None
                     and self.scheduled_day == now_local.date()
                 ):
@@ -274,9 +317,10 @@ class Appointment(SoftDeleteModel):
         if clash_exact:
             raise ValidationError({"scheduled_time": _("This time slot is already booked for this doctor.")})
 
-        # Gap rule
-        if APPOINTMENT_GAP_MIN > 0 and ((self.pk is None) or time_changed or doctor_changed):
-            gap = timedelta(minutes=APPOINTMENT_GAP_MIN)
+        # ✅ Gap rule
+        gap_min = _appointment_gap_minutes()
+        if gap_min > 0 and ((self.pk is None) or time_changed or doctor_changed):
+            gap = timedelta(minutes=gap_min)
             window_start = norm_dt - gap
             window_end = norm_dt + gap
 
@@ -310,17 +354,24 @@ class Appointment(SoftDeleteModel):
         return int(last) + 1
 
     def save(self, *args, **kwargs):
+        # ✅ Let soft-delete updates pass through without revalidation / queue logic
+        if _soft_update_fields_only(kwargs.get("update_fields")):
+            return super().save(*args, **kwargs)
+
         update_fields = kwargs.get("update_fields")
+        uf: set[str] | None = None
         if update_fields is not None:
             uf = set(update_fields)
-            soft_fields = {"is_deleted", "deleted_at", "deleted_by"}
-            if uf.issubset(soft_fields):
-                return super().save(*args, **kwargs)
 
         self.scheduled_time = _normalize_dt(self.scheduled_time)
         self.scheduled_day = _local_date_from_dt(self.scheduled_time)
 
-        if self.iqd_amount is None:
+        # ✅ CRITICAL FIX: if no time, queue must be None
+        if self.scheduled_time is None:
+            self.queue_number = None
+
+        # keep amount sane (without forcing unexpected DB write on unrelated partial updates)
+        if self.iqd_amount is None and (uf is None or "iqd_amount" in uf):
             self.iqd_amount = 0
 
         creating = self.pk is None
@@ -328,9 +379,26 @@ class Appointment(SoftDeleteModel):
         if self.status == AppointmentStatus.CANCELLED:
             self.queue_number = None
 
+        # ✅ If caller used update_fields, include derived fields that may be modified here
+        if uf is not None:
+            if "scheduled_time" in uf:
+                uf.add("scheduled_day")
+                uf.add("queue_number")  # may be nulled when scheduled_time becomes None
+
+            # status/doctor/time change may nullify queue_number (cancel) or require recalculation
+            if {"status", "doctor", "doctor_id", "scheduled_time"} & uf:
+                uf.add("queue_number")
+                uf.add("scheduled_day")
+
+            if "iqd_amount" in uf and self.iqd_amount is None:
+                self.iqd_amount = 0
+
+            kwargs["update_fields"] = sorted(uf)
+
         if not creating:
             old = (
-                Appointment.objects.filter(pk=self.pk)
+                _unfiltered_qs(type(self))
+                .filter(pk=self.pk)
                 .only("doctor_id", "scheduled_day", "status", "queue_number")
                 .first()
             )
@@ -352,12 +420,19 @@ class Appointment(SoftDeleteModel):
                 with transaction.atomic():
                     Doctor.objects.select_for_update().get(pk=self.doctor_id)
                     self.queue_number = self._compute_next_queue_number()
+
+                    # ensure queue_number persists in partial update saves
+                    if uf is not None:
+                        uf.add("queue_number")
+                        kwargs["update_fields"] = sorted(uf)
+
                     self.full_clean()
                     return super().save(*args, **kwargs)
 
             self.full_clean()
             return super().save(*args, **kwargs)
 
+        # Create path
         if not self.scheduled_time or self.status == AppointmentStatus.CANCELLED:
             self.full_clean()
             return super().save(*args, **kwargs)
@@ -365,13 +440,39 @@ class Appointment(SoftDeleteModel):
         with transaction.atomic():
             Doctor.objects.select_for_update().get(pk=self.doctor_id)
             self.queue_number = self._compute_next_queue_number()
+
+            # partial update on create is rare, but if present ensure queue_number is persisted
+            if uf is not None:
+                uf.add("queue_number")
+                uf.add("scheduled_day")
+                kwargs["update_fields"] = sorted(uf)
+
             self.full_clean()
             return super().save(*args, **kwargs)
 
     def restore(self):
+        """
+        Restore soft-deleted appointment with normal validations.
+
+        ✅ مهم:
+        عند الاسترجاع ممكن يصير تضارب بــ queue_number لأن غيره أخذ نفس الرقم أثناء الحذف.
+        لذلك نجبر إعادة حساب الدور (queue) للموعد النشط عند الاسترجاع.
+        """
         self.is_deleted = False
         self.deleted_at = None
         self.deleted_by = None
+
+        # Keep derived fields consistent
+        self.scheduled_time = _normalize_dt(self.scheduled_time)
+        self.scheduled_day = _local_date_from_dt(self.scheduled_time)
+
+        # Force re-queue for active (non-cancelled) appointments to avoid UNIQUE conflicts
+        if self.scheduled_time and self.status != AppointmentStatus.CANCELLED:
+            self.queue_number = None
+        else:
+            self.queue_number = None
+
+        # Will compute queue inside save() under transaction.atomic() + DB guards
         self.save()
 
     def __str__(self):
@@ -397,7 +498,7 @@ class PatientBookingRequest(SoftDeleteModel):
     """
     External / portal booking requests.
 
-    ✅ Now SoftDeleteModel:
+    ✅ SoftDeleteModel:
     - any delete in admin becomes soft-delete by default
     - supports restore()
     """
@@ -466,6 +567,7 @@ class PatientBookingRequest(SoftDeleteModel):
         super().clean()
 
         errors = {}
+
         if not self.scheduled_time or not self.doctor_id:
             return
 
@@ -475,36 +577,47 @@ class PatientBookingRequest(SoftDeleteModel):
         time_changed = True
         doctor_changed = True
         if self.pk:
-            old = PatientBookingRequest.objects.filter(pk=self.pk).only("scheduled_time", "doctor_id").first()
+            # ✅ Use unfiltered queryset to avoid soft-delete manager surprises
+            old = _unfiltered_qs(type(self)).filter(pk=self.pk).only("scheduled_time", "doctor_id").first()
             if old:
                 old_time = _normalize_dt(old.scheduled_time) if old.scheduled_time else None
-                time_changed = (old_time != norm_dt)
-                doctor_changed = (old.doctor_id != self.doctor_id)
+                time_changed = old_time != norm_dt
+                doctor_changed = old.doctor_id != self.doctor_id
 
         if (self.pk is None) or time_changed or doctor_changed:
-            if norm_dt < (_now_local() - PAST_TOLERANCE):
+            if norm_dt < (_now_local() - _past_tolerance()):
                 errors["scheduled_time"] = _("Requested time is in the past.")
 
         if (
-            BOOKING_REQUEST_BLOCK_CONFLICTS
+            _booking_request_block_conflicts()
             and self.doctor_id
             and self.scheduled_time
             and ((self.pk is None) or time_changed or doctor_changed)
         ):
-            if (
+            q = (
                 _active_appointments_qs()
                 .filter(doctor_id=self.doctor_id, scheduled_time=norm_dt)
                 .exclude(status=AppointmentStatus.CANCELLED)
-                .exists()
-            ):
+            )
+
+            # ✅ If request is already linked to an appointment, don't consider that linked appointment a conflict.
+            if self.appointment_id:
+                q = q.exclude(pk=self.appointment_id)
+
+            if q.exists():
                 errors["scheduled_time"] = _("This time is already allocated for this doctor.")
 
         if errors:
             raise ValidationError(errors)
 
     def save(self, *args, **kwargs):
+        # ✅ Let soft-delete updates pass through without revalidation
+        if _soft_update_fields_only(kwargs.get("update_fields")):
+            return super().save(*args, **kwargs)
+
         creating = self.pk is None
         self.scheduled_time = _normalize_dt(self.scheduled_time)
+
         self.full_clean()
         super().save(*args, **kwargs)
 
@@ -526,6 +639,7 @@ class PatientBookingRequest(SoftDeleteModel):
                     related_booking_request=self,
                 )
             except Exception:
+                # Avoid blocking booking request creation بسبب مشكلة إشعار
                 pass
 
     def __str__(self):
@@ -541,7 +655,7 @@ class Notification(SoftDeleteModel):
     """
     Simple notification model used by the secretary bell + list view.
 
-    ✅ Now SoftDeleteModel:
+    ✅ SoftDeleteModel:
     - Admin delete / delete selected becomes soft-delete by default
     - supports restore()
     """

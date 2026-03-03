@@ -8,13 +8,19 @@ from django import forms
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.utils import timezone
-from django.utils.timezone import get_default_timezone, make_aware
+from django.utils.timezone import get_default_timezone
 from django.utils.translation import gettext_lazy as _
 
 from doctor.models import Doctor
 from patient.models import Patient
 
-from .models import Appointment, AppointmentStatus, PatientBookingRequest
+# ✅ (FIX #1) import booking-conflict policy from models.py
+from .models import (
+    Appointment,
+    AppointmentStatus,
+    PatientBookingRequest,
+    _booking_request_block_conflicts,
+)
 
 # =============================
 # Helpers / Time normalization
@@ -34,74 +40,64 @@ def _model_has_field(model, field_name: str) -> bool:
         return False
 
 
-# Prefer using same constant name as your models.py if it exists
+# ✅ Use the SAME helpers from models.py to avoid mismatch
 try:  # pragma: no cover
-    from .models import PAST_MARGIN as _PAST_MARGIN  # type: ignore
+    from .models import _normalize_dt as _model_normalize_dt  # type: ignore
+    from .models import _now_local as _model_now_local  # type: ignore
+    from .models import _past_tolerance as _model_past_tolerance  # type: ignore
 except Exception:  # pragma: no cover
-    try:
-        from .models import PAST_TOLERANCE as _PAST_MARGIN  # type: ignore
-    except Exception:
-        _PAST_MARGIN = timedelta(seconds=60)
+    # Fallbacks (should rarely be used)
+    def _model_now_local():
+        now = timezone.now()
+        if _use_tz():
+            if timezone.is_naive(now):
+                now = timezone.make_aware(now, _LOCAL_TZ)
+            return timezone.localtime(now, _LOCAL_TZ)
+        if timezone.is_aware(now):
+            return timezone.localtime(now, _LOCAL_TZ).replace(tzinfo=None)
+        return now
+
+    def _model_normalize_dt(dt):
+        if dt is None:
+            return None
+        if _use_tz():
+            if timezone.is_naive(dt):
+                return timezone.make_aware(dt, _LOCAL_TZ)
+            return timezone.localtime(dt, _LOCAL_TZ)
+        if timezone.is_aware(dt):
+            return timezone.localtime(dt, _LOCAL_TZ).replace(tzinfo=None)
+        return dt
+
+    def _model_past_tolerance():
+        return timedelta(seconds=60)
 
 
 def _now_local() -> datetime:
-    """
-    Now in same representation we expect for normalized datetimes:
-    - USE_TZ=True  -> aware in LOCAL_TZ
-    - USE_TZ=False -> naive local wall-clock
-    """
-    now = timezone.now()
-    if _use_tz():
-        if timezone.is_naive(now):
-            now = make_aware(now, _LOCAL_TZ)
-        return timezone.localtime(now, _LOCAL_TZ)
-
-    # USE_TZ=False
-    if timezone.is_aware(now):
-        return timezone.localtime(now, _LOCAL_TZ).replace(tzinfo=None)
-    return now
+    return _model_now_local()
 
 
 def _normalize_dt(dt: datetime | None) -> datetime | None:
-    """
-    Normalize dt consistent with project behavior:
-    - USE_TZ=True  -> return aware dt in LOCAL_TZ
-    - USE_TZ=False -> return naive local wall-clock
-    """
-    if dt is None:
-        return None
+    return _model_normalize_dt(dt)
 
-    if _use_tz():
-        if timezone.is_naive(dt):
-            return make_aware(dt, _LOCAL_TZ)
-        return timezone.localtime(dt, _LOCAL_TZ)
 
-    # USE_TZ=False
-    if timezone.is_aware(dt):
-        return timezone.localtime(dt, _LOCAL_TZ).replace(tzinfo=None)
-    return dt
+def _past_tolerance() -> timedelta:
+    return _model_past_tolerance()
 
 
 def _is_past(dt: datetime | None) -> bool:
     nd = _normalize_dt(dt)
     if nd is None:
         return False
-    return nd < (_now_local() - _PAST_MARGIN)
+    return nd < (_now_local() - _past_tolerance())
 
 
 def _cancelled_status_value():
-    """
-    Return CANCELLED value if available, else None.
-    """
     if hasattr(AppointmentStatus, "CANCELLED"):
         return getattr(AppointmentStatus, "CANCELLED")
     return None
 
 
 def _status_choices():
-    """
-    Robustly resolve status choices.
-    """
     if hasattr(AppointmentStatus, "choices"):
         try:
             return AppointmentStatus.choices  # type: ignore[attr-defined]
@@ -109,7 +105,6 @@ def _status_choices():
             pass
     if hasattr(Appointment, "STATUS_CHOICES"):
         return getattr(Appointment, "STATUS_CHOICES")
-    # Fallback (minimal)
     return [
         ("pending", "Pending"),
         ("completed", "Completed"),
@@ -122,6 +117,17 @@ def _default_staff_status():
         if hasattr(AppointmentStatus, name):
             return getattr(AppointmentStatus, name)
     return getattr(AppointmentStatus, "PENDING", "pending")
+
+
+def _active_appointments_qs():
+    """
+    Match models.py behavior: exclude soft-deleted if field exists.
+    """
+    qs = Appointment.objects.all()
+    try:
+        return qs.filter(is_deleted=False)
+    except Exception:
+        return qs
 
 
 # =============================
@@ -149,11 +155,10 @@ class DateInput(forms.DateInput):
         super().__init__(attrs=base, format=self.format)
 
 
-# Accepted datetime input formats
 _BASE_DT_INPUT_FORMATS = [
-    DateTimeLocalInput.format,  # 2025-11-29T08:00
-    "%Y-%m-%d %H:%M",           # 2025-11-29 08:00
-    "%Y-%m-%d %I:%M %p",        # 2025-11-29 8:00 AM
+    DateTimeLocalInput.format,
+    "%Y-%m-%d %H:%M",
+    "%Y-%m-%d %I:%M %p",
 ]
 
 try:
@@ -161,7 +166,9 @@ try:
 except Exception:
     _EXTRA_DT_INPUT_FORMATS = []
 
-DATETIME_INPUT_FORMATS = _BASE_DT_INPUT_FORMATS + [f for f in _EXTRA_DT_INPUT_FORMATS if f not in _BASE_DT_INPUT_FORMATS]
+DATETIME_INPUT_FORMATS = _BASE_DT_INPUT_FORMATS + [
+    f for f in _EXTRA_DT_INPUT_FORMATS if f not in _BASE_DT_INPUT_FORMATS
+]
 
 
 # =============================
@@ -243,11 +250,9 @@ class AppointmentForm(forms.ModelForm):
                 lambda obj: getattr(obj, "full_name", None) or obj.user.get_full_name() or obj.user.username
             )
 
-        # Default status for new appointment
         if "status" in self.fields and not self.instance.pk and not self.is_bound:
             self.initial.setdefault("status", _default_staff_status())
 
-        # Keep existing amount visible
         if self.instance.pk and "iqd_amount" in self.fields:
             val = getattr(self.instance, "iqd_amount", None)
             if val is not None:
@@ -269,24 +274,24 @@ class AppointmentForm(forms.ModelForm):
         if scheduled_time:
             cleaned["scheduled_time"] = scheduled_time
 
-        # Default amount to 0
         if "iqd_amount" in cleaned and cleaned.get("iqd_amount") in (None, ""):
             cleaned["iqd_amount"] = 0
 
-        gap_min = int(getattr(settings, "APPOINTMENT_GAP_MINUTES", 1) or 1)
+        # ✅ allow 0 exactly (match models.py)
+        gap_min = int(getattr(settings, "APPOINTMENT_GAP_MINUTES", 1) or 0)
         gap_min = max(0, gap_min)
 
-        if doctor and scheduled_time:
+        if doctor and scheduled_time and gap_min > 0:
             window_start = scheduled_time - timedelta(minutes=gap_min)
             window_end = scheduled_time + timedelta(minutes=gap_min)
 
-            qs = Appointment.objects.filter(doctor=doctor).exclude(pk=self.instance.pk)
+            # ✅ use active qs (exclude soft-deleted)
+            qs = _active_appointments_qs().filter(doctor=doctor).exclude(pk=self.instance.pk)
 
             cancelled_val = _cancelled_status_value()
             if cancelled_val is not None and _model_has_field(Appointment, "status"):
                 qs = qs.exclude(status=cancelled_val)
 
-            # overlap within (start, end)
             overlapping = qs.filter(scheduled_time__gt=window_start, scheduled_time__lt=window_end).exists()
             if overlapping:
                 raise ValidationError(
@@ -314,6 +319,11 @@ class PatientBookingForm(forms.ModelForm):
     """
     Public booking request form (no login).
     Supports optional locked_doctor to restrict choices.
+
+    ✅ FIX (Point #1):
+    Respect BOOKING_REQUEST_BLOCK_CONFLICTS:
+    - If True  -> prevent requesting already-booked slot
+    - If False -> allow request even if slot is booked (secretary decides)
     """
 
     if _model_has_field(PatientBookingRequest, "full_name"):
@@ -378,7 +388,6 @@ class PatientBookingForm(forms.ModelForm):
     def clean(self):
         cleaned = super().clean()
 
-        # Enforce locked doctor if passed
         if self.locked_doctor is not None and "doctor" in self.fields:
             cleaned["doctor"] = self.locked_doctor
 
@@ -388,9 +397,9 @@ class PatientBookingForm(forms.ModelForm):
         if scheduled_time:
             cleaned["scheduled_time"] = scheduled_time
 
-        # Quick conflict check against actual appointments
-        if doctor and scheduled_time:
-            qs = Appointment.objects.filter(doctor_id=getattr(doctor, "id", doctor), scheduled_time=scheduled_time)
+        # ✅ (FIX #1) Only block conflicts if setting says so
+        if doctor and scheduled_time and _booking_request_block_conflicts():
+            qs = _active_appointments_qs().filter(doctor=doctor, scheduled_time=scheduled_time)
 
             cancelled_val = _cancelled_status_value()
             if cancelled_val is not None and _model_has_field(Appointment, "status"):

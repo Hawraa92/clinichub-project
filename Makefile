@@ -4,8 +4,9 @@ hard: lint type test security deps deploy
 
 hard-fast: lint test security deps
 
+# ✅ مهم: نشغّل التست من جذر المشروع (.) حتى ما يصير تعارض tests package
 test:
-	python manage.py test -v 2
+	python manage.py test . -v 2 --keepdb
 
 lint:
 	python -m pip install -q ruff
@@ -17,7 +18,7 @@ type:
 
 security:
 	python -m pip install -q bandit
-	python -m bandit -r . -x .venv,migrations,static,media
+	python -m bandit -r . -x .venv,migrations,static,media,node_modules
 
 deps:
 	python -m pip install -q pip-audit
@@ -25,3 +26,8 @@ deps:
 
 deploy:
 	python manage.py check --deploy
+	python manage.py makemigrations --check --dry-run
+
+# (اختياري) مكان لتستات E2E لاحقاً
+e2e:
+	@echo "E2E tests placeholder"

@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Final, Optional
 
 from django.conf import settings
-from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.validators import (
     FileExtensionValidator,
@@ -33,7 +32,7 @@ logger: Final[logging.Logger] = logging.getLogger(__name__)
 try:
     import phonenumbers as _pn
 
-    _HAS_PN = True
+    _HAS_PN: Final[bool] = True
 except ImportError:  # pragma: no cover
     _HAS_PN = False
     logger.info("phonenumbers not installed; phone normalisation disabled.")
@@ -42,15 +41,14 @@ except ImportError:  # pragma: no cover
 try:
     from PIL import Image as _PIL_Image
 
-    _HAS_PIL = True
+    _HAS_PIL: Final[bool] = True
 except ImportError:  # pragma: no cover
     _HAS_PIL = False
     logger.warning("Pillow not installed; MIME-type validation skipped.")
 
-User = get_user_model()
 
 # ------------------------------------------------------------------ #
-# Validators
+# Validators / Normalizers
 # ------------------------------------------------------------------ #
 
 phone_validator = RegexValidator(
@@ -65,12 +63,83 @@ hex_or_blank_validator = RegexValidator(
 )
 
 
+def _normalize_spaces(value: str) -> str:
+    return " ".join((value or "").split()).strip()
+
+
+def _normalize_blankable_str(value: str | None) -> str:
+    """
+    For blank='' CharField/TextField:
+    - trims/collapses spaces
+    - returns '' instead of None
+    """
+    if value is None:
+        return ""
+    return _normalize_spaces(value)
+
+
+def _normalize_phone(value: str | None) -> str | None:
+    """
+    Normalize phone to digits + optional leading +.
+    Accepts spaces/dashes/parentheses/dots.
+    Returns None for empty/blank.
+    """
+    if value is None:
+        return None
+
+    v = str(value).strip()
+    if not v:
+        return None
+
+    v = v.replace(" ", "").replace("-", "").replace("(", "").replace(")", "").replace(".", "")
+    v = re.sub(r"[^\d+]", "", v)
+
+    # allow only one leading '+'
+    if "+" in v and not v.startswith("+"):
+        v = v.replace("+", "")
+    if v.startswith("+"):
+        v = "+" + re.sub(r"[^\d]", "", v[1:])
+    else:
+        v = re.sub(r"[^\d]", "", v)
+
+    return v or None
+
+
 def validate_phone(value: str) -> None:
-    phone_validator(value)
+    """
+    Accepts common local input formats, validates after normalization.
+    Uses phonenumbers(IQ) if available; falls back to regex.
+    """
+    if value in (None, ""):
+        return
+
+    normalized = _normalize_phone(value)
+    if not normalized:
+        raise ValidationError(
+            _("%(value)s is not a valid phone number."),
+            params={"value": value},
+        )
+
+    if _HAS_PN:
+        try:
+            parsed = _pn.parse(normalized, "IQ")
+            if not _pn.is_possible_number(parsed) or not _pn.is_valid_number(parsed):
+                raise ValidationError(
+                    _("%(value)s is not a valid phone number."),
+                    params={"value": value},
+                )
+            return
+        except ValidationError:
+            raise
+        except Exception:
+            # fallback to regex
+            pass
+
+    phone_validator(normalized)
 
 
 def validate_hex_or_blank(value: str) -> None:
-    hex_or_blank_validator(value)
+    hex_or_blank_validator(value or "")
 
 
 def _is_svg(name: str) -> bool:
@@ -85,6 +154,7 @@ def validate_image_mime(image_field_file) -> None:
     Validate image using Pillow.
     - If SVG: skip (Pillow doesn't support SVG verify).
     - If Pillow not installed or empty: skip silently.
+    - If content is invalid and Pillow can inspect it: raise ValidationError.
     """
     if not image_field_file:
         return
@@ -100,7 +170,6 @@ def validate_image_mime(image_field_file) -> None:
         return
 
     try:
-        # Ensure the file is open and positioned at start.
         if hasattr(image_field_file, "open"):
             try:
                 image_field_file.open("rb")
@@ -113,13 +182,38 @@ def validate_image_mime(image_field_file) -> None:
         img = _PIL_Image.open(image_field_file)
         img.verify()
 
-        # Reset pointer so storage/save isn't affected
         if hasattr(image_field_file, "seek"):
             image_field_file.seek(0)
 
+    except ValidationError:
+        raise
     except Exception as exc:  # pragma: no cover
-        logger.warning("Image MIME validation skipped: %s", exc)
-        # Do not raise to avoid dev/test issues
+        logger.warning("Image validation failed: %s", exc)
+        raise ValidationError(_("Uploaded file is not a valid image.")) from exc
+
+
+def _validate_file_size(field_file, *, field_name: str, max_mb: int = 2, kind_label: str = "File") -> None:
+    """
+    Strict file size validation without swallowing ValidationError.
+    """
+    if not field_file:
+        return
+
+    max_bytes = max_mb * 1024 * 1024
+
+    try:
+        size = getattr(field_file, "size", None)
+    except Exception as exc:  # pragma: no cover
+        logger.debug("Could not read %s size for %s: %s", kind_label, field_name, exc)
+        size = None
+
+    if size is not None and size > max_bytes:
+        raise ValidationError({field_name: _(f"{kind_label} size must not exceed {max_mb} MB.")})
+
+
+def _validate_upload_image(field_file, *, field_name: str, max_mb: int = 2, kind_label: str = "Image") -> None:
+    _validate_file_size(field_file, field_name=field_name, max_mb=max_mb, kind_label=kind_label)
+    validate_image_mime(field_file)
 
 
 # ------------------------------------------------------------------ #
@@ -139,7 +233,6 @@ def doctor_photo_upload_to(instance: "Doctor", filename: str) -> str:
 
 
 def doctor_cover_upload_to(instance: "Doctor", filename: str) -> str:
-    """Wide cover used on doctor cards."""
     return _dated_path("doctors/covers", instance.created_at, str(instance.pk or "new"), filename)
 
 
@@ -161,12 +254,10 @@ def specialty_asset_upload_to(instance: "Specialty", filename: str) -> str:
 
 
 def _upload_path(instance: "Doctor", filename: str) -> str:
-    """Old alias referenced by legacy migrations."""
     return doctor_photo_upload_to(instance, filename)
 
 
 def _unique_upload_path(instance: "Doctor", filename: str) -> str:
-    """Another legacy alias if referenced by old migrations."""
     return _upload_path(instance, filename)
 
 
@@ -176,13 +267,6 @@ def _unique_upload_path(instance: "Doctor", filename: str) -> str:
 
 
 class Specialty(models.Model):
-    """
-    Specialty profile:
-    - icon/illustration per specialty
-    - optional theme colors
-    - is_public controls public visibility in filters/pages
-    """
-
     name = models.CharField(
         max_length=120,
         unique=True,
@@ -246,8 +330,21 @@ class Specialty(models.Model):
 
     def clean(self):
         super().clean()
+
+        self.name = _normalize_spaces(self.name)
+        self.code = _normalize_spaces(self.code).lower()
+
+        if not self.name:
+            raise ValidationError({"name": _("Specialty name cannot be blank.")})
+        if not self.code:
+            raise ValidationError({"code": _("Code cannot be blank.")})
+
         if self.icon:
-            validate_image_mime(self.icon)
+            _validate_upload_image(self.icon, field_name="icon", max_mb=2, kind_label="File")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         return self.name
@@ -259,8 +356,6 @@ class Specialty(models.Model):
 
 
 class Doctor(models.Model):
-    """Represents a doctor profile in the system."""
-
     ENTITY_CHOICES = [
         ("doctor_m", _("Doctor (Male)")),
         ("doctor_f", _("Doctor (Female)")),
@@ -274,7 +369,7 @@ class Doctor(models.Model):
     ]
 
     user = models.OneToOneField(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="doctor_profile",
         verbose_name=_("User Account"),
@@ -319,6 +414,7 @@ class Doctor(models.Model):
         max_length=20,
         blank=True,
         default="",
+        validators=[validate_hex_or_blank],
         verbose_name=_("Primary Color (Doctor Override)"),
         help_text=_("Optional. Overrides specialty primary color. Example: #0b4ea2"),
     )
@@ -327,18 +423,17 @@ class Doctor(models.Model):
         max_length=20,
         blank=True,
         default="",
+        validators=[validate_hex_or_blank],
         verbose_name=_("Accent Color (Doctor Override)"),
         help_text=_("Optional. Overrides specialty accent color. Example: #0d9488"),
     )
 
-    # -------------------- Prescription Theme Controls -------------------- #
     prescription_paper_bg = models.CharField(
         max_length=7,
         blank=True,
         default="",
         validators=[validate_hex_or_blank],
         verbose_name=_("Prescription Paper Background (HEX)"),
-        help_text=_("Example: #FFFFFF (leave blank to use default)."),
     )
 
     prescription_paper_border = models.CharField(
@@ -347,7 +442,6 @@ class Doctor(models.Model):
         default="",
         validators=[validate_hex_or_blank],
         verbose_name=_("Prescription Paper Border (HEX)"),
-        help_text=_("Example: #E9ECEF (leave blank to use default)."),
     )
 
     prescription_header_bg = models.CharField(
@@ -356,7 +450,6 @@ class Doctor(models.Model):
         default="",
         validators=[validate_hex_or_blank],
         verbose_name=_("Prescription Header Card Background (HEX)"),
-        help_text=_("Example: #FDE7D6 (leave blank to auto from primary)."),
     )
 
     prescription_header_text_color = models.CharField(
@@ -365,7 +458,6 @@ class Doctor(models.Model):
         default="",
         validators=[validate_hex_or_blank],
         verbose_name=_("Prescription Header Text Color (HEX)"),
-        help_text=_("Example: #111827 (leave blank to use default)."),
     )
 
     prescription_header_line_color = models.CharField(
@@ -374,7 +466,6 @@ class Doctor(models.Model):
         default="",
         validators=[validate_hex_or_blank],
         verbose_name=_("Prescription Header Line Color (HEX)"),
-        help_text=_("Example: #E5E7EB (leave blank to use default)."),
     )
 
     prescription_specialty_text_color = models.CharField(
@@ -383,7 +474,6 @@ class Doctor(models.Model):
         default="",
         validators=[validate_hex_or_blank],
         verbose_name=_("Prescription Specialty Text Color (HEX)"),
-        help_text=_("Example: #334155 (leave blank to use default)."),
     )
 
     prescription_patient_label_color = models.CharField(
@@ -392,7 +482,6 @@ class Doctor(models.Model):
         default="",
         validators=[validate_hex_or_blank],
         verbose_name=_("Prescription Patient Labels Color (HEX)"),
-        help_text=_("Example: #64748B (leave blank to use default)."),
     )
 
     prescription_patient_value_color = models.CharField(
@@ -401,16 +490,13 @@ class Doctor(models.Model):
         default="",
         validators=[validate_hex_or_blank],
         verbose_name=_("Prescription Patient Values Color (HEX)"),
-        help_text=_("Example: #0F172A (leave blank to use default)."),
     )
 
-    # -------------------- Syndicate / Union -------------------- #
     syndicate_registration_no = models.CharField(
         max_length=80,
         blank=True,
         default="",
         verbose_name=_("Syndicate Registration No."),
-        help_text=_("Optional doctor registration number in the syndicate."),
         db_index=True,
     )
 
@@ -418,18 +504,15 @@ class Doctor(models.Model):
         null=True,
         blank=True,
         verbose_name=_("Syndicate Registration Date"),
-        help_text=_("Date of registration in the syndicate."),
         db_index=True,
     )
 
-    # -------------------- Contact -------------------- #
     phone = models.CharField(
         max_length=20,
         blank=True,
         null=True,
         validators=[validate_phone],
         verbose_name=_("Clinic Phone Number"),
-        help_text=_("E.164-like: optional +, 7–15 digits."),
         db_index=True,
     )
 
@@ -437,7 +520,6 @@ class Doctor(models.Model):
         blank=True,
         default="",
         verbose_name=_("Clinic Address"),
-        help_text=_("Clinic address as shown on prescriptions and profiles."),
     )
 
     photo = models.ImageField(
@@ -446,7 +528,6 @@ class Doctor(models.Model):
         null=True,
         validators=[FileExtensionValidator(["jpg", "jpeg", "png", "gif", "webp"])],
         verbose_name=_("Profile Photo"),
-        help_text=_("Square profile photo (avatar). Max 2 MB."),
     )
 
     cover_photo = models.ImageField(
@@ -455,17 +536,14 @@ class Doctor(models.Model):
         null=True,
         validators=[FileExtensionValidator(["jpg", "jpeg", "png", "gif", "webp"])],
         verbose_name=_("Card Cover Photo"),
-        help_text=_("Wide cover shown on doctor cards. Max 2 MB."),
     )
 
-    # -------------------- Branding for prescription -------------------- #
     clinic_logo = models.ImageField(
         upload_to=doctor_brand_upload_to,
         blank=True,
         null=True,
         validators=[FileExtensionValidator(["png", "jpg", "jpeg", "webp"])],
         verbose_name=_("Clinic Logo"),
-        help_text=_("Optional. Max 2 MB."),
     )
 
     signature_image = models.ImageField(
@@ -474,7 +552,6 @@ class Doctor(models.Model):
         null=True,
         validators=[FileExtensionValidator(["png", "jpg", "jpeg", "webp"])],
         verbose_name=_("Doctor Signature Image"),
-        help_text=_("Optional. Max 2 MB."),
     )
 
     prescription_header_illustration = models.FileField(
@@ -483,7 +560,6 @@ class Doctor(models.Model):
         null=True,
         validators=[FileExtensionValidator(["svg", "png", "jpg", "jpeg", "webp"])],
         verbose_name=_("Prescription Header Illustration"),
-        help_text=_("Optional. If empty, Specialty icon may be used."),
     )
 
     prescription_watermark = models.FileField(
@@ -492,10 +568,8 @@ class Doctor(models.Model):
         null=True,
         validators=[FileExtensionValidator(["svg", "png", "jpg", "jpeg", "webp"])],
         verbose_name=_("Prescription Watermark"),
-        help_text=_("Optional. If empty, Specialty icon can be used."),
     )
 
-    # -------------------- Profile -------------------- #
     gender = models.CharField(
         max_length=10,
         choices=GENDER_CHOICES,
@@ -509,13 +583,11 @@ class Doctor(models.Model):
         blank=True,
         default="",
         verbose_name=_("Short Biography"),
-        help_text=_("Brief summary shown on profile card."),
     )
 
     available = models.BooleanField(
         default=True,
         verbose_name=_("Available for Booking"),
-        help_text=_("Shows whether this doctor can be booked."),
     )
 
     rating = models.DecimalField(
@@ -525,13 +597,11 @@ class Doctor(models.Model):
         blank=True,
         validators=[MinValueValidator(0), MaxValueValidator(5)],
         verbose_name=_("Rating (Auto)"),
-        help_text=_("Auto-calculated average rating from reviews (0–5)."),
     )
 
     review_count = models.PositiveIntegerField(
         default=0,
         verbose_name=_("Review Count (Auto)"),
-        help_text=_("Auto-calculated reviews count."),
         db_index=True,
         editable=False,
     )
@@ -540,7 +610,6 @@ class Doctor(models.Model):
         blank=True,
         null=True,
         verbose_name=_("Consultation Fee (IQD)"),
-        help_text=_("Set to 0 for free consultations."),
     )
 
     experience_years = models.PositiveSmallIntegerField(
@@ -548,7 +617,6 @@ class Doctor(models.Model):
         null=True,
         validators=[MaxValueValidator(80)],
         verbose_name=_("Years of Experience"),
-        help_text=_("Number of years in practice."),
     )
 
     created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Created At"))
@@ -573,7 +641,6 @@ class Doctor(models.Model):
                 check=models.Q(rating__isnull=True) | (models.Q(rating__gte=0) & models.Q(rating__lte=5)),
                 name="doctor_rating_null_or_between_0_and_5",
             ),
-            # ✅ FIX: handle NULL properly + prevent duplicates only when phone is not empty
             models.UniqueConstraint(
                 fields=["phone"],
                 condition=models.Q(phone__isnull=False) & ~models.Q(phone=""),
@@ -581,7 +648,6 @@ class Doctor(models.Model):
             ),
         ]
 
-    # ------------------------- Rating cache ------------------------- #
     @classmethod
     def update_rating_cache_for(cls, doctor_id: int) -> None:
         agg = DoctorReview.objects.filter(doctor_id=doctor_id).aggregate(avg=Avg("rating"), cnt=Count("id"))
@@ -597,28 +663,59 @@ class Doctor(models.Model):
 
         cls.objects.filter(pk=doctor_id).update(rating=avg_dec, review_count=cnt)
 
-    # ------------------------- Validation ------------------------- #
     def clean(self):
         super().clean()
 
-        # Normalise phone
-        if self.phone:
-            normalized = re.sub(r"\s+", "", self.phone)
-            if _HAS_PN:
-                try:
-                    parsed = _pn.parse(normalized, "IQ")
-                    normalized = _pn.format_number(parsed, _pn.PhoneNumberFormat.E164)
-                except Exception:
-                    logger.warning("Failed to normalise phone: %s", self.phone)
-            self.phone = normalized
-
-        if self.full_name and not self.full_name.strip():
+        # ✅ فرق مهم للاختبارات:
+        # إذا full_name انرسل كمسافات فقط => خطأ
+        raw_full_name = self.full_name
+        if isinstance(raw_full_name, str) and raw_full_name != "" and raw_full_name.strip() == "":
             raise ValidationError({"full_name": _("Full name cannot be blank spaces.")})
+
+        # Normalize
+        self.full_name = _normalize_blankable_str(self.full_name)
+        self.specialty = _normalize_blankable_str(self.specialty) or "General"
+        self.short_bio = _normalize_blankable_str(self.short_bio)
+        self.clinic_address = _normalize_blankable_str(self.clinic_address)
+        self.syndicate_registration_no = _normalize_blankable_str(self.syndicate_registration_no)
+
+        # ✅ إذا فارغ فعلاً => نعبّيه من get_full_name وإذا فاضي هم نستخدم username
+        if not self.full_name:
+            derived = ""
+            if getattr(self, "user_id", None):
+                try:
+                    derived = (self.user.get_full_name() or "").strip()
+                except Exception:
+                    derived = ""
+
+                if not derived:
+                    derived = (getattr(self.user, "username", "") or "").strip()
+
+            if derived:
+                self.full_name = derived
+            else:
+                raise ValidationError({"full_name": _("Full name is required.")})
+
+        # Normalize phone storage
+        if self.phone is not None:
+            normalized = _normalize_phone(self.phone)
+            if normalized:
+                if _HAS_PN:
+                    try:
+                        parsed = _pn.parse(normalized, "IQ")
+                        normalized = _pn.format_number(parsed, _pn.PhoneNumberFormat.E164)
+                    except Exception:
+                        logger.warning("Failed to normalise phone: %s", self.phone)
+                self.phone = normalized
+            else:
+                self.phone = None
 
         if self.clinic_address and not str(self.clinic_address).strip():
             raise ValidationError({"clinic_address": _("Clinic address cannot be blank spaces.")})
 
         theme_fields = (
+            "primary_color",
+            "accent_color",
             "prescription_paper_bg",
             "prescription_paper_border",
             "prescription_header_bg",
@@ -635,25 +732,12 @@ class Doctor(models.Model):
             except ValidationError as exc:
                 raise ValidationError({fname: _("Enter HEX like #A1B2C3 (or leave blank).")}) from exc
 
-        # Photo validations (2MB) + MIME check
         if self.photo:
-            try:
-                if self.photo.size > 2 * 1024 * 1024:
-                    raise ValidationError({"photo": _("Image size must not exceed 2 MB.")})
-            except Exception:
-                pass
-            validate_image_mime(self.photo)
+            _validate_upload_image(self.photo, field_name="photo", max_mb=2, kind_label="Image")
 
-        # Cover validations (2MB) + MIME check
         if self.cover_photo:
-            try:
-                if self.cover_photo.size > 2 * 1024 * 1024:
-                    raise ValidationError({"cover_photo": _("Image size must not exceed 2 MB.")})
-            except Exception:
-                pass
-            validate_image_mime(self.cover_photo)
+            _validate_upload_image(self.cover_photo, field_name="cover_photo", max_mb=2, kind_label="Image")
 
-        # Branding files (2MB) + MIME check
         for field_name in (
             "clinic_logo",
             "signature_image",
@@ -663,43 +747,49 @@ class Doctor(models.Model):
             f = getattr(self, field_name, None)
             if not f:
                 continue
-            try:
-                if f.size > 2 * 1024 * 1024:
-                    raise ValidationError({field_name: _("File size must not exceed 2 MB.")})
-            except Exception:
-                pass
-            validate_image_mime(f)
+            _validate_upload_image(f, field_name=field_name, max_mb=2, kind_label="File")
 
-    # --------------------------- Save ----------------------------- #
     def save(self, *args, **kwargs):
-        if not self.full_name:
-            self.full_name = self.user.get_full_name() or self.user.username
+        update_fields = kwargs.get("update_fields")
+        uf = set(update_fields) if update_fields is not None else None
+
+        # ✅ auto-fill: get_full_name ثم username (حتى لا تنكسر بقية الاختبارات)
+        if not (self.full_name or "").strip() and getattr(self, "user_id", None):
+            auto_name = (self.user.get_full_name() or "").strip()
+            if not auto_name:
+                auto_name = (getattr(self.user, "username", "") or "").strip()
+
+            if auto_name:
+                self.full_name = auto_name
+                if uf is not None:
+                    uf.add("full_name")
+                    kwargs["update_fields"] = sorted(uf)
 
         self.full_clean()
-        super().save(*args, **kwargs)
+        return super().save(*args, **kwargs)
 
-    # ------------------------- Display API ------------------------ #
     def __str__(self) -> str:
-        return self.full_name or self.user.get_full_name() or self.user.username or f"Doctor #{self.pk}"
+        return (
+            self.full_name
+            or (self.user.get_full_name() or "").strip()
+            or (getattr(self.user, "username", "") or "").strip()
+            or f"Doctor #{self.pk}"
+        )
 
     def get_display_name(self) -> str:
-        """Consistent name used across UI."""
-        return self.full_name or self.user.get_full_name() or self.user.username or _("Doctor")
+        return self.__str__() or _("Doctor")
 
     def get_absolute_url(self) -> str:
         return reverse("doctor:detail", args=[self.pk])
 
-    # ------------------ Compatibility properties (templates) ------------------ #
     @property
     def is_available(self) -> bool:
         return bool(self.available)
 
     @property
     def experience(self) -> int:
-        # Important: read-only property (avoid queryset annotations into "experience")
         return int(self.experience_years or 0)
 
-    # ------------------ Available Doctors helpers ------------------ #
     def get_card_cover_url(self) -> Optional[str]:
         if self.cover_photo and getattr(self.cover_photo, "url", None):
             return self.cover_photo.url
@@ -709,7 +799,6 @@ class Doctor(models.Model):
             return self.specialty_profile.icon.url
         return None
 
-    # ------------------ Prescription helpers ------------------ #
     @property
     def specialty_name(self) -> str:
         if self.specialty_profile_id and self.specialty_profile:
@@ -754,16 +843,11 @@ class Doctor(models.Model):
 
 
 # ------------------------------------------------------------------ #
-# Doctor Visit (Consultation Notes)  ✅ NEW
+# Doctor Visit
 # ------------------------------------------------------------------ #
 
 
 class DoctorVisit(models.Model):
-    """
-    Stores clinical notes for a single appointment (doctor visit).
-    This is what your doctor_visit.html form should save into.
-    """
-
     appointment = models.OneToOneField(
         "appointments.Appointment",
         on_delete=models.CASCADE,
@@ -806,6 +890,35 @@ class DoctorVisit(models.Model):
             models.Index(fields=["patient", "created_at"]),
         ]
 
+    def clean(self):
+        super().clean()
+
+        self.chief_complaint = _normalize_spaces(self.chief_complaint)
+        self.symptoms = _normalize_blankable_str(self.symptoms)
+        self.history = _normalize_blankable_str(self.history)
+        self.examination = _normalize_blankable_str(self.examination)
+        self.preliminary_diagnosis = _normalize_blankable_str(self.preliminary_diagnosis)
+        self.final_diagnosis = _normalize_blankable_str(self.final_diagnosis)
+        self.plan = _normalize_blankable_str(self.plan)
+
+        if not self.chief_complaint:
+            raise ValidationError({"chief_complaint": _("Chief complaint cannot be blank.")})
+        if not self.symptoms:
+            raise ValidationError({"symptoms": _("Symptoms cannot be blank.")})
+
+        appt = getattr(self, "appointment", None)
+        if appt:
+            if self.doctor_id and getattr(appt, "doctor_id", None) and self.doctor_id != appt.doctor_id:
+                raise ValidationError({"doctor": _("Visit doctor must match the appointment doctor.")})
+            if self.patient_id and getattr(appt, "patient_id", None) and self.patient_id != appt.patient_id:
+                raise ValidationError({"patient": _("Visit patient must match the appointment patient.")})
+
+    def save(self, *args, **kwargs):
+        skip_full_clean = bool(kwargs.pop("skip_full_clean", False))
+        if not skip_full_clean:
+            self.full_clean()
+        return super().save(*args, **kwargs)
+
     def __str__(self) -> str:
         return f"Visit #{self.pk} (Appt #{self.appointment_id})"
 
@@ -816,12 +929,6 @@ class DoctorVisit(models.Model):
 
 
 class DoctorReview(models.Model):
-    """
-    Reviews:
-    - rating (1..5)
-    - on save/delete: updates Doctor.rating + Doctor.review_count
-    """
-
     doctor = models.ForeignKey(
         "doctor.Doctor",
         on_delete=models.CASCADE,
@@ -866,6 +973,10 @@ class DoctorReview(models.Model):
             ),
         ]
 
+    def clean(self):
+        super().clean()
+        self.comment = _normalize_blankable_str(self.comment)
+
     def __str__(self) -> str:
         return f"Review({self.doctor_id}) ★{self.rating}"
 
@@ -880,8 +991,13 @@ class DoctorReview(models.Model):
         transaction.on_commit(_update)
 
     def save(self, *args, **kwargs):
-        super().save(*args, **kwargs)
+        skip_full_clean = bool(kwargs.pop("skip_full_clean", False))
+        if not skip_full_clean:
+            self.full_clean()
+
+        res = super().save(*args, **kwargs)
         self._touch_doctor_cache()
+        return res
 
     def delete(self, *args, **kwargs):
         doctor_id = self.doctor_id

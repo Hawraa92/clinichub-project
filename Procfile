@@ -1,1 +1,1 @@
-web: gunicorn ClinicHub.wsgi:application --log-file -
+web: gunicorn ClinicHub.wsgi:application --bind 0.0.0.0:$PORT --log-file -

@@ -40,16 +40,19 @@ class SoftDeleteQuerySet(models.QuerySet):
 
 
 class SoftDeleteManager(models.Manager):
+    """Default manager: يخفي المحذوفات."""
     def get_queryset(self):
         return SoftDeleteQuerySet(self.model, using=self._db).filter(is_deleted=False)
 
 
 class AllObjectsManager(models.Manager):
+    """Base manager: يشوف الكل (حتى المحذوف soft) لتجنب كسر العلاقات."""
     def get_queryset(self):
         return SoftDeleteQuerySet(self.model, using=self._db)
 
 
 class DeletedObjectsManager(models.Manager):
+    """Manager للعرض/التقارير على المحذوفات فقط."""
     def get_queryset(self):
         return SoftDeleteQuerySet(self.model, using=self._db).filter(is_deleted=True)
 
@@ -73,11 +76,14 @@ class SoftDeleteModel(models.Model):
 
     class Meta:
         abstract = True
-        # ✅ أهم سطرين:
         base_manager_name = "all_objects"      # العلاقات/ForeignKey تشوف حتى المحذوف soft
         default_manager_name = "objects"       # الاستعلامات العادية تبقى تخفي المحذوف
 
     def delete(self, using=None, keep_parents=False, user=None, hard=False):
+        """
+        Model.delete() في Django يرجّع (count, per_model_dict)
+        فنحافظ على نفس السلوك حتى ما ينكسر أي كود.
+        """
         if hard:
             return super().delete(using=using, keep_parents=keep_parents)
 
@@ -86,8 +92,14 @@ class SoftDeleteModel(models.Model):
         self.deleted_by = user if user and getattr(user, "is_authenticated", False) else None
         self.save(update_fields=["is_deleted", "deleted_at", "deleted_by"])
 
+        return (1, {self._meta.label: 1})
+
+    def hard_delete(self, using=None, keep_parents=False):
+        return super().delete(using=using, keep_parents=keep_parents)
+
     def restore(self):
         self.is_deleted = False
         self.deleted_at = None
         self.deleted_by = None
         self.save(update_fields=["is_deleted", "deleted_at", "deleted_by"])
+        return 1
