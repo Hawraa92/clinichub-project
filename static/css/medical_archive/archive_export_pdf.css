@@ -1,7 +1,7 @@
 /* File: static/css/medical_archive/archive_export_pdf.css */
 
 /* ---------- Fonts (FIX Arabic squares) ----------
-   ✅ REQUIREMENT (Render/WhiteNoise):
+   REQUIREMENT (Render/WhiteNoise):
    Put the Arabic font file here:
    static/fonts/NotoNaskhArabic-Regular.ttf
 
@@ -15,15 +15,6 @@
   font-style: normal;
 }
 
-/* ✅ Removed CH-Latin (Inter) to prevent Render collectstatic failure
-@font-face {
-  font-family: "CH-Latin";
-  src: url("../../fonts/Inter-Regular.ttf") format("truetype");
-  font-weight: 400;
-  font-style: normal;
-}
-*/
-
 /* Page setup */
 @page {
   size: A4;
@@ -36,7 +27,6 @@ html, body {
 }
 
 body.pdf {
-  /* ✅ Arabic-first, no Inter dependency */
   font-family: "CH-Arabic", "DejaVu Sans", Arial, sans-serif;
   color: #0f172a;
   font-size: 11.2px;
