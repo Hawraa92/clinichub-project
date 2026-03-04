@@ -6,12 +6,18 @@
 
 {% block extra_head %}
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  {# Base shared lab styles #}
   <link rel="stylesheet" href="{% static 'css/lab/lab_base.css' %}">
-   <link rel="stylesheet" href="{% static 'css/lab/lab_settings.css' %}"> 
+  {# Settings-only styles (scoped) #}
+  <link rel="stylesheet" href="{% static 'css/lab/lab_settings.css' %}">
+
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
 {% endblock %}
 
 {% block content %}
+{% firstof settings_obj.lab_name "Lab Panel" as lab_name %}
+
 <div class="labp">
   <div class="page-bg">
     <div class="dashboard-container">
@@ -19,11 +25,19 @@
       <!-- Sidebar -->
       <aside class="sidebar" aria-label="Lab Sidebar Navigation">
         <div class="brand-container">
-          <div class="lab-avatar">
-            <i class="bi bi-gear"></i>
+          <div class="lab-avatar" aria-hidden="true">
+            {% if settings_obj and settings_obj.lab_logo %}
+              <img
+                src="{{ settings_obj.lab_logo.url }}"
+                alt="Lab Logo"
+                style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;">
+            {% else %}
+              <i class="bi bi-gear"></i>
+            {% endif %}
           </div>
+
           <div class="brand-text">
-            <h3>Lab Panel</h3>
+            <h3>{{ lab_name }}</h3>
             <p>Settings</p>
           </div>
         </div>
@@ -45,7 +59,10 @@
         <div class="logout-container">
           <form method="post" action="{% url 'accounts:logout' %}">
             {% csrf_token %}
-            <button type="submit" class="nav-item" style="width:100%; background:transparent; border:0; text-align:left;">
+            <button
+              type="submit"
+              class="nav-item"
+              style="width:100%; background:transparent; border:0; text-align:start;">
               <i class="bi bi-box-arrow-right"></i> Logout
             </button>
           </form>
@@ -62,7 +79,7 @@
           </div>
 
           <div class="datetime-card" aria-label="Info">
-            <div class="clock-icon">
+            <div class="clock-icon" aria-hidden="true">
               <i class="bi bi-sliders"></i>
             </div>
             <div>
@@ -72,13 +89,14 @@
           </div>
         </div>
 
-        <section class="archives-section">
+        {# ✅ مهم: نضيف labset حتى تشتغل متغيرات/سكوب lab_settings.css #}
+        <section class="archives-section labset">
           <div class="section-header">
             <i class="bi bi-wrench-adjustable-circle"></i>
             <h2>Configuration</h2>
           </div>
 
-          <form method="post" enctype="multipart/form-data" class="labd-form">
+          <form method="post" enctype="multipart/form-data" class="labd-form" novalidate>
             {% csrf_token %}
 
             <div class="labd-form-body">
@@ -86,7 +104,7 @@
             </div>
 
             <div class="labd-actions">
-              <button class="labd-btn primary" type="submit">
+              <button type="submit" class="labd-btn primary">
                 <i class="bi bi-check2-circle"></i> Save Settings
               </button>
 
@@ -96,14 +114,16 @@
             </div>
           </form>
 
-          {% if settings_obj.lab_logo %}
+          {% if settings_obj and settings_obj.lab_logo %}
             <div style="margin-top:12px;">
               <div class="section-header" style="margin-bottom:10px;">
                 <i class="bi bi-image"></i>
                 <h2>Current Logo</h2>
               </div>
-              <div style="background:#fff; border:1px solid rgba(0,0,0,.06); border-radius:14px; padding:14px; box-shadow:0 1px 0 rgba(0,0,0,.03);">
-                <img src="{{ settings_obj.lab_logo.url }}" alt="Lab Logo" style="max-height:90px; width:auto; display:block;">
+
+              {# ✅ بدل الـ inline: نخليها labset-preview حتى تتناسق مع CSS #}
+              <div class="labset-preview">
+                <img src="{{ settings_obj.lab_logo.url }}" alt="Lab Logo">
               </div>
             </div>
           {% endif %}

@@ -3,15 +3,15 @@ from __future__ import annotations
 
 import json
 from datetime import date, timedelta
-from typing import Final, Optional, Any
+from typing import Any, Final, Optional
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db import IntegrityError
-from django.db.models import Q, Count
+from django.db.models import Count, Q
 from django.db.models.functions import Lower, TruncDate
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template import TemplateDoesNotExist
@@ -19,10 +19,9 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 from django.views.decorators.http import require_http_methods
 
+from appointments.models import Appointment
 from patient.forms import DoctorPatientForm, SecretaryPatientForm
 from patient.models import DiabetesStatus, Patient
-
-from appointments.models import Appointment
 from prescription.models import Prescription
 
 try:
@@ -42,8 +41,9 @@ GROUPS_MAP = {
 
 
 def _has_role(user, role_name: str) -> bool:
+    group_name = GROUPS_MAP.get(role_name)
     try:
-        in_group = user.groups.filter(name=GROUPS_MAP.get(role_name)).exists()
+        in_group = bool(group_name) and user.groups.filter(name=group_name).exists()
     except Exception:
         in_group = False
     return getattr(user, "role", "") == role_name or in_group
@@ -81,9 +81,8 @@ def _model_has_field(model_cls: type, name: str) -> bool:
 
 def _prediction_field_name() -> str:
     """
-    ✅ We want the LIST to depend on AI prediction results.
-    So we prefer diabetes_prediction always.
-    Fallback to diabetes_status only if diabetes_prediction doesn't exist.
+    ✅ Prefer diabetes_prediction (AI output) for listing/filtering.
+    Fallback to diabetes_status if diabetes_prediction doesn't exist.
     """
     if _model_has_field(Patient, "diabetes_prediction"):
         return "diabetes_prediction"
@@ -150,7 +149,7 @@ def _assigned_doctor_for(user) -> Optional["doctor.Doctor"]:  # type: ignore[nam
 
 def _patients_qs_for(request):
     """
-    ACTIVE patients only (Patient.objects filters is_deleted=False).
+    ACTIVE patients only (Patient.objects typically filters is_deleted=False).
     Scoped to assigned doctor.
     """
     if not is_med_staff(request.user):
@@ -211,7 +210,7 @@ def _get_prediction_proba_dict(patient: Patient) -> dict[str, float]:
         "proba",
     )
 
-    raw = None
+    raw: Any = None
     for name in candidates:
         raw = getattr(patient, name, None)
         if raw not in (None, "", {}, []):
@@ -276,6 +275,15 @@ def _compute_confidence_percent(patient: Patient) -> tuple[Optional[float], Opti
     return confidence_pct, confidence_angle
 
 
+def _should_run_ai_on_save(request) -> bool:
+    """
+    ✅ To avoid slow save in workstations:
+    - default: DO NOT run AI on create/edit
+    - enable explicitly via settings.RUN_AI_ON_PATIENT_SAVE = True
+    """
+    return bool(getattr(settings, "RUN_AI_ON_PATIENT_SAVE", False)) and is_doctor(request.user)
+
+
 # -------------------------------------------------------------------
 # Views
 # -------------------------------------------------------------------
@@ -296,7 +304,8 @@ def create_patient(request):
             patient.doctor = doc
             patient.save()
 
-            if is_doctor(request.user):
+            # ✅ Optional AI on save (disabled by default to avoid slow requests)
+            if _should_run_ai_on_save(request):
                 try:
                     from patient.services import predict_and_save
                     predict_and_save(patient)
@@ -385,7 +394,6 @@ def patient_list(request):
         "selected_sexes": sexes,
         "selected_sort": sort_key,
         "prediction_field": pred_field,
-        # ✅ handy link if you want a button in template later
         "recycle_bin_url": "patient:recycle_bin",
     }
     return render(request, "patient/patient_list.html", context)
@@ -399,6 +407,7 @@ def patient_detail(request, pk: int):
 
     confidence_pct, confidence_angle = _compute_confidence_percent(patient)
 
+    # ✅ Run AI here (on-demand) if not available yet (keeps create/edit fast)
     if is_doctor(request.user) and confidence_pct is None:
         try:
             from patient.services import predict_and_save
@@ -465,7 +474,8 @@ def edit_patient(request, pk: int):
             patient.doctor = doc
             patient.save()
 
-            if is_doctor(request.user):
+            # ✅ Optional AI on save (disabled by default to avoid slow requests)
+            if _should_run_ai_on_save(request):
                 try:
                     from patient.services import predict_and_save
                     predict_and_save(patient)
@@ -510,17 +520,14 @@ def delete_patient(request, pk: int):
 
     if request.method == "POST":
         try:
-            # SoftDeleteModel supports user param
             patient.delete(user=request.user)  # type: ignore[arg-type]
             messages.success(request, _("🗑️ Patient moved to Recycle Bin."))
         except Exception:
-            # Fallback
             patient.delete()
             messages.success(request, _("🗑️ Patient moved to Recycle Bin."))
         return redirect("patient:list")
 
     ctx = {"patient": patient, "mode": "delete"}
-    # Try patient template first, fallback to appointments confirmation template
     try:
         return render(request, "patient/delete_confirmation.html", ctx)
     except TemplateDoesNotExist:
@@ -571,7 +578,6 @@ def restore_patient(request, pk: int):
     qs = Patient.all_objects.select_related("doctor", "doctor__user").filter(doctor=doc)
     patient: Patient = get_object_or_404(qs, pk=pk)
 
-    # Only restore if actually deleted
     is_deleted = bool(getattr(patient, "is_deleted", False))
     if not is_deleted:
         messages.info(request, _("ℹ️ This patient is not in Recycle Bin."))
@@ -675,7 +681,7 @@ def patient_dashboard(request):
     labels, counts = _week_labels_counts(start_week, end_week, week_qs)
     chart_data_json = json.dumps({"labels": labels, "data": counts})
 
-    order_fields = []
+    order_fields: list[str] = []
     if hasattr(Prescription, "date_issued"):
         order_fields.append("-date_issued")
     if hasattr(Prescription, "created_at"):

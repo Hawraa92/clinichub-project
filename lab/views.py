@@ -7,6 +7,7 @@ from functools import lru_cache
 from typing import Any, Optional
 
 from django.apps import apps
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import FieldError
@@ -47,6 +48,18 @@ ORDER_STATUSES = {
 # ✅ Actions المقبولة من الأزرار (حتى لو template يرسل send/submit)
 VERIFY_ACTIONS = {"verify", "send", "submit", "approve", "ready"}
 SAVE_ACTIONS = {"save", "draft", "update"}
+
+
+# ------------------------------------------------------------
+# Optional policy toggles
+# ------------------------------------------------------------
+def _enforce_doctor_patient_scope() -> bool:
+    """
+    إذا True: الطبيب ما يگدر ينشئ LabOrder لمريض خارج نطاقه.
+    الافتراضي False حتى ما نكسر أي سلوك قديم، وتكدرين تفعليه من settings:
+      LAB_DOCTOR_ENFORCE_PATIENT_SCOPE=True
+    """
+    return bool(getattr(settings, "LAB_DOCTOR_ENFORCE_PATIENT_SCOPE", False))
 
 
 # ------------------------------------------------------------
@@ -179,25 +192,49 @@ def _laborder_text_search_q_basic(q: str) -> Q:
     return cond
 
 
-def _laborder_text_search_q(q: str) -> Q:
+def _m2m_requested_tests_search_q(q: str) -> Q:
     """
-    يبني Q للبحث.
-    - الأساس يعتمد على patient/full_name + requested_tests_text + notes
-    - إذا عندج requested_tests (M2M) نحاول نضيفه بشكل best-effort
-      بس بما إن أسماء حقول الـ M2M تختلف (name/title/...) نخليها optional ونعالج FieldError لاحقًا.
+    محاولة ذكية للبحث ضمن requested_tests (ManyToMany) بدون كسر:
+    نبحث على حقول شائعة في جدول الفحوصات: name/title/code/label...
+    إذا ما نكدر نحدد حقل مناسب، نرجع Q() فقط.
     """
     q = (q or "").strip()
     if not q:
         return Q()
 
-    fields = _order_fields()
+    try:
+        f = LabOrder._meta.get_field("requested_tests")  # type: ignore[attr-defined]
+        related_model = getattr(f, "related_model", None)
+        if not related_model:
+            return Q()
+
+        # pick a likely text field
+        candidate_fields = ("name", "title", "label", "code", "test_name", "test", "short_name")
+        related_field_names = {x.name for x in related_model._meta.fields}
+
+        chosen = next((c for c in candidate_fields if c in related_field_names), None)
+        if not chosen:
+            return Q()
+
+        return Q(**{f"requested_tests__{chosen}__icontains": q})
+    except Exception:
+        return Q()
+
+
+def _laborder_text_search_q(q: str) -> Q:
+    """
+    يبني Q للبحث.
+    - الأساس يعتمد على patient/full_name + requested_tests_text + notes
+    - وإذا requested_tests (M2M) موجودة: نضيف بحث ذكي على name/title/code...
+    """
+    q = (q or "").strip()
+    if not q:
+        return Q()
+
     cond = _laborder_text_search_q_basic(q)
 
-    # best-effort only; may raise FieldError depending on relation fields
-    if "requested_tests" in fields:
-        # إذا كانت relation، هذا قد يحتاج requested_tests__name__icontains
-        # لكن ما نعرف اسم الحقل؛ نخلي محاولة عامة ونلتقط FieldError عند apply.
-        cond |= Q(requested_tests__icontains=q)
+    if "requested_tests" in _order_fields():
+        cond |= _m2m_requested_tests_search_q(q)
 
     return cond
 
@@ -208,6 +245,34 @@ def _get_doctor_profile(user) -> Optional[Doctor]:
         return Doctor.objects.select_related("user").get(user=user)
     except Doctor.DoesNotExist:
         return None
+
+
+def _doctor_can_access_patient(doctor: Doctor, patient: Patient) -> bool:
+    """
+    تحقق نطاق المريض للطبيب (اختياري حسب setting).
+    يدعم:
+    - Patient.doctor FK إذا موجود
+    - Appointment linkage إذا موجود
+    """
+    if not doctor or not patient:
+        return False
+
+    # direct FK if exists
+    try:
+        if getattr(patient, "doctor_id", None) == doctor.id:
+            return True
+    except Exception:
+        pass
+
+    # appointment linkage
+    try:
+        Appointment = apps.get_model("appointments", "Appointment")
+        if Appointment and Appointment.objects.filter(doctor=doctor, patient=patient).exists():
+            return True
+    except Exception:
+        pass
+
+    return False
 
 
 def _build_result_form(*, request: HttpRequest, instance: LabResult, settings_obj: LabSettings) -> Any:
@@ -418,7 +483,6 @@ def lab_dashboard(request: HttpRequest) -> HttpResponse:
         base_qs = base_qs.filter(status=status_filter)
 
     if q:
-        # تطبيق البحث مع fallback إذا صار FieldError بسبب requested_tests
         try:
             base_qs = base_qs.filter(_laborder_text_search_q(q))
         except FieldError:
@@ -580,6 +644,11 @@ def doctor_create_lab_order(request: HttpRequest, patient_id: int | None = None)
     if patient_id is not None:
         patient = get_object_or_404(Patient, pk=patient_id)
 
+        # ✅ Optional scope enforcement
+        if _enforce_doctor_patient_scope() and not _doctor_can_access_patient(doctor, patient):
+            messages.error(request, "هذا المريض خارج نطاق هذا الطبيب.")
+            return _try_redirect("lab:doctor_orders_inbox", fallback_name="doctor:dashboard")
+
     if request.method == "POST":
         form = LabOrderCreateForm(request.POST, request.FILES)
         if form.is_valid():
@@ -593,6 +662,14 @@ def doctor_create_lab_order(request: HttpRequest, patient_id: int | None = None)
             if not getattr(order, "patient_id", None):
                 inferred = _infer_patient_from_order(order)
                 if inferred is not None:
+                    # ✅ Optional scope enforcement
+                    if _enforce_doctor_patient_scope() and not _doctor_can_access_patient(doctor, inferred):
+                        messages.error(request, "هذا المريض خارج نطاق هذا الطبيب.")
+                        return render(
+                            request,
+                            "lab/doctor_create_order.html",
+                            {"form": form, "patient": patient, "ready_count": ready_count},
+                        )
                     order.patient = inferred
 
             # 3) لازم يكون صار عندنا patient بالنهاية
@@ -648,7 +725,7 @@ def doctor_order_detail(request: HttpRequest, order_id: int) -> HttpResponse:
         return _try_redirect("doctor:dashboard", fallback_name="home:index")
 
     order = get_object_or_404(
-        LabOrder.objects.select_related("patient", "doctor__user"),
+        LabOrder.objects.select_related("patient", "doctor__user", "appointment"),
         pk=order_id,
         doctor=doctor,
     )
@@ -721,7 +798,7 @@ def lab_order_detail(request: HttpRequest, order_id: int) -> HttpResponse:
         return _deny_lab_area(request)
 
     order = get_object_or_404(
-        LabOrder.objects.select_related("patient", "doctor__user"),
+        LabOrder.objects.select_related("patient", "doctor__user", "appointment"),
         pk=order_id,
     )
 
@@ -748,7 +825,7 @@ def lab_order_detail(request: HttpRequest, order_id: int) -> HttpResponse:
 
             with transaction.atomic():
                 if action == "verify":
-                    # ✅ يعتمد على الموديل: VERIFIED + READY + reset doctor_seen_at
+                    # ✅ VERIFIED + READY + reset doctor_seen_at
                     result.verify(request.user)
                     messages.success(request, "✅ تم اعتماد النتيجة وإرسالها للطبيب.")
                 else:

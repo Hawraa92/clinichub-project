@@ -1,594 +1,517 @@
 /* File: static/css/doctor/doctor_dashboard.css
    Doctor Dashboard (Scoped + Organized)
    ✅ Scoped to .dashboard-container (no global body/* resets)
-   ✅ Dark mode support
-   ✅ Safe with base.html (doesn't override global .main-content outside this page)
+   ✅ WHITE MODE ONLY (NO DARK MODE)
+   ✅ Safe with base.html
    ✅ Includes badges + table + pills + icon buttons + tooltip
 */
 
 /* =========================
    1) Page Scope + Tokens
    ========================= */
-   .dashboard-container{
-    /* Pastel Color Palette */
-    --primary: #8ECAE6;
-    --primary-light: #B8E0F9;
-    --primary-dark: #219EBC;
-    --secondary: #FFB4A2;
-    --accent: #A2D2FF;
-    --success: #95D5B2;
-    --warning: #FFD166;
-    --danger: #FF9B9B;
-  
-    /* Neutrals */
-    --light: #F8F9FA;
-    --light-gray: #E9ECEF;
-    --medium-gray: #DEE2E6;
-    --dark-gray: #6C757D;
-    --dark: #212529;
-  
-    /* Glass Effect */
-    --glass-bg: rgba(255, 255, 255, 0.85);
-    --glass-border: rgba(255, 255, 255, 0.3);
-  
-    /* Shadows */
-    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
-    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.10);
-    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
-  
-    /* Typography */
-    --font-main: 'Poppins', sans-serif;
-    --radius: 16px;
-  
-    /* Badge / Status Colors */
-    --badge-red: #ef4444;
-  
-    /* Page background */
-    background: linear-gradient(135deg, #f5f7fa 0%, #e4edf5 100%);
-    color: var(--dark);
-    min-height: 100vh;
-  
-    display: flex;
-    width: 100%;
+.dashboard-container{
+  /* Pastel Color Palette */
+  --primary: #8ECAE6;
+  --primary-light: #B8E0F9;
+  --primary-dark: #219EBC;
+  --secondary: #FFB4A2;
+  --accent: #A2D2FF;
+  --success: #95D5B2;
+  --warning: #FFD166;
+  --danger: #FF9B9B;
+
+  /* Neutrals */
+  --light: #F8F9FA;
+  --light-gray: #E9ECEF;
+  --medium-gray: #DEE2E6;
+  --dark-gray: #6C757D;
+  --dark: #212529;
+
+  /* Glass Effect */
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(255, 255, 255, 0.3);
+
+  /* Shadows */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.10);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+
+  /* Typography */
+  --font-main: 'Poppins', sans-serif;
+  --radius: 16px;
+
+  /* Badge / Status Colors */
+  --badge-red: #ef4444;
+
+  /* Page background (WHITE ONLY) */
+  background: linear-gradient(135deg, #f5f7fa 0%, #e4edf5 100%);
+  color: var(--dark);
+  min-height: 100vh;
+
+  display: flex;
+  width: 100%;
+}
+
+/* Safe box sizing within this page only */
+.dashboard-container,
+.dashboard-container *{
+  box-sizing: border-box;
+}
+
+/* =========================
+   2) Sidebar
+   ========================= */
+.dashboard-container .sidebar{
+  width: 260px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  border-right: 1px solid var(--glass-border);
+  display: flex;
+  flex-direction: column;
+  padding: 24px 16px;
+  box-shadow: var(--shadow-md);
+  z-index: 100;
+}
+
+.dashboard-container .brand-container{
+  display: flex;
+  align-items: center;
+  margin-bottom: 32px;
+}
+
+.dashboard-container .doctor-avatar{
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 16px;
+  color: #fff;
+  font-size: 28px;
+}
+
+.dashboard-container .brand-text h3{
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--dark);
+  margin: 0;
+}
+
+.dashboard-container .brand-text p{
+  font-size: 14px;
+  color: var(--dark-gray);
+  margin: 4px 0 0;
+}
+
+.dashboard-container .nav-menu{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.dashboard-container .nav-item{
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 14px 16px;
+  border-radius: 12px;
+  color: var(--dark-gray);
+  text-decoration: none;
+  font-weight: 500;
+  transition: background .2s ease, color .2s ease, transform .15s ease, box-shadow .2s ease;
+  outline: none;
+}
+
+.dashboard-container .nav-item i{
+  font-size: 20px;
+  margin-right: 12px;
+  width: 24px;
+  text-align: center;
+}
+
+.dashboard-container .nav-item:hover{
+  background: var(--primary-light);
+  color: var(--primary-dark);
+  transform: translateY(-1px);
+}
+
+.dashboard-container .nav-item:focus-visible{
+  outline: 3px solid rgba(33, 158, 188, 0.35);
+  outline-offset: 2px;
+}
+
+.dashboard-container .nav-item.active{
+  background: var(--primary);
+  color: #fff;
+  box-shadow: var(--shadow-sm);
+  transform: none;
+}
+
+.dashboard-container .nav-item.active i{
+  color: #fff;
+}
+
+/* supports both "disabled" (old) and "is-disabled" (new) */
+.dashboard-container .nav-item.disabled,
+.dashboard-container .nav-item.is-disabled{
+  opacity: 0.55;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Sidebar badge (Lab unread count) */
+.dashboard-container .nav-badge{
+  margin-left: auto;
+  background: var(--badge-red);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  padding: 4px 10px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 18px rgba(239, 68, 68, 0.25);
+}
+
+.dashboard-container .logout-container{
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--medium-gray);
+}
+
+/* =========================
+   3) Main Content
+   ========================= */
+.dashboard-container .main-content{
+  flex: 1;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  font-family: var(--font-main);
+}
+
+.dashboard-container .dashboard-header{
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  gap: 16px;
+}
+
+.dashboard-container .welcome-section h1{
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--dark);
+  margin: 0 0 8px;
+}
+
+.dashboard-container .inspiration{
+  font-size: 16px;
+  color: var(--dark-gray);
+  font-style: italic;
+  margin: 0;
+}
+
+.dashboard-container .datetime-card{
+  display: flex;
+  align-items: center;
+  background: var(--glass-bg);
+  border-radius: var(--radius);
+  padding: 16px 24px;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--glass-border);
+  min-width: 260px;
+}
+
+.dashboard-container .clock-icon{
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--primary) 100%);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 16px;
+  color: #fff;
+  font-size: 20px;
+}
+
+.dashboard-container .clock{
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--dark);
+}
+
+.dashboard-container .date{
+  font-size: 14px;
+  color: var(--dark-gray);
+  margin-top: 4px;
+}
+
+/* =========================
+   4) Quick Actions
+   ========================= */
+.dashboard-container .quick-actions{
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+}
+
+.dashboard-container .action-btn{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  background: var(--glass-bg);
+  border-radius: var(--radius);
+  border: 1px solid var(--glass-border);
+  text-decoration: none;
+  color: var(--dark);
+  transition: transform .2s ease, box-shadow .2s ease, background .2s ease, border-color .2s ease;
+  box-shadow: var(--shadow-sm);
+  outline: none;
+}
+
+.dashboard-container .action-btn:hover{
+  transform: translateY(-5px);
+  box-shadow: var(--shadow-lg);
+  background: #fff;
+  border-color: var(--primary-light);
+}
+
+.dashboard-container .action-btn:focus-visible{
+  outline: 3px solid rgba(33, 158, 188, 0.35);
+  outline-offset: 4px;
+}
+
+.dashboard-container .action-btn i{
+  font-size: 32px;
+  margin-bottom: 12px;
+  color: var(--primary-dark);
+}
+
+.dashboard-container .action-btn span{
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* =========================
+   5) Sections (Charts + Table)
+   ========================= */
+.dashboard-container .chart-section{
+  background: var(--glass-bg);
+  border-radius: var(--radius);
+  padding: 24px;
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-sm);
+}
+
+.dashboard-container .section-header{
+  display: flex;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.dashboard-container .section-header h2{
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--dark);
+  margin: 0;
+}
+
+.dashboard-container .section-header i{
+  margin-right: 12px;
+  color: var(--primary-dark);
+}
+
+.dashboard-container .chart-container{
+  height: 300px;
+  position: relative;
+}
+
+/* =========================
+   6) Today's Appointments Table
+   ========================= */
+.dashboard-container .table-wrap{
+  overflow: auto;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: #fff;
+}
+
+.dashboard-container table.clean{
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 680px;
+}
+
+.dashboard-container table.clean th,
+.dashboard-container table.clean td{
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.dashboard-container table.clean th{
+  background: #f3f6fb;
+  font-weight: 700;
+}
+
+.dashboard-container .th-actions{
+  text-align: right;
+}
+
+.dashboard-container .table-empty{
+  padding: 18px;
+  color: #6b7280;
+}
+
+/* Row actions */
+.dashboard-container .td-actions{
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+/* Icon button actions */
+.dashboard-container .icon-btn{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: #fff;
+  text-decoration: none;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.06);
+  transition: transform .15s ease, box-shadow .15s ease, filter .15s ease, opacity .15s ease;
+  cursor: pointer;
+}
+
+.dashboard-container .icon-btn:hover{
+  transform: translateY(-1px);
+  box-shadow: 0 10px 18px rgba(0, 0, 0, 0.08);
+}
+
+.dashboard-container .icon-btn:focus-visible{
+  outline: 3px solid rgba(33, 158, 188, 0.35);
+  outline-offset: 2px;
+}
+
+.dashboard-container .icon-btn i{
+  font-size: 18px;
+}
+
+/* Disabled icon buttons (used in template: .is-disabled) */
+.dashboard-container .icon-btn.is-disabled{
+  opacity: 0.55;
+  cursor: not-allowed;
+  pointer-events: none;
+  box-shadow: none;
+  transform: none;
+}
+
+/* Status pills */
+.dashboard-container .pill{
+  display: inline-flex;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.dashboard-container .pill-pending{
+  background: #fff7ed;
+  color: #9a3412;
+  border: 1px solid #fed7aa;
+}
+
+.dashboard-container .pill-completed{
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+.dashboard-container .pill-cancelled{
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+/* =========================
+   7) Tooltip (Used by JS)
+   ========================= */
+.tooltip{
+  position: fixed;
+  background: rgba(0, 0, 0, 0.78);
+  color: #fff;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity .15s ease, transform .15s ease;
+  max-width: min(260px, 90vw);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tooltip.show{
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* =========================
+   8) Responsive
+   ========================= */
+@media (max-width: 992px){
+  .dashboard-container{
+    flex-direction: column;
   }
-  
-  /* Safe box sizing within this page only */
-  .dashboard-container,
-  .dashboard-container *{
-    box-sizing: border-box;
-  }
-  
-  /* =========================
-     2) Sidebar
-     ========================= */
+
   .dashboard-container .sidebar{
-    width: 260px;
-    background: var(--glass-bg);
-    backdrop-filter: blur(12px);
-    border-right: 1px solid var(--glass-border);
-    display: flex;
-    flex-direction: column;
-    padding: 24px 16px;
-    box-shadow: var(--shadow-md);
-    z-index: 100;
-  }
-  
-  .dashboard-container .brand-container{
-    display: flex;
-    align-items: center;
-    margin-bottom: 32px;
-  }
-  
-  .dashboard-container .doctor-avatar{
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-right: 16px;
-    color: #fff;
-    font-size: 28px;
-  }
-  
-  .dashboard-container .brand-text h3{
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--dark);
-    margin: 0;
-  }
-  
-  .dashboard-container .brand-text p{
-    font-size: 14px;
-    color: var(--dark-gray);
-    margin: 4px 0 0;
-  }
-  
-  .dashboard-container .nav-menu{
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    flex: 1;
-  }
-  
-  .dashboard-container .nav-item{
-    position: relative;
-    display: flex;
-    align-items: center;
-    padding: 14px 16px;
-    border-radius: 12px;
-    color: var(--dark-gray);
-    text-decoration: none;
-    font-weight: 500;
-    transition: background .2s ease, color .2s ease, transform .15s ease, box-shadow .2s ease;
-    outline: none;
-  }
-  
-  .dashboard-container .nav-item i{
-    font-size: 20px;
-    margin-right: 12px;
-    width: 24px;
-    text-align: center;
-  }
-  
-  .dashboard-container .nav-item:hover{
-    background: var(--primary-light);
-    color: var(--primary-dark);
-    transform: translateY(-1px);
-  }
-  
-  .dashboard-container .nav-item:focus-visible{
-    outline: 3px solid rgba(33, 158, 188, 0.35);
-    outline-offset: 2px;
-  }
-  
-  .dashboard-container .nav-item.active{
-    background: var(--primary);
-    color: #fff;
-    box-shadow: var(--shadow-sm);
-    transform: none;
-  }
-  
-  .dashboard-container .nav-item.active i{
-    color: #fff;
-  }
-  
-  /* supports both "disabled" (old) and "is-disabled" (new) */
-  .dashboard-container .nav-item.disabled,
-  .dashboard-container .nav-item.is-disabled{
-    opacity: 0.55;
-    cursor: not-allowed;
-    pointer-events: none;
-  }
-  
-  /* Sidebar badge (Lab unread count) */
-  .dashboard-container .nav-badge{
-    margin-left: auto;
-    background: var(--badge-red);
-    color: #fff;
-    font-size: 12px;
-    font-weight: 900;
-    line-height: 1;
-    padding: 4px 10px;
-    border-radius: 999px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 8px 18px rgba(239, 68, 68, 0.25);
-  }
-  
-  .dashboard-container .logout-container{
-    margin-top: auto;
-    padding-top: 16px;
-    border-top: 1px solid var(--medium-gray);
-  }
-  
-  /* =========================
-     3) Main Content
-     ========================= */
-  .dashboard-container .main-content{
-    flex: 1;
-    padding: 32px;
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
-    font-family: var(--font-main);
-  }
-  
-  .dashboard-container .dashboard-header{
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 16px;
-    gap: 16px;
-  }
-  
-  .dashboard-container .welcome-section h1{
-    font-size: 28px;
-    font-weight: 700;
-    color: var(--dark);
-    margin: 0 0 8px;
-  }
-  
-  .dashboard-container .inspiration{
-    font-size: 16px;
-    color: var(--dark-gray);
-    font-style: italic;
-    margin: 0;
-  }
-  
-  .dashboard-container .datetime-card{
-    display: flex;
-    align-items: center;
-    background: var(--glass-bg);
-    border-radius: var(--radius);
-    padding: 16px 24px;
-    box-shadow: var(--shadow-sm);
-    border: 1px solid var(--glass-border);
-    min-width: 260px;
-  }
-  
-  .dashboard-container .clock-icon{
-    width: 48px;
-    height: 48px;
-    background: linear-gradient(135deg, var(--accent) 0%, var(--primary) 100%);
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-right: 16px;
-    color: #fff;
-    font-size: 20px;
-  }
-  
-  .dashboard-container .clock{
-    font-size: 24px;
-    font-weight: 600;
-    color: var(--dark);
-  }
-  
-  .dashboard-container .date{
-    font-size: 14px;
-    color: var(--dark-gray);
-    margin-top: 4px;
-  }
-  
-  /* =========================
-     4) Quick Actions
-     ========================= */
-  .dashboard-container .quick-actions{
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 16px;
-  }
-  
-  .dashboard-container .action-btn{
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 24px 16px;
-    background: var(--glass-bg);
-    border-radius: var(--radius);
-    border: 1px solid var(--glass-border);
-    text-decoration: none;
-    color: var(--dark);
-    transition: transform .2s ease, box-shadow .2s ease, background .2s ease, border-color .2s ease;
-    box-shadow: var(--shadow-sm);
-    outline: none;
-  }
-  
-  .dashboard-container .action-btn:hover{
-    transform: translateY(-5px);
-    box-shadow: var(--shadow-lg);
-    background: #fff;
-    border-color: var(--primary-light);
-  }
-  
-  .dashboard-container .action-btn:focus-visible{
-    outline: 3px solid rgba(33, 158, 188, 0.35);
-    outline-offset: 4px;
-  }
-  
-  .dashboard-container .action-btn i{
-    font-size: 32px;
-    margin-bottom: 12px;
-    color: var(--primary-dark);
-  }
-  
-  .dashboard-container .action-btn span{
-    font-size: 14px;
-    font-weight: 500;
-  }
-  
-  /* =========================
-     5) Sections (Charts + Table)
-     ========================= */
-  .dashboard-container .chart-section{
-    background: var(--glass-bg);
-    border-radius: var(--radius);
-    padding: 24px;
-    border: 1px solid var(--glass-border);
-    box-shadow: var(--shadow-sm);
-  }
-  
-  .dashboard-container .section-header{
-    display: flex;
-    align-items: center;
-    margin-bottom: 20px;
-  }
-  
-  .dashboard-container .section-header h2{
-    font-size: 20px;
-    font-weight: 600;
-    color: var(--dark);
-    margin: 0;
-  }
-  
-  .dashboard-container .section-header i{
-    margin-right: 12px;
-    color: var(--primary-dark);
-  }
-  
-  .dashboard-container .chart-container{
-    height: 300px;
-    position: relative;
-  }
-  
-  /* =========================
-     6) Today's Appointments Table
-     ========================= */
-  .dashboard-container .table-wrap{
-    overflow: auto;
-    border-radius: 14px;
-    border: 1px solid rgba(0, 0, 0, 0.06);
-    background: #fff;
-  }
-  
-  .dashboard-container table.clean{
     width: 100%;
-    border-collapse: collapse;
-    min-width: 680px;
+    padding: 16px;
+    border-right: none;
+    border-bottom: 1px solid var(--glass-border);
   }
-  
-  .dashboard-container table.clean th,
-  .dashboard-container table.clean td{
-    padding: 14px 16px;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-    text-align: left;
-    vertical-align: middle;
+
+  .dashboard-container .main-content{
+    padding: 24px;
   }
-  
-  .dashboard-container table.clean th{
-    background: #f3f6fb;
-    font-weight: 700;
+
+  .dashboard-container .dashboard-header{
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 20px;
   }
-  
-  .dashboard-container .th-actions{
-    text-align: right;
+
+  .dashboard-container .datetime-card{
+    width: 100%;
   }
-  
-  .dashboard-container .table-empty{
-    padding: 18px;
-    color: #6b7280;
+}
+
+@media (max-width: 768px){
+  .dashboard-container .quick-actions{
+    grid-template-columns: repeat(2, 1fr);
   }
-  
-  /* Row actions */
-  .dashboard-container .td-actions{
-    display: flex;
-    gap: 10px;
-    justify-content: flex-end;
-    align-items: center;
+
+  .dashboard-container table.clean{
+    min-width: 620px;
   }
-  
-  /* Icon button actions */
-  .dashboard-container .icon-btn{
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 38px;
-    height: 38px;
-    border-radius: 10px;
-    border: 1px solid rgba(0, 0, 0, 0.06);
-    background: #fff;
-    text-decoration: none;
-    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.06);
-    transition: transform .15s ease, box-shadow .15s ease, filter .15s ease, opacity .15s ease;
-    cursor: pointer;
-  }
-  
-  .dashboard-container .icon-btn:hover{
-    transform: translateY(-1px);
-    box-shadow: 0 10px 18px rgba(0, 0, 0, 0.08);
-  }
-  
-  .dashboard-container .icon-btn:focus-visible{
-    outline: 3px solid rgba(33, 158, 188, 0.35);
-    outline-offset: 2px;
-  }
-  
-  .dashboard-container .icon-btn i{
-    font-size: 18px;
-  }
-  
-  /* Disabled icon buttons (used in template: .is-disabled) */
-  .dashboard-container .icon-btn.is-disabled{
-    opacity: 0.55;
-    cursor: not-allowed;
-    pointer-events: none;
-    box-shadow: none;
-    transform: none;
-  }
-  
-  /* Status pills */
-  .dashboard-container .pill{
-    display: inline-flex;
-    padding: 6px 12px;
-    border-radius: 999px;
-    font-weight: 700;
-    font-size: 12px;
-    line-height: 1;
-    white-space: nowrap;
-  }
-  
-  .dashboard-container .pill-pending{
-    background: #fff7ed;
-    color: #9a3412;
-    border: 1px solid #fed7aa;
-  }
-  
-  .dashboard-container .pill-completed{
-    background: #ecfdf5;
-    color: #065f46;
-    border: 1px solid #a7f3d0;
-  }
-  
-  .dashboard-container .pill-cancelled{
-    background: #fef2f2;
-    color: #991b1b;
-    border: 1px solid #fecaca;
-  }
-  
-  /* =========================
-     7) Tooltip (Used by JS)
-     NOTE: kept as .tooltip to match your JS,
-     but made conservative to avoid surprises.
-     ========================= */
-  .tooltip{
-    position: fixed;
-    background: rgba(0, 0, 0, 0.78);
-    color: #fff;
-    padding: 6px 10px;
-    border-radius: 8px;
-    font-size: 12px;
-    pointer-events: none;
-    z-index: 9999;
-    opacity: 0;
-    transform: translateY(-4px);
-    transition: opacity .15s ease, transform .15s ease;
-    max-width: min(260px, 90vw);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  
-  .tooltip.show{
-    opacity: 1;
-    transform: translateY(0);
-  }
-  
-  /* =========================
-     8) Responsive
-     ========================= */
-  @media (max-width: 992px){
-    .dashboard-container{
-      flex-direction: column;
-    }
-  
-    .dashboard-container .sidebar{
-      width: 100%;
-      padding: 16px;
-      border-right: none;
-      border-bottom: 1px solid var(--glass-border);
-    }
-  
-    .dashboard-container .main-content{
-      padding: 24px;
-    }
-  
-    .dashboard-container .dashboard-header{
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 20px;
-    }
-  
-    .dashboard-container .datetime-card{
-      width: 100%;
-    }
-  }
-  
-  @media (max-width: 768px){
-    .dashboard-container .quick-actions{
-      grid-template-columns: repeat(2, 1fr);
-    }
-  
-    .dashboard-container table.clean{
-      min-width: 620px;
-    }
-  }
-  
-  /* =========================
-     9) Dark Mode
-     ========================= */
-  @media (prefers-color-scheme: dark){
-    .dashboard-container{
-      background: radial-gradient(1200px 600px at 20% 10%, rgba(33,158,188,.18), transparent 60%),
-                  radial-gradient(900px 500px at 90% 40%, rgba(162,210,255,.16), transparent 55%),
-                  #070b14;
-      color: rgba(255,255,255,.92);
-    }
-  
-    .dashboard-container .sidebar{
-      background: rgba(15, 23, 42, 0.70);
-      border-color: rgba(255,255,255,.08);
-    }
-  
-    .dashboard-container .brand-text h3{ color: rgba(255,255,255,.92); }
-    .dashboard-container .brand-text p{ color: rgba(255,255,255,.65); }
-  
-    .dashboard-container .nav-item{
-      color: rgba(255,255,255,.72);
-    }
-    .dashboard-container .nav-item:hover{
-      background: rgba(184,224,249,.16);
-      color: rgba(255,255,255,.92);
-    }
-    .dashboard-container .nav-item.active{
-      background: rgba(33,158,188,.35);
-      color: rgba(255,255,255,.95);
-    }
-  
-    .dashboard-container .welcome-section h1{ color: rgba(255,255,255,.95); }
-    .dashboard-container .inspiration{ color: rgba(255,255,255,.65); }
-  
-    .dashboard-container .datetime-card,
-    .dashboard-container .chart-section,
-    .dashboard-container .action-btn{
-      background: rgba(15, 23, 42, 0.70);
-      border-color: rgba(255,255,255,.08);
-    }
-  
-    .dashboard-container .clock,
-    .dashboard-container .section-header h2{
-      color: rgba(255,255,255,.92);
-    }
-    .dashboard-container .date{
-      color: rgba(255,255,255,.65);
-    }
-  
-    .dashboard-container .table-wrap{
-      background: rgba(15, 23, 42, 0.85);
-      border-color: rgba(255,255,255,.08);
-    }
-  
-    .dashboard-container table.clean th{
-      background: rgba(255,255,255,.06);
-      color: rgba(255,255,255,.90);
-    }
-    .dashboard-container table.clean td{
-      border-bottom-color: rgba(255,255,255,.08);
-      color: rgba(255,255,255,.85);
-    }
-  
-    .dashboard-container .icon-btn{
-      background: rgba(255,255,255,.06);
-      border-color: rgba(255,255,255,.10);
-      box-shadow: none;
-      color: rgba(255,255,255,.90);
-    }
-    .dashboard-container .icon-btn:hover{
-      box-shadow: 0 10px 18px rgba(0,0,0,.25);
-    }
-  }
-  
+}

@@ -5,118 +5,154 @@
 ========================================================= */
 
 .labp .labset{
-    --labset-card: rgba(255,255,255,.92);
-    --labset-border: rgba(15,23,42,.10);
-    --labset-shadow: 0 18px 40px rgba(2, 6, 23, .10);
-  }
-  
-  /* Make Django form.as_p look like your dashboard inputs */
-  .labp .labd-form-body p{
-    margin: 0 0 14px 0;
-  }
-  
-  .labp .labd-form-body label{
-    display:block;
-    font-weight: 700;
-    font-size: 13px;
-    letter-spacing: .2px;
-    margin: 0 0 8px 0;
-    color: rgba(15,23,42,.86);
-  }
-  
-  /* Inputs */
-  .labp .labd-form-body input[type="text"],
-  .labp .labd-form-body input[type="email"],
-  .labp .labd-form-body input[type="url"],
-  .labp .labd-form-body input[type="number"],
-  .labp .labd-form-body input[type="password"],
-  .labp .labd-form-body input[type="time"],
-  .labp .labd-form-body input[type="date"],
-  .labp .labd-form-body select,
-  .labp .labd-form-body textarea{
-    width: 100%;
-    background: rgba(255,255,255,.95);
-    border: 1px solid rgba(15,23,42,.12);
-    border-radius: 14px;
-    padding: 12px 14px;
-    font-size: 14px;
-    outline: none;
-    transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
-  }
-  
-  .labp .labd-form-body textarea{
-    min-height: 120px;
-    resize: vertical;
-  }
-  
-  .labp .labd-form-body input[type="file"]{
-    width: 100%;
-    background: rgba(255,255,255,.95);
-    border: 1px dashed rgba(15,23,42,.18);
-    border-radius: 14px;
-    padding: 12px 14px;
-  }
-  
-  /* Focus */
-  .labp .labd-form-body input:focus,
-  .labp .labd-form-body select:focus,
-  .labp .labd-form-body textarea:focus{
-    border-color: rgba(59,130,246,.55);
-    box-shadow: 0 0 0 4px rgba(59,130,246,.12);
-  }
-  
-  /* Helptext + errors */
-  .labp .labd-form-body .helptext{
-    display:block;
-    margin-top: 6px;
-    font-size: 12px;
-    color: rgba(100,116,139,.95);
-  }
-  
-  .labp .labd-form-body .errorlist{
-    list-style: none;
-    padding: 0;
-    margin: 8px 0 0 0;
-    color: #b91c1c;
-    font-weight: 700;
-    font-size: 12px;
-  }
-  
-  .labp .labd-form-body .errorlist li{
-    margin: 0 0 6px 0;
-  }
-  
-  /* Checkbox / radio */
-  .labp .labd-form-body input[type="checkbox"],
-  .labp .labd-form-body input[type="radio"]{
-    transform: translateY(1px);
-    margin-right: 8px;
-  }
-  
-  .labp .labd-form-body ul{
-    margin: 8px 0 0 0;
-    padding-left: 18px;
-  }
-  
-  /* Small preview card for current logo/file */
-  .labp .labset-preview{
-    background: rgba(255,255,255,.92);
-    border: 1px solid var(--labset-border);
-    border-radius: 16px;
-    padding: 14px;
-    box-shadow: 0 8px 22px rgba(2, 6, 23, .06);
-  }
-  
-  .labp .labset-preview img{
-    display:block;
-    max-height: 96px;
-    width: auto;
-  }
-  
-  /* Actions spacing */
-  .labp .labd-actions{
-    margin-top: 10px;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-  
+  --labset-card: rgba(255,255,255,.92);
+  --labset-border: rgba(15,23,42,.10);
+  --labset-shadow: 0 18px 40px rgba(2, 6, 23, .10);
+
+  /* ✅ explicit input text colors (so it's never ambiguous) */
+  --labset-text: rgba(15,23,42,.92);
+  --labset-placeholder: rgba(100,116,139,.85);
+  --labset-focus: rgba(59,130,246,.55);
+  --labset-focus-ring: rgba(59,130,246,.12);
+}
+
+/* ✅ Apply card vars when the section uses .labset */
+.labp .archives-section.labset{
+  background: var(--labset-card);
+  border: 1px solid var(--labset-border);
+  box-shadow: var(--labset-shadow);
+}
+
+/* Make Django form.as_p spacing nice */
+.labp .labd-form-body p{
+  margin: 0 0 14px 0;
+}
+
+.labp .labd-form-body label{
+  display:block;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: .2px;
+  margin: 0 0 8px 0;
+  color: rgba(15,23,42,.86);
+}
+
+/* Inputs */
+.labp .labd-form-body input[type="text"],
+.labp .labd-form-body input[type="email"],
+.labp .labd-form-body input[type="url"],
+.labp .labd-form-body input[type="number"],
+.labp .labd-form-body input[type="password"],
+.labp .labd-form-body input[type="time"],
+.labp .labd-form-body input[type="date"],
+.labp .labd-form-body select,
+.labp .labd-form-body textarea{
+  width: 100%;
+  background: rgba(255,255,255,.95);
+  border: 1px solid rgba(15,23,42,.12);
+  border-radius: 14px;
+  padding: 12px 14px;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--labset-text);          /* ✅ text color inside field */
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+
+/* Placeholder */
+.labp .labd-form-body input::placeholder,
+.labp .labd-form-body textarea::placeholder{
+  color: var(--labset-placeholder);
+  opacity: 1;
+}
+
+.labp .labd-form-body textarea{
+  min-height: 120px;
+  resize: vertical;
+  padding-top: 12px;
+}
+
+/* File input */
+.labp .labd-form-body input[type="file"]{
+  width: 100%;
+  background: rgba(255,255,255,.95);
+  border: 1px dashed rgba(15,23,42,.18);
+  border-radius: 14px;
+  padding: 12px 14px;
+  font-size: 14px;
+  color: var(--labset-text);          /* ✅ file name color */
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+
+/* Focus */
+.labp .labd-form-body input:focus,
+.labp .labd-form-body select:focus,
+.labp .labd-form-body textarea:focus{
+  border-color: var(--labset-focus);
+  box-shadow: 0 0 0 4px var(--labset-focus-ring);
+}
+
+/* Disabled */
+.labp .labd-form-body input:disabled,
+.labp .labd-form-body select:disabled,
+.labp .labd-form-body textarea:disabled{
+  opacity: .7;
+  background: rgba(241,245,249,.75);
+  cursor: not-allowed;
+}
+
+/* Helptext + errors */
+.labp .labd-form-body .helptext{
+  display:block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: rgba(100,116,139,.95);
+}
+
+.labp .labd-form-body .errorlist{
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0 0;
+  color: #b91c1c;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.labp .labd-form-body .errorlist li{
+  margin: 0 0 6px 0;
+}
+
+/* Checkbox / radio */
+.labp .labd-form-body input[type="checkbox"],
+.labp .labd-form-body input[type="radio"]{
+  transform: translateY(1px);
+  margin-inline-end: 8px; /* ✅ RTL/LTR safe */
+}
+
+.labp .labd-form-body ul{
+  margin: 8px 0 0 0;
+  padding-inline-start: 18px; /* ✅ RTL/LTR safe */
+}
+
+/* Small preview card for current logo/file */
+.labp .labset-preview{
+  background: rgba(255,255,255,.92);
+  border: 1px solid var(--labset-border);
+  border-radius: 16px;
+  padding: 14px;
+  box-shadow: 0 8px 22px rgba(2, 6, 23, .06);
+}
+
+.labp .labset-preview img{
+  display:block;
+  max-height: 96px;
+  width: auto;
+}
+
+/* Actions spacing */
+.labp .labd-actions{
+  margin-top: 10px;
+  gap: 10px;
+  flex-wrap: wrap;
+}

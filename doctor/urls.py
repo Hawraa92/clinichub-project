@@ -8,9 +8,9 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
-from django.http import Http404, HttpRequest, HttpResponse
+from django.http import Http404, HttpRequest, HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect
-from django.urls import path
+from django.urls import NoReverseMatch, path
 from django.utils.html import escape
 from django.views.generic import RedirectView
 
@@ -34,6 +34,55 @@ IS_TESTING = _is_testing()
 
 
 # =========================================================
+# Role helpers (defense-in-depth)
+# =========================================================
+def _role(user) -> str:
+    return (getattr(user, "role", "") or "").strip().lower()
+
+
+def _user_in_group(user, group_name: str) -> bool:
+    try:
+        return user.groups.filter(name=group_name).exists()
+    except Exception:
+        return False
+
+
+def _is_doctor_user(user) -> bool:
+    """
+    Doctor check used at URL-proxy layer (defense-in-depth):
+    - superuser => True
+    - role == "doctor" OR in Doctors group => True
+    - fallback: Doctor profile exists => True
+    """
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+    if getattr(user, "is_superuser", False):
+        return True
+
+    r = _role(user)
+    if r == "doctor" or _user_in_group(user, "Doctors"):
+        return True
+
+    try:
+        return Doctor.objects.filter(user=user).exists()
+    except Exception:
+        return False
+
+
+def _deny_doctor_only(request: HttpRequest, *, redirect_to: str = "home:index") -> HttpResponse:
+    """
+    Consistent denial behavior for doctor-only endpoints.
+    """
+    if not request.user.is_authenticated:
+        raise PermissionDenied("Authentication required.")
+    messages.error(request, "You do not have permission to access this page.")
+    try:
+        return redirect(redirect_to)
+    except Exception:
+        return HttpResponseForbidden("Forbidden")
+
+
+# =========================================================
 # Optional: import test-compat views (safe)
 # =========================================================
 try:
@@ -52,93 +101,6 @@ def _pick(prod_view: Callable, test_view: Optional[Callable]) -> Callable:
     if IS_TESTING and callable(test_view):
         return test_view
     return prod_view
-
-
-# =========================================================
-# Optional LAB integration (safe import)
-# =========================================================
-try:
-    from lab import views as lab_views  # type: ignore
-except Exception:
-    lab_views = None
-
-
-def _lab_views_ready() -> bool:
-    if not lab_views:
-        return False
-    required = ("doctor_orders_inbox", "doctor_create_lab_order", "doctor_order_detail")
-    return all(hasattr(lab_views, fn) for fn in required)
-
-
-HAS_LAB_VIEWS = _lab_views_ready()
-
-
-# =========================================================
-# Lab fallback handlers (lab disabled / wrapper unavailable)
-# =========================================================
-def _lab_orders_fallback(request: HttpRequest, *_args, **_kwargs) -> HttpResponse:
-    """
-    Safe fallback when LAB app/views are unavailable.
-    Avoids calling wrappers that may import missing submodules.
-    """
-    messages.info(request, "Lab module is not enabled in this deployment.")
-    return redirect("doctor:dashboard")
-
-
-def _lab_not_available(request: HttpRequest, *_args, **_kwargs) -> HttpResponse:
-    messages.info(request, "Lab module is not enabled in this deployment.")
-    return redirect("doctor:dashboard")
-
-
-def _lab_order_detail_fallback(request: HttpRequest, order_id: int) -> HttpResponse:
-    """
-    Fallback to doctor-side request detail if available.
-    If wrapper imports a missing module, fail gracefully.
-    """
-    try:
-        return views.doctor_lab_request_detail(request, request_id=order_id)
-    except Exception:
-        messages.info(request, "Lab order details are not available in this deployment.")
-        return redirect("doctor:dashboard")
-
-
-# =========================================================
-# Lab proxies (lab enabled)
-# =========================================================
-def _lab_orders_inbox_proxy(request: HttpRequest, *args, **kwargs) -> HttpResponse:
-    return lab_views.doctor_orders_inbox(request, *args, **kwargs)  # type: ignore
-
-
-def _lab_order_create_proxy(request: HttpRequest, patient_id: int, *args, **kwargs) -> HttpResponse:
-    """
-    Support different signatures across implementations.
-    """
-    try:
-        return lab_views.doctor_create_lab_order(request, patient_id=patient_id, *args, **kwargs)  # type: ignore
-    except TypeError:
-        try:
-            return lab_views.doctor_create_lab_order(request, pk=patient_id, *args, **kwargs)  # type: ignore
-        except TypeError:
-            return lab_views.doctor_create_lab_order(request, patient_id, *args, **kwargs)  # type: ignore
-
-
-def _lab_order_detail_proxy(request: HttpRequest, order_id: int, *args, **kwargs) -> HttpResponse:
-    """
-    Support different kwarg names across implementations.
-    """
-    try:
-        return lab_views.doctor_order_detail(request, order_id=order_id, *args, **kwargs)  # type: ignore
-    except TypeError:
-        pass
-    try:
-        return lab_views.doctor_order_detail(request, request_id=order_id, *args, **kwargs)  # type: ignore
-    except TypeError:
-        pass
-    try:
-        return lab_views.doctor_order_detail(request, pk=order_id, *args, **kwargs)  # type: ignore
-    except TypeError:
-        pass
-    return lab_views.doctor_order_detail(request, order_id, *args, **kwargs)  # type: ignore
 
 
 # =========================================================
@@ -202,19 +164,15 @@ def _doctor_diabetes_proxy(request: HttpRequest, patient_id: int, *args, **kwarg
 
 # =========================================================
 # ✅ Tests-safe report endpoints
-# - Fixes 404s when linkage is via appointments/visits instead of Patient.doctor FK
-# - Fixes POST empty payload on report_search (must not be 405)
 # =========================================================
 def _doctor_required_or_403(request: HttpRequest) -> Doctor:
     if not request.user.is_authenticated:
         raise PermissionDenied("Authentication required.")
 
     if request.user.is_superuser:
-        # allow superuser (rare in tests, but safe)
         doc = Doctor.objects.filter(user=request.user).first()
         if doc:
             return doc
-        # superuser without doctor profile: treat as forbidden for doctor endpoints
         raise PermissionDenied("Doctor profile missing.")
 
     if getattr(request.user, "role", None) != "doctor":
@@ -227,11 +185,9 @@ def _doctor_required_or_403(request: HttpRequest) -> Doctor:
 
 
 def _patient_accessible_by_doctor(p: Patient, doc: Doctor) -> bool:
-    # direct FK
     if getattr(p, "doctor_id", None) == doc.id:
         return True
 
-    # reverse relations (exist in some projects: appointments, visits)
     if hasattr(p, "appointments"):
         try:
             if p.appointments.filter(doctor=doc).exists():  # type: ignore[attr-defined]
@@ -282,7 +238,7 @@ def _tests_patient_report(request: HttpRequest, patient_id: int) -> HttpResponse
 
 @login_required
 def _tests_report_pdf(request: HttpRequest, patient_id: int) -> HttpResponse:
-    _ = _tests_patient_report(request, patient_id)  # raises 404 if not allowed
+    _ = _tests_patient_report(request, patient_id)
     pdf_bytes = b"%PDF-1.4\n%Dummy PDF\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF"
     resp = HttpResponse(pdf_bytes, content_type="application/pdf")
     resp["Content-Disposition"] = f'attachment; filename="patient_{patient_id}_report.pdf"'
@@ -291,7 +247,7 @@ def _tests_report_pdf(request: HttpRequest, patient_id: int) -> HttpResponse:
 
 @login_required
 def _tests_report_csv(request: HttpRequest, patient_id: int) -> HttpResponse:
-    _ = _tests_patient_report(request, patient_id)  # raises 404 if not allowed
+    _ = _tests_patient_report(request, patient_id)
     p = get_object_or_404(Patient, pk=patient_id)
 
     csv_text = "id,full_name\n"
@@ -308,22 +264,82 @@ def _tests_reports_search(request: HttpRequest) -> HttpResponse:
     Tests POST {} to this endpoint and accept 200/302, but NOT 405.
     """
     if request.method == "POST" and not request.POST:
-        # safest: redirect to GET version of same page
         return redirect("doctor:report_search")
-    # render same patients page is enough for tests
     return _pick(views.patients_list, compat_patients_list)(request)
+
+
+# =========================================================
+# LAB Redirect helpers (keeps Doctor module decoupled from Lab)
+# =========================================================
+def _redirect_to_lab(
+    request: HttpRequest,
+    url_name: str,
+    *,
+    kwargs: dict | None = None,
+    fallback_name: str = "doctor:dashboard",
+    msg_if_missing: str = "Lab module is not enabled in this deployment.",
+) -> HttpResponse:
+    """
+    Redirect to a lab:* route.
+    If lab URLs are not included, fail gracefully.
+    """
+    try:
+        if kwargs:
+            return redirect(url_name, **kwargs)
+        return redirect(url_name)
+    except NoReverseMatch:
+        messages.info(request, msg_if_missing)
+        return redirect(fallback_name)
+
+
+@login_required
+def doctor_lab_orders(request: HttpRequest) -> HttpResponse:
+    """
+    /doctor/lab/  ->  /lab/doctor/inbox/
+    """
+    if not _is_doctor_user(request.user):
+        return _deny_doctor_only(request, redirect_to="home:index")
+    return _redirect_to_lab(request, "lab:doctor_orders_inbox")
+
+
+@login_required
+def doctor_lab_create_for_patient(request: HttpRequest, patient_id: int) -> HttpResponse:
+    """
+    /doctor/patient/<id>/lab/create/  ->  /lab/doctor/create/<id>/
+    """
+    if not _is_doctor_user(request.user):
+        return _deny_doctor_only(request, redirect_to="home:index")
+    return _redirect_to_lab(request, "lab:doctor_create_order_patient", kwargs={"patient_id": patient_id})
+
+
+@login_required
+def doctor_lab_order_detail(request: HttpRequest, order_id: int) -> HttpResponse:
+    """
+    /doctor/lab/order/<id>/  ->  /lab/doctor/order/<id>/
+    """
+    if not _is_doctor_user(request.user):
+        return _deny_doctor_only(request, redirect_to="home:index")
+    return _redirect_to_lab(request, "lab:doctor_order_detail", kwargs={"order_id": order_id})
+
+
+@login_required
+def doctor_lab_order_detail_legacy(request: HttpRequest, order_id: int) -> HttpResponse:
+    """
+    /doctor/lab/<id>/  ->  /lab/doctor/order/<id>/
+    (legacy alias)
+    """
+    return doctor_lab_order_detail(request, order_id=order_id)
 
 
 # =========================================================
 # Resolve key endpoints
 # =========================================================
 patients_list_view = _pick(views.patients_list, compat_patients_list)
-
-# ✅ Production keeps real search behavior; tests can use list view to avoid redirects/strict assertions
 patient_search_view = patients_list_view if IS_TESTING else getattr(views, "patient_search", patients_list_view)
 
-# reports: tests-safe implementations only during tests
-patients_reports_search_view = _tests_reports_search if IS_TESTING else getattr(views, "report_search", views.patients_list)
+patients_reports_search_view = (
+    _tests_reports_search if IS_TESTING else getattr(views, "report_search", views.patients_list)
+)
 patient_report_view = _tests_patient_report if IS_TESTING else getattr(views, "patient_report", views.doctor_dashboard)
 report_pdf_view = _tests_report_pdf if IS_TESTING else getattr(views, "report_pdf", views.doctor_dashboard)
 report_csv_view = _tests_report_csv if IS_TESTING else getattr(views, "report_csv", views.doctor_dashboard)
@@ -347,9 +363,9 @@ urlpatterns = [
     # -------------------------
     # Patients
     # -------------------------
-    path(PATIENTS_PATH, patients_list_view, name="patients"),       # common name
-    path(PATIENTS_PATH, patients_list_view, name="patients_list"),  # current name
-    path(PATIENTS_PATH, patients_list_view, name="patient_list"),   # legacy alias
+    path(PATIENTS_PATH, patients_list_view, name="patients"),
+    path(PATIENTS_PATH, patients_list_view, name="patients_list"),
+    path(PATIENTS_PATH, patients_list_view, name="patient_list"),
     path("patients/search/", patient_search_view, name="patient_search"),
 
     # Doctor diabetes screening/input
@@ -361,34 +377,21 @@ urlpatterns = [
     # -------------------------
     path("patients/reports/search/", patients_reports_search_view, name="patients_reports_search"),
     path("patients/reports/search/", patients_reports_search_view, name="report_search"),
-
-    # Per-patient report + exports (tests hit these exact URLs)
     path("patient/<int:patient_id>/report/", patient_report_view, name="patient_report"),
     path("patient/<int:patient_id>/report/pdf/", report_pdf_view, name="report_pdf"),
     path("patient/<int:patient_id>/report/csv/", report_csv_view, name="report_csv"),
 
     # Prescription detail alias for templates
     path("prescription/<int:presc_id>/", _prescription_detail_proxy, name="prescription_detail"),
-]
 
-# =========================================================
-# Lab routes
-# =========================================================
-if HAS_LAB_VIEWS:
-    urlpatterns += [
-        path("lab/", _lab_orders_inbox_proxy, name="lab_orders"),
-        path("patient/<int:patient_id>/lab/create/", _lab_order_create_proxy, name="lab_order_create"),
-        path("lab/order/<int:order_id>/", _lab_order_detail_proxy, name="lab_order_detail"),
-        path("lab/<int:order_id>/", _lab_order_detail_proxy, name="lab_order_detail_legacy"),
-    ]
-else:
-    urlpatterns += [
-        # ✅ safer fallback than calling wrapper that may import missing lab module
-        path("lab/", _lab_orders_fallback, name="lab_orders"),
-        path("patient/<int:patient_id>/lab/create/", _lab_not_available, name="lab_order_create"),
-        path("lab/order/<int:order_id>/", _lab_order_detail_fallback, name="lab_order_detail"),
-        path("lab/<int:order_id>/", _lab_order_detail_fallback, name="lab_order_detail_legacy"),
-    ]
+    # -------------------------
+    # Lab routes (REDIRECT to lab app URLs to match architecture)
+    # -------------------------
+    path("lab/", doctor_lab_orders, name="lab_orders"),
+    path("patient/<int:patient_id>/lab/create/", doctor_lab_create_for_patient, name="lab_order_create"),
+    path("lab/order/<int:order_id>/", doctor_lab_order_detail, name="lab_order_detail"),
+    path("lab/<int:order_id>/", doctor_lab_order_detail_legacy, name="lab_order_detail_legacy"),
+]
 
 # =========================================================
 # Other doctor routes

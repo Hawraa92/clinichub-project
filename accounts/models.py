@@ -11,6 +11,7 @@ class UserManager(BaseUserManager):
     """
     Custom manager using email as the unique login identifier.
     Applies default approval rules based on role, BUT respects explicit is_approved.
+    Also enforces admin role -> is_staff=True to avoid /admin redirect confusion.
     """
     use_in_migrations = True
 
@@ -22,13 +23,17 @@ class UserManager(BaseUserManager):
         email = self.normalize_email(email).strip().lower()
 
         # Extract role (default to patient)
-        role = extra_fields.pop("role", User.Roles.PATIENT)
+        role = (extra_fields.pop("role", User.Roles.PATIENT) or User.Roles.PATIENT)
+        role = str(role).strip().lower()
 
         # Default approval rule (ONLY if caller didn't specify is_approved):
         # - patients auto-approved by default
         # - staff roles require approval by default
-        # NOTE: if tests/admin pass is_approved=False explicitly, we keep it.
         extra_fields.setdefault("is_approved", True if role == User.Roles.PATIENT else False)
+
+        # ✅ Enforce admin role => is_staff=True (even if caller forgot)
+        if role == User.Roles.ADMIN and extra_fields.get("is_staff") is not True:
+            extra_fields["is_staff"] = True
 
         user = self.model(email=email, role=role, **extra_fields)
         user.set_password(password)
@@ -36,9 +41,17 @@ class UserManager(BaseUserManager):
         return user
 
     def create_user(self, email: str, password: str | None = None, role: str = "patient", **extra_fields):
+        role = str(role or "patient").strip().lower()
         extra_fields["role"] = role
+
+        # Default: non-admin users are not staff
         extra_fields.setdefault("is_staff", False)
         extra_fields.setdefault("is_superuser", False)
+
+        # ✅ If creating admin user (not superuser), force staff
+        if role == User.Roles.ADMIN:
+            extra_fields["is_staff"] = True
+
         return self._create_user(email, password, **extra_fields)
 
     def create_superuser(self, email: str, password: str | None = None, **extra_fields):
@@ -51,7 +64,7 @@ class UserManager(BaseUserManager):
             raise ValueError("Superuser must have is_staff=True.")
         if extra_fields.get("is_superuser") is not True:
             raise ValueError("Superuser must have is_superuser=True.")
-        if extra_fields.get("role") != User.Roles.ADMIN:
+        if str(extra_fields.get("role")).lower() != User.Roles.ADMIN:
             raise ValueError('Superuser must have role="admin".')
 
         return self._create_user(email, password, **extra_fields)
@@ -126,25 +139,43 @@ class User(AbstractUser):
         if self.email:
             self.email = self.email.strip().lower()
 
+        if self.role:
+            self.role = str(self.role).strip().lower()
+
+        # Only secretaries may keep assigned_doctor
         if self.role != self.Roles.SECRETARY:
             self.assigned_doctor = None
 
     def save(self, *args, **kwargs):
-        # Normalize email
+        # Normalize email + role
         if self.email:
             self.email = self.email.strip().lower()
+
+        if self.role:
+            self.role = str(self.role).strip().lower()
+        else:
+            self.role = self.Roles.PATIENT
 
         # Auto-fill username from email prefix if missing
         if self.email and not self.username:
             self.username = self.email.split("@")[0]
 
-        # ✅ Only enforce superuser approval (safe)
+        # ✅ Superuser policy: always admin + staff + approved
         if getattr(self, "is_superuser", False):
+            self.role = self.Roles.ADMIN
+            self.is_staff = True
             self.is_approved = True
 
-        # Do not force patient approval here.
-        # (PatientSignUpForm / UserManager defaults handle auto-approval,
-        # while tests/admin can set is_approved=False explicitly.)
+        # ✅ Admin role should be staff to access /admin/
+        if self.role == self.Roles.ADMIN and not getattr(self, "is_superuser", False):
+            self.is_staff = True
+
+        # ✅ Prevent accidental admin-site access for non-admin roles (more secure)
+        if self.role != self.Roles.ADMIN and not getattr(self, "is_superuser", False):
+            self.is_staff = False
+            self.is_superuser = False  # safety: avoid inconsistent states
+
+        # Only secretaries may keep assigned_doctor
         if self.role != self.Roles.SECRETARY:
             self.assigned_doctor = None
 

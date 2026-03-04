@@ -12,6 +12,7 @@ import qrcode
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.files.base import ContentFile
 from django.core.signing import BadSignature, SignatureExpired, dumps, loads
 from django.db import IntegrityError, transaction
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseForbidden
@@ -348,16 +349,86 @@ def _ensure_assets_after_medications(p: Prescription, *, force_pdf: bool = True)
         pass
 
 
+def _upsert_archive_pdf_copy(archive: PatientArchive, prescription: Prescription, user) -> None:
+    """
+    ✅ IMPORTANT FIX:
+    نخزن نسخة PDF داخل ArchiveAttachment (بدون مشاركة نفس file path)
+    حتى حذف الـ attachment ما يحذف ملف الـ prescription الأصلي.
+    """
+    pdf_field = getattr(prescription, "pdf_file", None)
+    if not pdf_field:
+        return
+
+    try:
+        try:
+            pdf_field.open("rb")
+        except Exception:
+            pass
+        pdf_bytes = pdf_field.read()
+    except Exception as e:
+        logger.warning("Cannot read RX PDF for archiving (RX %s): %s", getattr(prescription, "pk", None), e)
+        return
+
+    if not pdf_bytes:
+        return
+
+    filename = f"rx_{getattr(prescription, 'pk', 'new')}.pdf"
+
+    try:
+        att = (
+            ArchiveAttachment.objects.filter(archive=archive, description="Prescription PDF")
+            .order_by("-id")
+            .first()
+        )
+
+        if att:
+            old_name = getattr(att.file, "name", None)
+            att.file.save(filename, ContentFile(pdf_bytes), save=False)
+
+            if _model_has_field(ArchiveAttachment, "uploaded_by") and getattr(user, "is_authenticated", False):
+                att.uploaded_by = user
+
+            att.description = "Prescription PDF"
+            att.save()
+
+            # Best-effort: delete old stored file if it changed
+            try:
+                new_name = getattr(att.file, "name", None)
+                if old_name and new_name and old_name != new_name:
+                    try:
+                        att.file.storage.delete(old_name)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+        else:
+            new_att = ArchiveAttachment(
+                archive=archive,
+                description="Prescription PDF",
+            )
+            if _model_has_field(ArchiveAttachment, "uploaded_by") and getattr(user, "is_authenticated", False):
+                new_att.uploaded_by = user
+
+            new_att.file.save(filename, ContentFile(pdf_bytes), save=False)
+            new_att.save()
+
+    except Exception as e:
+        logger.warning("Failed attaching/updating PDF copy to archive for RX %s: %s", prescription.pk, e)
+
+
 def _archive_prescription_if_needed(prescription: Prescription, user, archive_flag: bool) -> None:
     """
-    يبني سجل في PatientArchive ويضيف/يحدّث مرفق PDF (إن وجد)
-    عند تفعيل خيار الأرشفة.
+    ✅ FIXED:
+    - يربط PatientArchive.prescription = Prescription (إذا الحقل موجود)
+    - يربط PatientArchive.appointment (إذا الحقل موجود)
+    - يخزن نسخة PDF داخل archive attachments (بدون مشاركة نفس الملف)
     """
     if not archive_flag:
         return
 
-    patient = getattr(getattr(prescription, "appointment", None), "patient", None)
+    patient = getattr(getattr(prescription, "appointment", None), "patient", None) or getattr(prescription, "patient", None)
     doctor = getattr(prescription, "doctor", None)
+    appt = getattr(prescription, "appointment", None)
 
     if not patient or not doctor:
         logger.warning("Cannot archive prescription %s: missing patient or doctor.", prescription.pk)
@@ -365,72 +436,124 @@ def _archive_prescription_if_needed(prescription: Prescription, user, archive_fl
 
     title = f"Prescription #{prescription.pk}"
 
-    defaults: dict = {}
+    has_rx_link = _model_has_field(PatientArchive, "prescription")
+    has_appt_link = _model_has_field(PatientArchive, "appointment")
+
+    # ---------- Build create/default fields ----------
+    base_fields: dict = {
+        "patient": patient,
+        "doctor": doctor,
+        "title": title,
+    }
+
     if _model_has_field(PatientArchive, "notes"):
-        defaults["notes"] = getattr(prescription, "instructions", "") or ""
+        base_fields["notes"] = getattr(prescription, "instructions", "") or ""
     if _model_has_field(PatientArchive, "archive_type"):
-        defaults["archive_type"] = "prescription"
+        base_fields["archive_type"] = "prescription"
     if _model_has_field(PatientArchive, "is_critical"):
-        defaults["is_critical"] = False
+        base_fields["is_critical"] = False
     if _model_has_field(PatientArchive, "status"):
-        defaults["status"] = "final"
+        base_fields["status"] = "final"
     if _model_has_field(PatientArchive, "created_by") and getattr(user, "is_authenticated", False):
-        defaults["created_by"] = user
+        base_fields["created_by"] = user
+    if has_appt_link and appt is not None:
+        base_fields["appointment"] = appt
+    if has_rx_link:
+        base_fields["prescription"] = prescription
 
     try:
-        archive, created = PatientArchive.objects.get_or_create(
-            patient=patient,
-            doctor=doctor,
-            title=title,
-            defaults=defaults,
-        )
+        archive: PatientArchive | None = None
+        created = False
 
-        if not created:
-            updated = False
+        if has_rx_link:
+            # 1) Prefer strict link by prescription (OneToOne)
+            archive = PatientArchive.objects.filter(prescription=prescription).first()
 
-            if _model_has_field(PatientArchive, "notes"):
-                ins = getattr(prescription, "instructions", "") or ""
-                if ins and getattr(archive, "notes", "") != ins:
-                    archive.notes = ins
-                    updated = True
+            # 2) If not found, try to reuse an older record by patient/doctor/title (if it has no prescription)
+            if not archive:
+                cand_qs = PatientArchive.objects.filter(patient=patient, doctor=doctor, title=title)
+                if _model_has_field(PatientArchive, "archive_type"):
+                    cand_qs = cand_qs.filter(archive_type="prescription")
+                candidate = cand_qs.order_by("-id").first()
+                if candidate and not getattr(candidate, "prescription_id", None):
+                    archive = candidate
 
-            if _model_has_field(PatientArchive, "status") and getattr(archive, "status", "") != "final":
+            # 3) If still not found, create
+            if not archive:
+                archive = PatientArchive.objects.create(**base_fields)
+                created = True
+            else:
+                created = False
+        else:
+            # Fallback build (بدون حقل prescription)
+            defaults = base_fields.copy()
+            defaults.pop("patient", None)
+            defaults.pop("doctor", None)
+            defaults.pop("title", None)
+
+            archive, created = PatientArchive.objects.get_or_create(
+                patient=patient,
+                doctor=doctor,
+                title=title,
+                defaults=defaults,
+            )
+
+        if not archive:
+            return
+
+        # ---------- Update existing archive to ensure consistency ----------
+        updated = False
+
+        if has_rx_link and getattr(archive, "prescription_id", None) != prescription.pk:
+            try:
+                setattr(archive, "prescription", prescription)
+                updated = True
+            except Exception:
+                pass
+
+        if has_appt_link and appt is not None and getattr(archive, "appointment_id", None) != getattr(appt, "pk", None):
+            try:
+                setattr(archive, "appointment", appt)
+                updated = True
+            except Exception:
+                pass
+
+        if _model_has_field(PatientArchive, "archive_type") and getattr(archive, "archive_type", None) != "prescription":
+            try:
+                archive.archive_type = "prescription"
+                updated = True
+            except Exception:
+                pass
+
+        if _model_has_field(PatientArchive, "status") and getattr(archive, "status", None) != "final":
+            try:
                 archive.status = "final"
                 updated = True
+            except Exception:
+                pass
 
-            if _model_has_field(PatientArchive, "updated_by") and getattr(user, "is_authenticated", False):
+        if _model_has_field(PatientArchive, "notes"):
+            ins = getattr(prescription, "instructions", "") or ""
+            if ins and (getattr(archive, "notes", "") or "") != ins:
+                try:
+                    archive.notes = ins
+                    updated = True
+                except Exception:
+                    pass
+
+        if _model_has_field(PatientArchive, "updated_by") and getattr(user, "is_authenticated", False):
+            try:
                 archive.updated_by = user
                 updated = True
+            except Exception:
+                pass
 
-            if updated:
-                archive.save()
+        if updated and not created:
+            archive.save()
 
-        # attach pdf if available
+        # ---------- Attach PDF as a COPY inside archive ----------
         if getattr(prescription, "pdf_file", None):
-            try:
-                att = (
-                    ArchiveAttachment.objects.filter(archive=archive, description="Prescription PDF")
-                    .order_by("-id")
-                    .first()
-                )
-
-                if att:
-                    if getattr(att.file, "name", None) != getattr(prescription.pdf_file, "name", None):
-                        att.file = prescription.pdf_file
-                        if _model_has_field(ArchiveAttachment, "uploaded_by") and getattr(user, "is_authenticated", False):
-                            att.uploaded_by = user
-                        att.save()
-                else:
-                    create_kwargs = {
-                        "archive": archive,
-                        "file": prescription.pdf_file,
-                        "description": "Prescription PDF",
-                    }
-                    if _model_has_field(ArchiveAttachment, "uploaded_by") and getattr(user, "is_authenticated", False):
-                        create_kwargs["uploaded_by"] = user
-                    ArchiveAttachment.objects.create(**create_kwargs)
-            except Exception as e:
-                logger.warning("Failed attaching/updating PDF to archive for RX %s: %s", prescription.pk, e)
+            _upsert_archive_pdf_copy(archive, prescription, user)
 
     except Exception as e:
         logger.error("Error while archiving prescription %s: %s", prescription.pk, e)
@@ -577,7 +700,11 @@ def _new_prescription_core(request, forced_appointment_id: Optional[int] = None)
                     # ✅ ARCHIVING POLICY:
                     # - إذا PRESCRIPTION_FORCE_ARCHIVE=True => دائما True
                     # - غير ذلك => يعتمد على checkbox
-                    user_choice = bool(form.cleaned_data.get("archive_prescription")) if hasattr(form, "cleaned_data") else False
+                    user_choice = (
+                        bool(form.cleaned_data.get("archive_prescription"))
+                        if hasattr(form, "cleaned_data")
+                        else False
+                    )
                     archive_flag = True if _force_archive_enabled() else user_choice
 
                     # لو عندك status بالحقل نعتبرها completed عند الأرشفة
@@ -696,7 +823,11 @@ def _edit_prescription_core(request, pk: int) -> HttpResponse:
                         if prescription.appointment.doctor_id != prescription.doctor_id:
                             prescription.doctor = prescription.appointment.doctor
 
-                    user_choice = bool(form.cleaned_data.get("archive_prescription")) if hasattr(form, "cleaned_data") else False
+                    user_choice = (
+                        bool(form.cleaned_data.get("archive_prescription"))
+                        if hasattr(form, "cleaned_data")
+                        else False
+                    )
                     archive_flag = True if _force_archive_enabled() else user_choice
 
                     if archive_flag and hasattr(prescription, "status"):

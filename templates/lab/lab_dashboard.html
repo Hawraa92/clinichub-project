@@ -18,287 +18,286 @@
 {% endblock %}
 
 {% block content %}
-{% firstof settings_obj.lab_name "Lab Panel" as lab_name %}
+  {% firstof settings_obj.lab_name "Lab Panel" as lab_name %}
 
-<div class="labp">
-  <div class="page-bg">
-    <div class="dashboard-container">
+  <div class="labp">
+    <div class="page-bg">
+      <div class="dashboard-container">
 
-      <!-- Sidebar -->
-      <aside class="sidebar" aria-label="Lab Sidebar Navigation">
-        <div class="brand-container">
-          <div class="lab-avatar">
-            {% if settings_obj and settings_obj.lab_logo %}
-              <img
-                src="{{ settings_obj.lab_logo.url }}"
-                alt="Lab Logo"
-                style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;">
-            {% else %}
-              <i class="bi bi-flask2"></i>
-            {% endif %}
-          </div>
-
-          <div class="brand-text">
-            <h3>{{ lab_name }}</h3>
-            <p>Dashboard</p>
-          </div>
-        </div>
-
-        <nav class="nav-menu">
-          <a class="nav-item active" href="{% url 'lab:dashboard' %}">
-            <i class="bi bi-speedometer2"></i> Dashboard
-          </a>
-
-          <a class="nav-item" href="{% url 'lab:lab_inbox' %}">
-            <i class="bi bi-inbox"></i> Orders Inbox
-          </a>
-
-          <a class="nav-item" href="{% url 'lab:dashboard' %}#latest">
-            <i class="bi bi-list-check"></i> Latest Orders
-          </a>
-
-          <a class="nav-item" href="{% url 'lab:dashboard' %}#chart">
-            <i class="bi bi-graph-up"></i> Weekly Chart
-          </a>
-
-          <a class="nav-item" href="{% url 'lab:lab_settings' %}">
-            <i class="bi bi-gear"></i> Settings
-          </a>
-        </nav>
-
-        <div class="logout-container">
-          <form method="post" action="{% url 'accounts:logout' %}">
-            {% csrf_token %}
-            <button type="submit" class="nav-item" style="width:100%; background:transparent; border:0; text-align:left;">
-              <i class="bi bi-box-arrow-right"></i> Logout
-            </button>
-          </form>
-        </div>
-      </aside>
-
-      <!-- Main -->
-      <main class="main-content">
-
-        <!-- Header -->
-        <div class="dashboard-header">
-          <div class="welcome-section">
-            <h1>Welcome, {{ lab_name }}</h1>
-            <p class="inspiration">Fast results, clear tracking, safer decisions.</p>
-          </div>
-
-          <div class="datetime-card" aria-label="Date and Time">
-            <div class="clock-icon">
-              <i class="bi bi-clock"></i>
+        <!-- Sidebar -->
+        <aside class="sidebar" aria-label="Lab Sidebar Navigation">
+          <div class="brand-container">
+            <div class="lab-avatar">
+              {% if settings_obj and settings_obj.lab_logo %}
+                <img
+                  src="{{ settings_obj.lab_logo.url }}"
+                  alt="Lab Logo"
+                  style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;">
+              {% else %}
+                <i class="bi bi-flask2"></i>
+              {% endif %}
             </div>
-            <div>
-              <div class="clock" id="labClock">--:--</div>
-              <div class="date">
-                {{ today|default:"—" }}
+
+            <div class="brand-text">
+              <h3>{{ lab_name }}</h3>
+              <p>Dashboard</p>
+            </div>
+          </div>
+
+          <nav class="nav-menu">
+            <a class="nav-item active" href="{% url 'lab:dashboard' %}">
+              <i class="bi bi-speedometer2"></i> Dashboard
+            </a>
+
+            <a class="nav-item" href="{% url 'lab:lab_inbox' %}">
+              <i class="bi bi-inbox"></i> Orders Inbox
+            </a>
+
+            <a class="nav-item" href="{% url 'lab:dashboard' %}#latest">
+              <i class="bi bi-list-check"></i> Latest Orders
+            </a>
+
+            <a class="nav-item" href="{% url 'lab:dashboard' %}#chart">
+              <i class="bi bi-graph-up"></i> Weekly Chart
+            </a>
+
+            <a class="nav-item" href="{% url 'lab:lab_settings' %}">
+              <i class="bi bi-gear"></i> Settings
+            </a>
+          </nav>
+
+          <div class="logout-container">
+            <form method="post" action="{% url 'accounts:logout' %}">
+              {% csrf_token %}
+              <button type="submit" class="nav-item" style="width:100%; background:transparent; border:0; text-align:start;">
+                <i class="bi bi-box-arrow-right"></i> Logout
+              </button>
+            </form>
+          </div>
+        </aside>
+
+        <!-- Main -->
+        <main class="main-content">
+
+          <!-- Header -->
+          <div class="dashboard-header">
+            <div class="welcome-section">
+              <h1>Welcome, {{ lab_name }}</h1>
+              <p class="inspiration">Fast results, clear tracking, safer decisions.</p>
+            </div>
+
+            <div class="datetime-card" aria-label="Date and Time">
+              <div class="clock-icon">
+                <i class="bi bi-clock"></i>
+              </div>
+              <div>
+                <div class="clock" id="labClock">--:--</div>
+                <div class="date">{{ today|default:"—" }}</div>
               </div>
             </div>
           </div>
-        </div>
 
-        <!-- Quick actions -->
-        <div class="quick-actions">
-          <a class="action-btn" href="{% url 'lab:lab_inbox' %}?status=PENDING">
-            <i class="bi bi-hourglass-split"></i>
-            <span>Pending</span>
-          </a>
-
-          <a class="action-btn" href="{% url 'lab:lab_inbox' %}?status=IN_PROGRESS">
-            <i class="bi bi-arrow-repeat"></i>
-            <span>In Progress</span>
-          </a>
-
-          <a class="action-btn" href="{% url 'lab:lab_inbox' %}?status=READY">
-            <i class="bi bi-check2-circle"></i>
-            <span>Ready</span>
-          </a>
-
-          <a class="action-btn" href="{% url 'lab:lab_inbox' %}?status=CANCELLED">
-            <i class="bi bi-x-circle"></i>
-            <span>Cancelled</span>
-          </a>
-        </div>
-
-        <!-- KPIs -->
-        <div class="stats-grid">
-          <div class="stat-card">
-            <div class="card-icon lab-pending">
+          <!-- Quick actions -->
+          <div class="quick-actions">
+            <a class="action-btn" href="{% url 'lab:lab_inbox' %}?status=PENDING">
               <i class="bi bi-hourglass-split"></i>
-            </div>
-            <div class="card-content">
-              <h3>Pending</h3>
-              <p>{{ stats.pending|default:0 }}</p>
-            </div>
-          </div>
+              <span>Pending</span>
+            </a>
 
-          <div class="stat-card">
-            <div class="card-icon lab-orders">
+            <a class="action-btn" href="{% url 'lab:lab_inbox' %}?status=IN_PROGRESS">
               <i class="bi bi-arrow-repeat"></i>
-            </div>
-            <div class="card-content">
-              <h3>In Progress</h3>
-              <p>{{ stats.in_progress|default:0 }}</p>
-            </div>
-          </div>
+              <span>In Progress</span>
+            </a>
 
-          {# ✅ NEW: Completed Results (ALL) = READY #}
-          <div class="stat-card">
-            <div class="card-icon lab-completed">
+            <a class="action-btn" href="{% url 'lab:lab_inbox' %}?status=READY">
               <i class="bi bi-check2-circle"></i>
-            </div>
-            <div class="card-content">
-              <h3>Completed Results</h3>
-              <p>
-                {% firstof stats.completed_results stats.completed_total 0 %}
-              </p>
-            </div>
+              <span>Ready</span>
+            </a>
+
+            <a class="action-btn" href="{% url 'lab:lab_inbox' %}?status=CANCELLED">
+              <i class="bi bi-x-circle"></i>
+              <span>Cancelled</span>
+            </a>
           </div>
 
-          {# ✅ Ready Today (fallback) #}
-          <div class="stat-card">
-            <div class="card-icon lab-completed">
-              <i class="bi bi-calendar-check"></i>
-            </div>
-            <div class="card-content">
-              <h3>Ready Today</h3>
-              <p>{{ stats.completed_today|default:0 }}</p>
-            </div>
-          </div>
-
-          <div class="stat-card">
-            <div class="card-icon lab-urgent">
-              <i class="bi bi-exclamation-triangle"></i>
-            </div>
-            <div class="card-content">
-              <h3>Urgent Waiting</h3>
-              <p>{{ stats.urgent_pending|default:0 }}</p>
-            </div>
-          </div>
-
-          {# ✅ Optional: Today Requests (إذا تحبين يظهر) #}
-          <div class="stat-card">
-            <div class="card-icon lab-orders">
-              <i class="bi bi-clipboard2-pulse"></i>
-            </div>
-            <div class="card-content">
-              <h3>Today Requests</h3>
-              <p>{{ stats.today_requests|default:0 }}</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Chart -->
-        <section class="chart-section" id="chart">
-          <div class="section-header">
-            <i class="bi bi-graph-up"></i>
-            <h2>Weekly Orders</h2>
-          </div>
-          <div class="chart-container">
-            <canvas id="labWeeklyChart"></canvas>
-          </div>
-        </section>
-
-        <!-- Latest Orders -->
-        <section class="archives-section" id="latest">
-          <div class="section-header">
-            <i class="bi bi-list-check"></i>
-            <h2>Latest Orders</h2>
-          </div>
-
-          <div class="labd-table">
-            <div class="labd-row labd-head">
-              <div>#</div>
-              <div>Patient</div>
-              <div>Doctor</div>
-              <div>Status</div>
-              <div>Urgency</div>
-              <div></div>
-            </div>
-
-            {% for o in latest_orders %}
-              {% firstof o.urgency o.priority "" as urgency_display %}
-
-              <div class="labd-row">
-                <div><strong>#{{ o.id }}</strong></div>
-
-                <div>{{ o.patient.full_name|default:o.patient|default:"—" }}</div>
-
-                <div>
-                  Dr. {{ o.doctor.user.get_full_name|default:o.doctor.user.username|default:"—" }}
-                </div>
-
-                <div>
-                  <span class="chip chip-{{ o.status|default:''|lower }}">{{ o.status|default:"—" }}</span>
-                </div>
-
-                <div>
-                  {% if urgency_display %}
-                    <span class="chip chip-{{ urgency_display|lower }}">{{ urgency_display }}</span>
-                  {% else %}
-                    <span style="opacity:.7;">—</span>
-                  {% endif %}
-                </div>
-
-                <div>
-                  <a class="labd-btn primary" href="{% url 'lab:lab_order_detail' order_id=o.id %}">
-                    <i class="bi bi-box-arrow-in-right"></i> Open
-                  </a>
-                </div>
+          <!-- KPIs -->
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="card-icon lab-pending">
+                <i class="bi bi-hourglass-split"></i>
               </div>
-            {% empty %}
-              <div class="labd-empty">No orders yet.</div>
-            {% endfor %}
-          </div>
-        </section>
+              <div class="card-content">
+                <h3>Pending</h3>
+                <p>{{ stats.pending|default:0 }}</p>
+              </div>
+            </div>
 
-      </main>
+            <div class="stat-card">
+              <div class="card-icon lab-orders">
+                <i class="bi bi-arrow-repeat"></i>
+              </div>
+              <div class="card-content">
+                <h3>In Progress</h3>
+                <p>{{ stats.in_progress|default:0 }}</p>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="card-icon lab-completed">
+                <i class="bi bi-check2-circle"></i>
+              </div>
+              <div class="card-content">
+                <h3>Completed Results</h3>
+                <p>{% firstof stats.completed_results stats.completed_total 0 %}</p>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="card-icon lab-completed">
+                <i class="bi bi-calendar-check"></i>
+              </div>
+              <div class="card-content">
+                <h3>Ready Today</h3>
+                <p>{{ stats.completed_today|default:0 }}</p>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="card-icon lab-urgent">
+                <i class="bi bi-exclamation-triangle"></i>
+              </div>
+              <div class="card-content">
+                <h3>Urgent Waiting</h3>
+                <p>{{ stats.urgent_pending|default:0 }}</p>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="card-icon lab-orders">
+                <i class="bi bi-clipboard2-pulse"></i>
+              </div>
+              <div class="card-content">
+                <h3>Today Requests</h3>
+                <p>{{ stats.today_requests|default:0 }}</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Chart -->
+          <section class="chart-section" id="chart">
+            <div class="section-header">
+              <i class="bi bi-graph-up"></i>
+              <h2>Weekly Orders</h2>
+            </div>
+            <div class="chart-container">
+              <canvas id="labWeeklyChart"></canvas>
+            </div>
+          </section>
+
+          <!-- Latest Orders -->
+          <section class="archives-section" id="latest">
+            <div class="section-header">
+              <i class="bi bi-list-check"></i>
+              <h2>Latest Orders</h2>
+            </div>
+
+            <div class="labd-table">
+              <div class="labd-row labd-head">
+                <div>#</div>
+                <div>Patient</div>
+                <div>Doctor</div>
+                <div>Status</div>
+                <div>Urgency</div>
+                <div></div>
+              </div>
+
+              {% for o in latest_orders %}
+                {% firstof o.urgency o.priority "" as urgency_display %}
+
+                <div class="labd-row">
+                  <div><strong>#{{ o.id }}</strong></div>
+
+                  <div>{{ o.patient.full_name|default:o.patient|default:"—" }}</div>
+
+                  <div>
+                    {% if o.doctor and o.doctor.user %}
+                      Dr. {{ o.doctor.user.get_full_name|default:o.doctor.user.username|default:"—" }}
+                    {% else %}
+                      <span style="opacity:.7;">—</span>
+                    {% endif %}
+                  </div>
+
+                  <div>
+                    {% with st=o.status|default:"" %}
+                      <span class="chip chip-{{ st|slugify }}">{{ st|default:"—" }}</span>
+                    {% endwith %}
+                  </div>
+
+                  <div>
+                    {% if urgency_display %}
+                      <span class="chip chip-{{ urgency_display|slugify }}">{{ urgency_display }}</span>
+                    {% else %}
+                      <span style="opacity:.7;">—</span>
+                    {% endif %}
+                  </div>
+
+                  <div>
+                    <a class="labd-btn primary" href="{% url 'lab:lab_order_detail' order_id=o.id %}">
+                      <i class="bi bi-box-arrow-in-right"></i> Open
+                    </a>
+                  </div>
+                </div>
+              {% empty %}
+                <div class="labd-empty">No orders yet.</div>
+              {% endfor %}
+            </div>
+          </section>
+
+        </main>
+      </div>
     </div>
   </div>
-</div>
 
-<script>
-  function pad(n){ return String(n).padStart(2,'0'); }
-  function tick(){
-    const d = new Date();
-    const el = document.getElementById('labClock');
-    if(el) el.textContent = pad(d.getHours()) + ":" + pad(d.getMinutes());
-  }
-  tick();
-  setInterval(tick, 1000 * 10);
-
-  // ✅ Safe chart parsing
-  const raw = '{{ chart_data_json|default:""|escapejs }}';
-  if (raw) {
-    try {
-      const payload = JSON.parse(raw);
-      const ctx = document.getElementById('labWeeklyChart');
-
-      if(ctx && payload && payload.labels && payload.data){
-        new Chart(ctx, {
-          type: 'line',
-          data: {
-            labels: payload.labels,
-            datasets: [{
-              label: 'Orders',
-              data: payload.data,
-              tension: 0.35,
-              fill: true
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { display: true } },
-            scales: { y: { beginAtZero: true } }
-          }
-        });
-      }
-    } catch(e){
-      console.warn("Chart payload invalid.");
+  <script>
+    function pad(n){ return String(n).padStart(2,'0'); }
+    function tick(){
+      const d = new Date();
+      const el = document.getElementById('labClock');
+      if(el) el.textContent = pad(d.getHours()) + ":" + pad(d.getMinutes());
     }
-  }
-</script>
+    tick();
+    setInterval(tick, 1000 * 10);
+
+    // ✅ Safe chart parsing
+    const raw = '{{ chart_data_json|default:""|escapejs }}';
+    if (raw) {
+      try {
+        const payload = JSON.parse(raw);
+        const ctx = document.getElementById('labWeeklyChart');
+
+        if(ctx && payload && payload.labels && payload.data){
+          new Chart(ctx, {
+            type: 'line',
+            data: {
+              labels: payload.labels,
+              datasets: [{
+                label: 'Orders',
+                data: payload.data,
+                tension: 0.35,
+                fill: true
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { display: true } },
+              scales: { y: { beginAtZero: true } }
+            }
+          });
+        }
+      } catch(e){
+        console.warn("Chart payload invalid.");
+      }
+    }
+  </script>
 {% endblock %}

@@ -5,9 +5,6 @@
 {% block title %}Lab Order #{{ order.id }} | ClinicHub{% endblock %}
 
 {% block extra_head %}
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{% static 'css/lab/lab_base.css' %}">
   <link rel="stylesheet" href="{% static 'css/lab/lab_order_detail.css' %}">
@@ -17,6 +14,10 @@
 {% block content %}
 {% firstof settings_obj.lab_name "Lab Panel" as lab_name %}
 {% firstof order.urgency order.priority "" as urgency_display %}
+
+{# ✅ settings defaults (used in UI + auto-fill) #}
+{% firstof settings_obj.default_result_template "" as default_template %}
+{% firstof settings_obj.footer_note "" as footer_note %}
 
 <div class="labp">
   <div class="page-bg">
@@ -280,6 +281,14 @@
             </div>
           </form>
 
+          {# ✅ Show footer note hint (this is what you asked: "وين تظهر؟") #}
+          {% if footer_note %}
+            <div class="labod-block" style="margin-top:12px;">
+              <div class="labod-title">Footer note (Report/PDF)</div>
+              <div class="labod-body">{{ footer_note|linebreaksbr }}</div>
+            </div>
+          {% endif %}
+
           {% if result and result.status == "VERIFIED" %}
             <div class="labod-verified">
               <i class="bi bi-shield-check" aria-hidden="true"></i>
@@ -294,4 +303,26 @@
     </div>
   </div>
 </div>
+
+{# ✅ Auto-fill default result template ONLY if textarea is empty #}
+<script>
+  (function () {
+    const defaultText = "{{ default_template|default:''|escapejs }}";
+    if (!defaultText) return;
+
+    const form = document.querySelector('.labd-form');
+    if (!form) return;
+
+    // أول textarea داخل الفورم (غالباً هو حقل النتيجة)
+    const ta = form.querySelector('textarea');
+    if (!ta) return;
+
+    if (!ta.value || !ta.value.trim()) {
+      ta.value = defaultText;
+    }
+
+    // خلي الاتجاه تلقائي (يفيد إذا النص عربي/إنكليزي)
+    ta.setAttribute('dir', 'auto');
+  })();
+</script>
 {% endblock %}

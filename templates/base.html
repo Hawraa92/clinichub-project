@@ -10,11 +10,11 @@
 
   <!-- Meta -->
   <meta name="theme-color" content="#0ea5e9">
-  <meta name="color-scheme" content="light dark">
+  {# ✅ نخليها light فقط حتى المتصفح/الويندوز ما يفرض Dark على الفورمات #}
+  <meta name="color-scheme" content="light">
   <meta name="description" content="{% block meta_description %}Advanced healthcare platform connecting patients with medical professionals through innovative technology.{% endblock %}">
 
   <!-- ✅ Favicons (STATIC) -->
-  {# عندك الملف موجود: static/images/favicon.png #}
   <link rel="icon" href="{% static 'images/favicon.png' %}" type="image/png">
   <link rel="shortcut icon" href="{% static 'images/favicon.png' %}" type="image/png">
   <link rel="icon" type="image/png" sizes="32x32" href="{% static 'images/favicon.png' %}">
@@ -33,17 +33,7 @@
     })();
   </script>
 
-  <!-- Theme Script (Early Execution) -->
-  <script>
-    (function() {
-      try {
-        const saved = localStorage.getItem('clinichub-theme');
-        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        const theme = saved || (prefersDark ? 'dark' : 'light');
-        document.documentElement.setAttribute('data-theme', theme);
-      } catch(e) {}
-    })();
-  </script>
+  {# ✅ حذفنا سكربت الثيم بالكامل حتى يصير ثابت Light #}
 
   <!-- Vendor CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -51,8 +41,9 @@
   <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
 
   <!-- App CSS -->
-  <link rel="stylesheet" href="{% static 'css/global/base.css' %}?v=12">
-  <link rel="stylesheet" href="{% static 'css/theme/dark_mode.css' %}?v=12">
+  <link rel="stylesheet" href="{% static 'css/global/base.css' %}?v=14">
+  {# ✅ لا نحمّل dark_mode.css بالامتحان #}
+  {# <link rel="stylesheet" href="{% static 'css/theme/dark_mode.css' %}?v=14"> #}
 
   {% block extra_head %}{% endblock %}
 </head>
@@ -105,7 +96,6 @@
 
           {% if user.is_authenticated %}
 
-            {# ✅ بدون فلتر first (غير موجود افتراضيًا) - نستخدم index .0 #}
             {% with groups=user.groups.all %}
               {% if groups and groups.0 and groups.0.name %}
                 {% with gname=groups.0.name|lower %}
@@ -133,7 +123,6 @@
                   {% endif %}
                 {% endwith %}
               {% else %}
-                {# لو ما عنده Groups #}
                 <li class="nav-item">
                   <a class="nav-link" href="{% url 'appointments:secretary_dashboard' %}">
                     <i class="bi bi-calendar-check me-1"></i>
@@ -143,14 +132,7 @@
               {% endif %}
             {% endwith %}
 
-            <!-- Theme Toggle -->
-            <li class="nav-item ms-2">
-              <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle theme">
-                <span class="theme-icon">
-                  <i class="bi bi-moon-stars"></i>
-                </span>
-              </button>
-            </li>
+            {# ✅ حذفنا زر الـ Theme Toggle #}
 
             <!-- User Menu -->
             <li class="nav-item dropdown ms-2">
@@ -159,16 +141,22 @@
                   {{ user.username|default:"U"|slice:":1"|upper }}
                 </div>
               </a>
+
               <ul class="dropdown-menu dropdown-menu-end">
                 <li><h6 class="dropdown-header">{{ user.username }}</h6></li>
                 <li><hr class="dropdown-divider"></li>
                 <li><a class="dropdown-item" href="#"><i class="bi bi-person me-2"></i>Profile</a></li>
                 <li><a class="dropdown-item" href="#"><i class="bi bi-gear me-2"></i>Settings</a></li>
                 <li><hr class="dropdown-divider"></li>
+
+                <!-- ✅ Logout via POST -->
                 <li>
-                  <a class="dropdown-item text-danger" href="{% url 'accounts:logout' %}">
-                    <i class="bi bi-box-arrow-right me-2"></i>Logout
-                  </a>
+                  <form method="post" action="{% url 'accounts:logout' %}" style="margin:0;">
+                    {% csrf_token %}
+                    <button type="submit" class="dropdown-item text-danger" style="background:transparent;border:0;width:100%;text-align:left;">
+                      <i class="bi bi-box-arrow-right me-2"></i>Logout
+                    </button>
+                  </form>
                 </li>
               </ul>
             </li>
@@ -189,14 +177,7 @@
               </a>
             </li>
 
-            <!-- Theme Toggle -->
-            <li class="nav-item ms-2">
-              <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle theme">
-                <span class="theme-icon">
-                  <i class="bi bi-moon-stars"></i>
-                </span>
-              </button>
-            </li>
+            {# ✅ حذفنا زر الـ Theme Toggle #}
 
           {% endif %}
 
@@ -229,7 +210,6 @@
     {% endif %}
   </div>
 
-  {# ✅ Footer واحد فقط لكل الصفحات #}
   {% include "partials/footer.html" %}
 
   <!-- Vendor Scripts -->
@@ -238,7 +218,7 @@
   <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
 
   <!-- App Script -->
-  <script src="{% static 'js/global/base.js' %}?v=12"></script>
+  <script src="{% static 'js/global/base.js' %}?v=14"></script>
 
   {% block extra_scripts %}{% endblock %}
   {% block extra_js %}{% endblock %}

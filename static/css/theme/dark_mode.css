@@ -1,272 +1,472 @@
 /* File: static/css/theme/dark_mode.css
-   Modern Dark Theme - Medical Professional */
+   Modern Dark Theme - Medical Professional (Improved Surfaces + Forms + Tables)
+*/
 
-   [data-theme="dark"] {
-    --primary: #38bdf8;
-    --primary-dark: #0ea5e9;
-    --primary-light: #7dd3fc;
-  
-    --secondary: #34d399;
-    --secondary-dark: #10b981;
-    --secondary-light: #6ee7b7;
-  
-    --accent: #a78bfa;
-    --accent-dark: #8b5cf6;
-    --accent-light: #c4b5fd;
-  
-    --bg-primary: #0f172a;
-    --bg-secondary: #1e293b;
-    --bg-tertiary: #334155;
-  
-    --text-primary: #f1f5f9;
-    --text-secondary: #cbd5e1;
-    --text-muted: #94a3b8;
-  
-    --border-light: rgba(148, 163, 184, 0.1);
-    --border-medium: rgba(148, 163, 184, 0.2);
-  
-    --glow-primary: 0 0 20px rgba(56, 189, 248, 0.15);
-    --glow-secondary: 0 0 30px rgba(52, 211, 153, 0.1);
-  }
-  
-  [data-theme="dark"] body {
-    background: linear-gradient(135deg, var(--bg-primary) 0%, #1a1f37 100%);
-    position: relative;
-    overflow-x: hidden;
-  }
-  
-  [data-theme="dark"] body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background-image:
-      radial-gradient(circle at 10% 20%, rgba(56, 189, 248, 0.03) 0%, transparent 50%),
-      radial-gradient(circle at 90% 80%, rgba(52, 211, 153, 0.02) 0%, transparent 50%),
-      radial-gradient(circle at 50% 50%, rgba(139, 92, 246, 0.01) 0%, transparent 70%);
-    pointer-events: none;
-    z-index: 0;
-  }
-  
-  [data-theme="dark"] body::after {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background-image:
-      repeating-linear-gradient(
-        90deg,
-        transparent,
-        transparent 1px,
-        rgba(56, 189, 248, 0.01) 1px,
-        rgba(56, 189, 248, 0.01) 2px
-      ),
-      repeating-linear-gradient(
-        0deg,
-        transparent,
-        transparent 1px,
-        rgba(52, 211, 153, 0.01) 1px,
-        rgba(52, 211, 153, 0.01) 2px
-      );
-    pointer-events: none;
-    z-index: 0;
-  }
-  
-  /* Navigation */
-  [data-theme="dark"] .navbar {
-    background: rgba(15, 23, 42, 0.85);
-    backdrop-filter: blur(20px);
-    border-bottom: 1px solid rgba(56, 189, 248, 0.1);
-  }
-  
-  [data-theme="dark"] .navbar-toggler {
-    border-color: rgba(56, 189, 248, 0.25);
-  }
-  
-  [data-theme="dark"] .navbar-toggler-icon {
-    filter: invert(1) brightness(1.2);
-  }
-  
-  [data-theme="dark"] .navbar.scrolled {
-    background: rgba(15, 23, 42, 0.95);
-    box-shadow:
-      0 4px 6px -1px rgba(0, 0, 0, 0.3),
-      0 2px 4px -1px rgba(0, 0, 0, 0.2);
-  }
-  
-  [data-theme="dark"] .brand-logo {
-    background: linear-gradient(135deg, var(--primary), var(--secondary));
-    box-shadow: var(--glow-primary);
-  }
-  
-  [data-theme="dark"] .brand-text {
-    color: var(--text-primary);
-  }
-  
-  /* Theme Toggle */
-  [data-theme="dark"] .theme-toggle {
-    background: rgba(56, 189, 248, 0.1);
-    border-color: rgba(56, 189, 248, 0.2);
-  }
-  
-  [data-theme="dark"] .theme-toggle:hover {
-    background: rgba(56, 189, 248, 0.2);
-    box-shadow: var(--glow-primary);
-  }
-  
-  [data-theme="dark"] .theme-icon { color: var(--primary); }
-  
-  /* Navigation Links */
-  [data-theme="dark"] .nav-link {
-    color: var(--text-secondary);
-  }
-  
-  [data-theme="dark"] .nav-link:hover,
-  [data-theme="dark"] .nav-link.active {
-    color: var(--primary);
-    background: rgba(56, 189, 248, 0.15);
-    box-shadow: var(--glow-primary);
-  }
-  
-  [data-theme="dark"] .btn-register {
-    background: linear-gradient(135deg, var(--primary), var(--secondary));
-    color: white !important;
-  }
-  
-  [data-theme="dark"] .btn-register:hover {
-    box-shadow:
-      var(--glow-primary),
-      0 10px 15px -3px rgba(0, 0, 0, 0.3);
-  }
-  
-  /* Dropdown Menu */
-  [data-theme="dark"] .dropdown-menu {
-    background: var(--bg-secondary);
-    border: 1px solid rgba(56, 189, 248, 0.2);
-    box-shadow:
-      var(--shadow-xl),
-      inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  }
-  
-  [data-theme="dark"] .dropdown-item { color: var(--text-secondary); }
-  
-  [data-theme="dark"] .dropdown-item:hover {
-    background: rgba(56, 189, 248, 0.1);
-    color: var(--primary);
-  }
-  
-  /* Toast Notifications */
-  [data-theme="dark"] .toast {
-    background: rgba(30, 41, 59, 0.95);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(56, 189, 248, 0.2);
-    box-shadow:
-      var(--shadow-lg),
-      var(--glow-primary);
-  }
-  
-  [data-theme="dark"] .toast-message { color: var(--text-primary); }
-  
-  /* Footer */
-  [data-theme="dark"] .site-footer {
-    background: linear-gradient(to top,
-      rgba(15, 23, 42, 0.95) 0%,
-      rgba(15, 23, 42, 0.8) 100%
-    );
-    position: relative;
-    overflow: hidden;
-  }
-  
-  [data-theme="dark"] .site-footer::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: linear-gradient(90deg,
+/* ✅ Make native UI (inputs/scrollbars) follow OUR theme (not Windows) */
+html { color-scheme: light; }
+html[data-theme="dark"] { color-scheme: dark; }
+
+[data-theme="dark"] {
+  --primary: #38bdf8;
+  --primary-dark: #0ea5e9;
+  --primary-light: #7dd3fc;
+
+  --secondary: #34d399;
+  --secondary-dark: #10b981;
+  --secondary-light: #6ee7b7;
+
+  --accent: #a78bfa;
+  --accent-dark: #8b5cf6;
+  --accent-light: #c4b5fd;
+
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-tertiary: #334155;
+
+  --text-primary: #f1f5f9;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+
+  --border-light: rgba(148, 163, 184, 0.12);
+  --border-medium: rgba(148, 163, 184, 0.22);
+
+  --glow-primary: 0 0 20px rgba(56, 189, 248, 0.15);
+  --glow-secondary: 0 0 30px rgba(52, 211, 153, 0.10);
+
+  /* ✅ Missing tokens (so dropdown shadow etc looks correct) */
+  --shadow-xl: 0 25px 50px -12px rgba(0,0,0,.45);
+
+  /* ✅ NEW: surface tokens (cards/sections/inputs) */
+  --surface-0: #0b1224;
+  --surface-1: rgba(30, 41, 59, 0.70);  /* glass-ish */
+  --surface-2: rgba(30, 41, 59, 0.88);  /* solid-ish */
+  --card-bg: rgba(30, 41, 59, 0.78);
+  --card-border: rgba(56, 189, 248, 0.16);
+
+  --input-bg: rgba(2, 6, 23, 0.55);
+  --input-border: rgba(56, 189, 248, 0.18);
+  --input-border-focus: rgba(56, 189, 248, 0.55);
+  --placeholder: rgba(148, 163, 184, 0.70);
+}
+
+/* Base page */
+[data-theme="dark"] body {
+  background: linear-gradient(135deg, var(--bg-primary) 0%, #1a1f37 100%);
+  color: var(--text-primary);
+  position: relative;
+  overflow-x: hidden;
+}
+
+[data-theme="dark"] body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    radial-gradient(circle at 10% 20%, rgba(56, 189, 248, 0.03) 0%, transparent 50%),
+    radial-gradient(circle at 90% 80%, rgba(52, 211, 153, 0.02) 0%, transparent 50%),
+    radial-gradient(circle at 50% 50%, rgba(139, 92, 246, 0.01) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+[data-theme="dark"] body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    repeating-linear-gradient(
+      90deg,
       transparent,
-      var(--primary),
-      var(--secondary),
-      transparent
+      transparent 1px,
+      rgba(56, 189, 248, 0.01) 1px,
+      rgba(56, 189, 248, 0.01) 2px
+    ),
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 1px,
+      rgba(52, 211, 153, 0.01) 1px,
+      rgba(52, 211, 153, 0.01) 2px
     );
-  }
-  
-  [data-theme="dark"] .footer-section h6 { color: var(--primary-light); }
-  [data-theme="dark"] .footer-section a:hover { color: var(--primary); }
-  
-  [data-theme="dark"] .social-links a {
-    background: rgba(56, 189, 248, 0.1);
-    color: var(--primary-light);
-  }
-  
-  [data-theme="dark"] .social-links a:hover {
-    background: var(--primary);
-    box-shadow: var(--glow-primary);
-  }
-  
-  [data-theme="dark"] .footer-bottom {
-    border-top: 1px solid rgba(56, 189, 248, 0.1);
-  }
-  
-  /* Medical Animation in Dark Mode */
-  [data-theme="dark"] .medical-animation {
-    opacity: 0.25;
-    background:
-      radial-gradient(circle at 20% 40%,
-        rgba(56, 189, 248, 0.15) 0%,
-        transparent 60%),
-      radial-gradient(circle at 80% 60%,
-        rgba(52, 211, 153, 0.1) 0%,
-        transparent 60%);
-    filter: blur(40px);
-  }
-  
-  /* Loading Overlay */
-  [data-theme="dark"] .loading-overlay { background: var(--bg-primary); }
-  
-  [data-theme="dark"] .loading-icon {
-    color: var(--primary);
-    filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.3));
-  }
-  
-  [data-theme="dark"] .loading-text {
-    background: linear-gradient(135deg, var(--primary), var(--secondary));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
-  
-  [data-theme="dark"] .loading-subtext { color: var(--text-secondary); }
-  
-  /* Enhanced Scrollbar */
-  [data-theme="dark"] ::-webkit-scrollbar { width: 10px; }
-  [data-theme="dark"] ::-webkit-scrollbar-track { background: var(--bg-secondary); }
-  [data-theme="dark"] ::-webkit-scrollbar-thumb {
-    background: linear-gradient(to bottom, var(--primary) 0%, var(--secondary) 100%);
-    border-radius: 5px;
-  }
-  [data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(to bottom, var(--primary-light) 0%, var(--secondary-light) 100%);
-  }
-  
-  /* Selection Color */
-  [data-theme="dark"] ::selection {
-    background: rgba(56, 189, 248, 0.3);
-    color: var(--text-primary);
-  }
-  
-  /* Focus Styles */
-  [data-theme="dark"] :focus-visible {
-    outline: 2px solid var(--primary);
-    outline-offset: 2px;
-  }
-  
-  /* Medical Icons Animation */
-  @keyframes float {
-    0%, 100% { transform: translateY(0) rotate(0deg); }
-    50% { transform: translateY(-20px) rotate(5deg); }
-  }
-  
-  [data-theme="dark"] .brand-logo i {
-    animation: float 3s ease-in-out infinite;
-  }
-  
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ✅ Keep app content above the background layers */
+[data-theme="dark"] body > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Links */
+[data-theme="dark"] a { color: var(--primary-light); }
+[data-theme="dark"] a:hover { color: var(--primary); }
+
+/* -------------------------------------------------------
+   ✅ GLOBAL SURFACES (cards/sections/containers)
+-------------------------------------------------------- */
+[data-theme="dark"] .card,
+[data-theme="dark"] .modal-content,
+[data-theme="dark"] .dropdown-menu,
+[data-theme="dark"] .toast,
+[data-theme="dark"] .datetime-card,
+[data-theme="dark"] .archives-section,
+[data-theme="dark"] .chart-section,
+[data-theme="dark"] .stat-card,
+[data-theme="dark"] .sidebar {
+  background: var(--card-bg) !important;
+  border: 1px solid var(--card-border) !important;
+  backdrop-filter: blur(14px);
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .section-header h2,
+[data-theme="dark"] .welcome-section h1,
+[data-theme="dark"] .brand-text,
+[data-theme="dark"] .toast-message {
+  color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .inspiration,
+[data-theme="dark"] .date,
+[data-theme="dark"] .brand-text p {
+  color: var(--text-secondary) !important;
+}
+
+/* -------------------------------------------------------
+   ✅ FORMS / INPUTS (this is the big fix)
+-------------------------------------------------------- */
+[data-theme="dark"] input,
+[data-theme="dark"] select,
+[data-theme="dark"] textarea,
+[data-theme="dark"] .form-control,
+[data-theme="dark"] .form-select {
+  background: var(--input-bg) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--input-border) !important;
+}
+
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder {
+  color: var(--placeholder) !important;
+}
+
+[data-theme="dark"] input:focus,
+[data-theme="dark"] select:focus,
+[data-theme="dark"] textarea:focus,
+[data-theme="dark"] .form-control:focus,
+[data-theme="dark"] .form-select:focus {
+  border-color: var(--input-border-focus) !important;
+  box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.16) !important;
+  outline: none;
+}
+
+/* File inputs */
+[data-theme="dark"] input[type="file"]{
+  background: rgba(2,6,23,.35) !important;
+  border-style: dashed !important;
+}
+
+/* -------------------------------------------------------
+   ✅ TABLES
+-------------------------------------------------------- */
+[data-theme="dark"] table,
+[data-theme="dark"] .table {
+  color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .table thead th {
+  background: rgba(15,23,42,.65) !important;
+  color: var(--text-secondary) !important;
+  border-color: var(--border-medium) !important;
+}
+
+[data-theme="dark"] .table td,
+[data-theme="dark"] .table th {
+  border-color: var(--border-light) !important;
+}
+
+[data-theme="dark"] .table-striped > tbody > tr:nth-of-type(odd) > * {
+  background: rgba(2,6,23,.22) !important;
+}
+
+/* -------------------------------------------------------
+   NAVIGATION (your existing styles, kept)
+-------------------------------------------------------- */
+[data-theme="dark"] .navbar {
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(56, 189, 248, 0.1);
+}
+
+[data-theme="dark"] .navbar-toggler {
+  border-color: rgba(56, 189, 248, 0.25);
+}
+
+[data-theme="dark"] .navbar-toggler-icon {
+  filter: invert(1) brightness(1.2);
+}
+
+[data-theme="dark"] .navbar.scrolled {
+  background: rgba(15, 23, 42, 0.95);
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.3),
+    0 2px 4px -1px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="dark"] .brand-logo {
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  box-shadow: var(--glow-primary);
+}
+
+[data-theme="dark"] .brand-text { color: var(--text-primary); }
+
+/* Theme Toggle */
+[data-theme="dark"] .theme-toggle {
+  background: rgba(56, 189, 248, 0.1);
+  border-color: rgba(56, 189, 248, 0.2);
+}
+
+[data-theme="dark"] .theme-toggle:hover {
+  background: rgba(56, 189, 248, 0.2);
+  box-shadow: var(--glow-primary);
+}
+
+[data-theme="dark"] .theme-icon { color: var(--primary); }
+
+/* Nav links */
+[data-theme="dark"] .nav-link { color: var(--text-secondary); }
+
+[data-theme="dark"] .nav-link:hover,
+[data-theme="dark"] .nav-link.active {
+  color: var(--primary);
+  background: rgba(56, 189, 248, 0.15);
+  box-shadow: var(--glow-primary);
+}
+
+/* Register button */
+[data-theme="dark"] .btn-register {
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  color: white !important;
+}
+
+[data-theme="dark"] .btn-register:hover {
+  box-shadow:
+    var(--glow-primary),
+    0 10px 15px -3px rgba(0, 0, 0, 0.3);
+}
+
+/* Dropdown menu */
+[data-theme="dark"] .dropdown-menu {
+  background: var(--bg-secondary) !important;
+  border: 1px solid rgba(56, 189, 248, 0.2) !important;
+  box-shadow:
+    var(--shadow-xl),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="dark"] .dropdown-item { color: var(--text-secondary); }
+
+[data-theme="dark"] .dropdown-item:hover {
+  background: rgba(56, 189, 248, 0.1);
+  color: var(--primary);
+}
+
+/* Toast */
+[data-theme="dark"] .toast {
+  background: rgba(30, 41, 59, 0.95) !important;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(56, 189, 248, 0.2) !important;
+}
+
+/* Footer */
+[data-theme="dark"] .site-footer {
+  background: linear-gradient(to top,
+    rgba(15, 23, 42, 0.95) 0%,
+    rgba(15, 23, 42, 0.8) 100%
+  );
+  position: relative;
+  overflow: hidden;
+}
+
+[data-theme="dark"] .site-footer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg,
+    transparent,
+    var(--primary),
+    var(--secondary),
+    transparent
+  );
+}
+
+[data-theme="dark"] .footer-section h6 { color: var(--primary-light); }
+[data-theme="dark"] .footer-section a:hover { color: var(--primary); }
+
+[data-theme="dark"] .social-links a {
+  background: rgba(56, 189, 248, 0.1);
+  color: var(--primary-light);
+}
+
+[data-theme="dark"] .social-links a:hover {
+  background: var(--primary);
+  box-shadow: var(--glow-primary);
+}
+
+[data-theme="dark"] .footer-bottom {
+  border-top: 1px solid rgba(56, 189, 248, 0.1);
+}
+
+/* Loading */
+[data-theme="dark"] .loading-overlay { background: var(--bg-primary); }
+[data-theme="dark"] .loading-icon {
+  color: var(--primary);
+  filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.3));
+}
+[data-theme="dark"] .loading-text {
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+[data-theme="dark"] .loading-subtext { color: var(--text-secondary); }
+
+/* Scrollbar */
+[data-theme="dark"] ::-webkit-scrollbar { width: 10px; }
+[data-theme="dark"] ::-webkit-scrollbar-track { background: var(--bg-secondary); }
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: linear-gradient(to bottom, var(--primary) 0%, var(--secondary) 100%);
+  border-radius: 5px;
+}
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(to bottom, var(--primary-light) 0%, var(--secondary-light) 100%);
+}
+
+/* Selection */
+[data-theme="dark"] ::selection {
+  background: rgba(56, 189, 248, 0.3);
+  color: var(--text-primary);
+}
+
+/* Focus visible */
+[data-theme="dark"] :focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Animation */
+@keyframes float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-20px) rotate(5deg); }
+}
+[data-theme="dark"] .brand-logo i {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* -------------------------------------------------------
+   ✅ EXTRA: Fix Lab pages that hardcode #fff backgrounds
+   (covers lab_dashboard / lab_order_detail / lab_settings)
+-------------------------------------------------------- */
+[data-theme="dark"] .labp .labod-item,
+[data-theme="dark"] .labp .labod-body,
+[data-theme="dark"] .labp .labd-form .labd-form-body,
+[data-theme="dark"] .labp .labd-row,
+[data-theme="dark"] .labp .labd-empty {
+  background: rgba(2,6,23,.35) !important;
+  border-color: var(--border-medium) !important;
+  color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .labp .labod-k,
+[data-theme="dark"] .labp .labod-title {
+  color: var(--text-secondary) !important;
+}
+/* =========================================================
+   ClinicHub — Dashboards Dark Surfaces (Doctor/Secretary/Lab)
+   Put at END of dark_mode.css
+========================================================= */
+
+[data-theme="dark"] body{
+  color-scheme: dark;
+}
+
+[data-theme="dark"] .page-bg{
+  background: transparent !important;
+}
+
+/* Sidebar */
+[data-theme="dark"] .sidebar{
+  background: rgba(15, 23, 42, 0.78) !important;
+  border-right: 1px solid rgba(148, 163, 184, 0.14) !important;
+}
+
+[data-theme="dark"] .nav-item{
+  color: var(--text-secondary) !important;
+}
+
+[data-theme="dark"] .nav-item:hover{
+  background: rgba(56, 189, 248, 0.10) !important;
+  color: var(--primary) !important;
+}
+
+[data-theme="dark"] .nav-item.active{
+  background: rgba(56, 189, 248, 0.16) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Main text */
+[data-theme="dark"] .main-content,
+[data-theme="dark"] .welcome-section h1{
+  color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .inspiration{
+  color: var(--text-muted) !important;
+}
+
+/* Cards / sections (this fixes your screenshot) */
+[data-theme="dark"] .datetime-card,
+[data-theme="dark"] .action-btn,
+[data-theme="dark"] .stat-card,
+[data-theme="dark"] .chart-section,
+[data-theme="dark"] .archives-section,
+[data-theme="dark"] .lab-section,
+[data-theme="dark"] .card{
+  background: rgba(30, 41, 59, 0.78) !important;
+  border: 1px solid rgba(148, 163, 184, 0.14) !important;
+  color: var(--text-primary) !important;
+  box-shadow: 0 10px 25px rgba(0,0,0,.35) !important;
+}
+
+[data-theme="dark"] .card-content h3,
+[data-theme="dark"] .stat-card h3{
+  color: var(--text-muted) !important;
+}
+
+[data-theme="dark"] .card-content p,
+[data-theme="dark"] .stat-card p{
+  color: var(--text-primary) !important;
+}
+
+/* Icons in cards */
+[data-theme="dark"] .action-btn i{
+  color: var(--primary-light) !important;
+}
+
+/* Forms (حتى ما يتأثر بشكل ويندوز الداكن) */
+[data-theme="dark"] input,
+[data-theme="dark"] select,
+[data-theme="dark"] textarea{
+  background: rgba(15, 23, 42, 0.55) !important;
+  color: var(--text-primary) !important;
+  border-color: rgba(148, 163, 184, 0.25) !important;
+}
+
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder{
+  color: rgba(148, 163, 184, 0.75) !important;
+}

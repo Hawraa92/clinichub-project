@@ -202,6 +202,19 @@ class AppointmentDateRangeFilter(admin.SimpleListFilter):
 class AppointmentAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
     list_per_page = 50
 
+    # ✅ IMPORTANT:
+    # Required because LabOrderAdmin.autocomplete_fields references Appointment via LabOrder.appointment
+    # Django system check (admin.E040) requires AppointmentAdmin.search_fields to be set.
+    search_fields = (
+        "patient__full_name",
+        "patient__mobile",
+        "patient__email",
+        "doctor__user__first_name",
+        "doctor__user__last_name",
+        "doctor__user__username",
+        "doctor__user__email",
+    )
+
     # ✅ add restore/hard-delete actions in addition to yours
     actions = ["mark_completed", "mark_cancelled", "restore_selected", "hard_delete_selected"]
 
@@ -243,14 +256,14 @@ class AppointmentAdmin(SoftDeleteAdminMixin, admin.ModelAdmin):
         return lf
 
     def get_search_fields(self, request):
-        sf = []
-        if _model_has_field(Appointment, "patient"):
-            sf.append("patient__full_name")
-        if _model_has_field(Appointment, "doctor"):
-            sf.extend(["doctor__user__first_name", "doctor__user__last_name"])
-        if _model_has_field(Appointment, "notes"):
+        """
+        Keep the class-level `search_fields` (required by admin checks),
+        but allow adding optional fields if they exist.
+        """
+        sf = list(self.search_fields or ())
+        if _model_has_field(Appointment, "notes") and "notes" not in sf:
             sf.append("notes")
-        return sf
+        return tuple(sf)
 
     def get_list_editable(self, request):
         # Only allow inline editing if status exists AND is not readonly
