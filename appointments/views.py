@@ -1699,6 +1699,8 @@ def approve_booking_request(request: HttpRequest, pk: int):
     ✅ FIXES ADDED:
     - Only query Patient by user if Patient model has `user` field.
     - Link booking request -> patient once resolved/created (so next approvals are stable).
+    - ✅ CRITICAL FIX (this bug): FORCE Patient.doctor_id = BookingRequest.doctor_id (DB update)
+      so patient appears in secretary patient_list (which is scoped by doctor).
     """
     fallback_next = reverse("appointments:booking_requests_list")
     next_url = _safe_next_url(request, fallback=fallback_next)
@@ -1745,7 +1747,7 @@ def approve_booking_request(request: HttpRequest, pk: int):
             if _model_has_field(PatientBookingRequest, "patient") and getattr(br, "patient", None):
                 patient_obj = br.patient  # type: ignore[attr-defined]
 
-            # ✅ FIX: only query Patient.user if Patient has that field
+            # ✅ only query Patient.user if Patient has that field
             elif (
                 _model_has_field(PatientBookingRequest, "user")
                 and getattr(br, "user", None)
@@ -1795,13 +1797,14 @@ def approve_booking_request(request: HttpRequest, pk: int):
                 except Exception:
                     pass
 
-            # ensure patient doctor matches request doctor (best effort)
-            try:
-                if _model_has_field(Patient, "doctor") and getattr(patient_obj, "doctor_id", None) != getattr(br.doctor, "id", None):
-                    patient_obj.doctor = br.doctor  # type: ignore[attr-defined]
-                    patient_obj.save(update_fields=["doctor"])
-            except Exception:
-                pass
+            # ✅✅ CRITICAL FIX:
+            # Force patient.doctor_id = booking_request.doctor_id in DB (no silent failure)
+            if _model_has_field(Patient, "doctor") and getattr(br, "doctor_id", None):
+                Patient.objects.filter(pk=patient_obj.pk).update(doctor_id=br.doctor_id)
+                try:
+                    patient_obj.doctor_id = br.doctor_id  # keep in-memory consistent
+                except Exception:
+                    pass
 
             scheduled_time = _normalize_dt(getattr(br, "scheduled_time", None))
             if not scheduled_time:

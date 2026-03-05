@@ -178,8 +178,8 @@ def _patients_qs_for(request):
     ACTIVE patients only (Patient.objects may already filter is_deleted=False).
     Doctor: scoped to his patients.
     Secretary:
-      - إذا عنده assigned doctor -> scoped
-      - إذا ما عنده و SECRETARY_SEES_ALL_PATIENTS=True -> يشوف الكل
+    - إذا عنده assigned doctor -> scoped
+    - إذا ما عنده و SECRETARY_SEES_ALL_PATIENTS=True -> يشوف الكل
     """
     if not is_med_staff(request.user):
         raise PermissionDenied
