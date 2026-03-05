@@ -1,0 +1,3 @@
+/* ClinicHub Admin RTL */
+html, body { direction: rtl; }
+#content, .module, .form-row { text-align: right; }
