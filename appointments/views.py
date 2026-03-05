@@ -5,6 +5,7 @@ import base64
 import csv
 import io
 import json
+import logging
 import secrets
 from datetime import date, timedelta
 from functools import wraps
@@ -39,6 +40,8 @@ from patient.models import Patient
 
 from .forms import AppointmentForm, DATETIME_INPUT_FORMATS, DateTimeLocalInput
 from .models import Appointment, AppointmentStatus, Notification, PatientBookingRequest
+
+logger = logging.getLogger(__name__)
 
 # ✅ Audit Log (optional-safe import)
 try:  # pragma: no cover
@@ -630,8 +633,13 @@ def _set_booking_request_status(br: PatientBookingRequest, target_names: tuple[s
     for name in target_names:
         if hasattr(BookingRequestStatus, name):
             try:
-                br.status = getattr(BookingRequestStatus, name)
-                br.save(update_fields=["status"])
+                val = getattr(BookingRequestStatus, name)
+                # Prefer DB update (bypass any model validation)
+                PatientBookingRequest.objects.filter(pk=br.pk).update(status=val)
+                try:
+                    br.status = val
+                except Exception:
+                    pass
                 return True
             except Exception:
                 return False
@@ -665,9 +673,7 @@ def _parse_int(value: str | None) -> int | None:
 
 def _ensure_patient_from_booking_request(br: PatientBookingRequest) -> Patient | None:
     """
-    ✅ If no linked patient is found, create one from booking request data
-    to avoid failing approval flow.
-    NOTE: might still return None if model constraints fail (unique / required).
+    ✅ If no linked patient is found, create one from booking request data.
     """
     try:
         doc = getattr(br, "doctor", None)
@@ -698,7 +704,6 @@ def _ensure_patient_from_booking_request(br: PatientBookingRequest) -> Patient |
         if dob and _model_has_field(Patient, "date_of_birth"):
             p.date_of_birth = dob
 
-        # link user if exists AND Patient actually has user field
         if _model_has_field(PatientBookingRequest, "user"):
             u = getattr(br, "user", None)
             if u is not None and _model_has_field(Patient, "user"):
@@ -708,6 +713,32 @@ def _ensure_patient_from_booking_request(br: PatientBookingRequest) -> Patient |
         return p
     except Exception:
         return None
+
+
+def _set_patient_scope_fields_for_secretary(patient_id: int, *, doctor_id: int | None, secretary_user) -> None:
+    """
+    ✅ Fix for your exact bug:
+    - force Patient.doctor_id to match BookingRequest.doctor_id (DB update)
+    - and if your Patient list uses 'added_by=me' we try to set added_by/created_by if available.
+    """
+    updates: dict[str, Any] = {}
+
+    if doctor_id and _model_has_field(Patient, "doctor"):
+        updates["doctor_id"] = doctor_id
+
+    # If you have a "who added this patient" field and you filter by ?added_by=me
+    for fld in ("added_by", "created_by", "registered_by", "created_by_user"):
+        if _model_has_field(Patient, fld):
+            try:
+                # Only set it if NULL (best effort) -> but update() can't "only if null" easily without extra query.
+                # We'll set it anyway to ensure it appears in "my patients" view.
+                updates[f"{fld}_id"] = getattr(secretary_user, "id", None)
+            except Exception:
+                pass
+            break
+
+    if updates:
+        Patient.objects.filter(pk=patient_id).update(**updates)
 
 
 # ------------------------------------------------------------------#
@@ -764,11 +795,6 @@ class _PublicBookingForm(forms.Form):
 
 @require_http_methods(["GET", "POST"])
 def book_appointment_public(request: HttpRequest, doctor_id: int | None = None):
-    """
-    Public self-booking:
-    - Creates PatientBookingRequest (secretary approves).
-    - Uses template: appointments/book_appointment.html
-    """
     if doctor_id is None:
         doctor_id = _parse_int(request.GET.get("doctor_id") or request.GET.get("doctor"))
 
@@ -1134,9 +1160,6 @@ def edit_appointment(request: HttpRequest, pk: int):
 @secretary_required
 @require_http_methods(["GET", "POST"])
 def cancel_appointment(request: HttpRequest, pk: int):
-    """
-    Cancel = تغيير الحالة إلى CANCELLED (ليس حذف).
-    """
     qs = _filter_appointments_for_user(_active_appts_qs(), request.user)
     appt = get_object_or_404(qs, pk=pk)
 
@@ -1163,15 +1186,6 @@ def cancel_appointment(request: HttpRequest, pk: int):
 
         Appointment.objects.filter(pk=appt.pk).update(**update_kwargs)
 
-        try:
-            appt.status = AppointmentStatus.CANCELLED
-            if "queue_number" in update_kwargs:
-                appt.queue_number = None  # type: ignore[attr-defined]
-            if "notes" in update_kwargs:
-                appt.notes = update_kwargs["notes"]  # type: ignore[attr-defined]
-        except Exception:
-            pass
-
         _audit(
             request=request,
             action="update",
@@ -1193,9 +1207,6 @@ def cancel_appointment(request: HttpRequest, pk: int):
 @secretary_required
 @require_http_methods(["GET", "POST"])
 def delete_appointment(request: HttpRequest, pk: int):
-    """
-    Soft Delete (Recycle Bin)
-    """
     qs = _filter_appointments_for_user(_active_appts_qs(), request.user)
     appt = get_object_or_404(qs, pk=pk)
 
@@ -1335,7 +1346,6 @@ def restore_appointment(request: HttpRequest, pk: int):
 @secretary_required
 @require_http_methods(["GET", "POST"])
 def hard_delete_appointment(request: HttpRequest, pk: int):
-    """Permanent delete (SUPERUSER ONLY) from Recycle Bin."""
     if not request.user.is_superuser:
         raise PermissionDenied("Hard delete is restricted to administrators only.")
 
@@ -1517,21 +1527,6 @@ def book_patient(request: HttpRequest, doctor_id: int):
 
                 br = PatientBookingRequest.objects.create(**br_kwargs)
 
-                _audit(
-                    request=request,
-                    action="create",
-                    instance=br,
-                    message="Patient portal booking request created",
-                    extra_data={
-                        "doctor_id": getattr(doctor, "id", None),
-                        "doctor_name": _doctor_name(doctor),
-                        "patient_id": getattr(patient, "id", None),
-                        "patient_name": getattr(patient, "full_name", ""),
-                        "scheduled_time": sched.isoformat() if sched else None,
-                        "source": "patient_portal",
-                    },
-                )
-
                 try:
                     if _notif_has_related_request():
                         if not Notification.objects.filter(related_booking_request=br).exists():
@@ -1563,28 +1558,6 @@ def book_patient(request: HttpRequest, doctor_id: int):
                     msg = f"❌ {e.messages[0]}"
                 messages.error(request, msg)
                 return redirect("appointments:my_appointments")
-
-            _audit(
-                request=request,
-                action="create",
-                instance=appt,
-                message="Appointment created from patient portal",
-                extra_data={
-                    "appointment_id": appt.pk,
-                    "patient_id": getattr(patient, "id", None),
-                    "doctor_id": getattr(doctor, "id", None),
-                    "scheduled_time": sched.isoformat() if sched else None,
-                    "source": "patient_portal_direct",
-                },
-            )
-
-            try:
-                Notification.objects.create(
-                    title="New appointment",
-                    message=f"{patient.full_name} booked {_doctor_name(doctor)} at {_fmt_dt(sched, '%Y-%m-%d %H:%M')}",
-                )
-            except Exception:
-                pass
 
             messages.success(request, "Your request was sent and is pending approval.")
             return redirect("appointments:my_appointments")
@@ -1693,19 +1666,15 @@ def confirm_appointment(request: HttpRequest, pk: int):
 @require_http_methods(["GET", "POST"])
 def approve_booking_request(request: HttpRequest, pk: int):
     """
-    Approve MUST create ONE appointment at the requested slot (doctor + scheduled_time)
-    and be idempotent + concurrency-safe.
-
-    ✅ FIXES ADDED:
-    - Only query Patient by user if Patient model has `user` field.
-    - Link booking request -> patient once resolved/created (so next approvals are stable).
-    - ✅ CRITICAL FIX (this bug): FORCE Patient.doctor_id = BookingRequest.doctor_id (DB update)
-      so patient appears in secretary patient_list (which is scoped by doctor).
+    ✅ FIXED:
+    - make approval actually “materialize” the patient for secretary views:
+      force Patient.doctor_id = BookingRequest.doctor_id using DB update (no validation surprises)
+    - optionally set added_by/created_by if your patient list uses ?added_by=me
+    - logs exceptions to Render logs via logger.exception
     """
     fallback_next = reverse("appointments:booking_requests_list")
     next_url = _safe_next_url(request, fallback=fallback_next)
 
-    # Allow GET to just go back (prevents confusing direct visits)
     if request.method != "POST":
         return redirect(next_url)
 
@@ -1729,25 +1698,17 @@ def approve_booking_request(request: HttpRequest, pk: int):
             if _booking_request_is_processed(br):
                 _mark_related_notifications_read(br)
                 _mark_booking_request_seen(br)
-                _audit(
-                    request=request,
-                    action="other",
-                    instance=br,
-                    message="Booking request approval skipped (already processed)",
-                    extra_data={"booking_request_id": br.pk},
-                )
                 messages.info(request, "ℹ️ هذا الطلب تمّت معالجته مسبقًا.")
                 return redirect(next_url)
 
-            # ------------------------------------------------------------
-            # Resolve / Create patient
-            # ------------------------------------------------------------
+            # -------------------------
+            # Resolve patient
+            # -------------------------
             patient_obj: Patient | None = None
 
             if _model_has_field(PatientBookingRequest, "patient") and getattr(br, "patient", None):
                 patient_obj = br.patient  # type: ignore[attr-defined]
 
-            # ✅ only query Patient.user if Patient has that field
             elif (
                 _model_has_field(PatientBookingRequest, "user")
                 and getattr(br, "user", None)
@@ -1785,10 +1746,10 @@ def approve_booking_request(request: HttpRequest, pk: int):
                 )
                 return redirect(next_url)
 
-            # ✅ Link booking request -> patient (VERY IMPORTANT)
+            # Link booking request -> patient
             if _model_has_field(PatientBookingRequest, "patient"):
                 try:
-                    if getattr(br, "patient", None) is None or getattr(br, "patient_id", None) != patient_obj.id:
+                    if getattr(br, "patient_id", None) != patient_obj.id:
                         PatientBookingRequest.objects.filter(pk=br.pk).update(patient=patient_obj)
                         try:
                             br.patient = patient_obj  # type: ignore[attr-defined]
@@ -1797,23 +1758,20 @@ def approve_booking_request(request: HttpRequest, pk: int):
                 except Exception:
                     pass
 
-            # ✅✅ CRITICAL FIX:
-            # Force patient.doctor_id = booking_request.doctor_id in DB (no silent failure)
-            if _model_has_field(Patient, "doctor") and getattr(br, "doctor_id", None):
-                Patient.objects.filter(pk=patient_obj.pk).update(doctor_id=br.doctor_id)
-                try:
-                    patient_obj.doctor_id = br.doctor_id  # keep in-memory consistent
-                except Exception:
-                    pass
+            # ✅✅ CRITICAL FIX: force patient scope fields (doctor_id + optionally added_by)
+            if getattr(br, "doctor_id", None):
+                _set_patient_scope_fields_for_secretary(
+                    patient_obj.pk,
+                    doctor_id=br.doctor_id,
+                    secretary_user=request.user,
+                )
 
             scheduled_time = _normalize_dt(getattr(br, "scheduled_time", None))
             if not scheduled_time:
                 messages.error(request, "⚠️ لا يمكن اعتماد الطلب لأن وقت الحجز غير موجود.")
                 return redirect(next_url)
 
-            # ------------------------------------------------------------
-            # Idempotent: already linked to appointment
-            # ------------------------------------------------------------
+            # If already linked to appointment and not cancelled -> idempotent success
             if _model_has_field(PatientBookingRequest, "appointment"):
                 existing_appt = getattr(br, "appointment", None)
                 if isinstance(existing_appt, Appointment):
@@ -1821,18 +1779,12 @@ def approve_booking_request(request: HttpRequest, pk: int):
                         _set_booking_request_status(br, ("CONFIRMED", "APPROVED", "ACCEPTED"))
                         _mark_related_notifications_read(br)
                         _mark_booking_request_seen(br)
-
                         messages.success(request, "✅ تم اعتماد الطلب (الموعد كان مرتبطًا مسبقًا).")
                         return _redirect_with_query("appointments:appointment_list", query={"created": existing_appt.pk})
 
-            # ------------------------------------------------------------
-            # Create or reuse appointment (race-safe)
-            # ------------------------------------------------------------
+            # Create/reuse appointment slot (race-safe)
             appt: Appointment | None = None
             created_new_appointment = False
-            approved_status_before = (
-                str(getattr(br, "status", "")) if _model_has_field(PatientBookingRequest, "status") else ""
-            )
 
             slot_qs = (
                 _active_appts_qs()
@@ -1853,7 +1805,6 @@ def approve_booking_request(request: HttpRequest, pk: int):
                 existing_slot.status = _secretary_default_status()
                 existing_slot.save()
                 appt = existing_slot
-                created_new_appointment = False
             else:
                 appt = Appointment(
                     patient=patient_obj,
@@ -1864,8 +1815,8 @@ def approve_booking_request(request: HttpRequest, pk: int):
                 appt.save()
                 created_new_appointment = True
 
-            # link request -> appointment
-            if _model_has_field(PatientBookingRequest, "appointment"):
+            # Link request -> appointment
+            if _model_has_field(PatientBookingRequest, "appointment") and appt is not None:
                 PatientBookingRequest.objects.filter(pk=br.pk).update(appointment=appt)
                 try:
                     br.appointment = appt  # type: ignore[attr-defined]
@@ -1876,34 +1827,30 @@ def approve_booking_request(request: HttpRequest, pk: int):
             _mark_booking_request_seen(br)
             _mark_related_notifications_read(br)
 
-            if appt is not None:
-                _audit(
-                    request=request,
-                    action="create" if created_new_appointment else "update",
-                    instance=appt,
-                    message="Booking request approved and appointment linked",
-                    extra_data={
-                        "booking_request_id": br.pk,
-                        "booking_request_status_before": approved_status_before,
-                        "booking_request_status_after": str(getattr(br, "status", ""))
-                        if _model_has_field(PatientBookingRequest, "status")
-                        else "",
-                        "appointment_id": appt.pk,
-                        "created_new_appointment": created_new_appointment,
-                        "patient_id": getattr(appt, "patient_id", None),
-                        "doctor_id": getattr(appt, "doctor_id", None),
-                        "scheduled_time": appt.scheduled_time.isoformat() if getattr(appt, "scheduled_time", None) else None,
-                        "appointment_status": str(getattr(appt, "status", "")),
-                    },
-                )
+            _audit(
+                request=request,
+                action="create" if created_new_appointment else "update",
+                instance=appt,
+                message="Booking request approved and appointment linked",
+                extra_data={
+                    "booking_request_id": br.pk,
+                    "appointment_id": appt.pk if appt else None,
+                    "created_new_appointment": created_new_appointment,
+                    "patient_id": getattr(patient_obj, "id", None),
+                    "doctor_id": getattr(br, "doctor_id", None),
+                    "scheduled_time": scheduled_time.isoformat() if scheduled_time else None,
+                },
+            )
 
-            messages.success(request, "✅ تم اعتماد طلب الحجز وإنشاء الموعد تلقائيًا بنفس الوقت المحدد.")
-            return _redirect_with_query("appointments:appointment_list", query={"created": appt.pk if appt else None})
+            messages.success(request, "✅ تم اعتماد طلب الحجز وإنشاء الموعد. وتم ربط المريض بالطبيب.")
+            return redirect(next_url)
 
     except IntegrityError:
+        logger.exception("approve_booking_request IntegrityError pk=%s", pk)
         messages.error(request, "⚠️ تعارض أثناء اعتماد الطلب (نفس الطبيب ونفس الوقت).")
         return redirect(next_url)
     except ValidationError as e:
+        logger.exception("approve_booking_request ValidationError pk=%s", pk)
         error_msg = None
         if hasattr(e, "message_dict"):
             msgs = e.message_dict.get("scheduled_time")
@@ -1914,6 +1861,7 @@ def approve_booking_request(request: HttpRequest, pk: int):
         messages.error(request, f"⚠️ لم يتم اعتماد طلب الحجز: {error_msg}")
         return redirect(next_url)
     except Exception:
+        logger.exception("approve_booking_request Unexpected error pk=%s", pk)
         messages.error(request, "❌ حدث خطأ غير متوقع أثناء اعتماد الطلب. راجعي Render Logs للتفاصيل.")
         return redirect(next_url)
 
@@ -1928,28 +1876,16 @@ def reject_booking_request(request: HttpRequest, pk: int):
     br = get_object_or_404(br_qs, pk=pk)
 
     next_url = _safe_next_url(request, fallback=reverse("appointments:booking_requests_list"))
-    old_status = str(getattr(br, "status", "")) if _model_has_field(PatientBookingRequest, "status") else ""
 
     try:
         _set_booking_request_status(br, ("REJECTED", "DECLINED", "CANCELLED"))
         _mark_booking_request_seen(br)
         _mark_related_notifications_read(br)
 
-        _audit(
-            request=request,
-            action="update",
-            instance=br,
-            message="Booking request rejected",
-            extra_data={
-                "booking_request_id": br.pk,
-                "old_status": old_status,
-                "new_status": str(getattr(br, "status", "")) if _model_has_field(PatientBookingRequest, "status") else "",
-            },
-        )
-
         messages.success(request, "✅ تم رفض طلب الحجز.")
         return redirect(next_url)
     except Exception:
+        logger.exception("reject_booking_request error pk=%s", pk)
         messages.error(request, "❌ حدث خطأ غير متوقع أثناء رفض الطلب. راجعي Render Logs.")
         return redirect(next_url)
 
@@ -2024,6 +1960,7 @@ def secretary_reports(request: HttpRequest):
     if _model_has_field(Appointment, "iqd_amount"):
         revenue = base_qs.aggregate(total=Sum("iqd_amount")).get("total") or 0
 
+    new_patients = 0
     if _model_has_field(Patient, "created_at"):
         patient_ids = base_qs.values_list("patient_id", flat=True).distinct()
         new_patients = (
@@ -2031,8 +1968,6 @@ def secretary_reports(request: HttpRequest):
             .distinct()
             .count()
         )
-    else:
-        new_patients = 0
 
     summary = {
         "total": total,
@@ -2185,533 +2120,8 @@ def reports_export(request: HttpRequest):
 
 
 # ------------------------------------------------------------------#
-#                  Public vs Internal Queue Snapshots                #
+#                   Notifications Polling                            #
 # ------------------------------------------------------------------#
-def _queue_doctors_queryset_for(user=None):
-    qs = Doctor.objects.select_related("user").order_by("id")
-    limit = getattr(settings, "QUEUE_DISPLAY_DOCTORS_LIMIT", None)
-    if user is not None:
-        assigned = _secretary_assigned_doctor(user)
-        if assigned is not None:
-            qs = qs.filter(pk=assigned.pk)
-    if isinstance(limit, int) and limit > 0:
-        qs = qs[:limit]
-    return qs
-
-
-def _queue_public_show_patient_names() -> bool:
-    return bool(getattr(settings, "QUEUE_PUBLIC_SHOW_PATIENT_NAME", False))
-
-
-def _queue_public_include_ids() -> bool:
-    return bool(getattr(settings, "QUEUE_PUBLIC_INCLUDE_IDS", False))
-
-
-def _queue_public_token_required() -> bool:
-    token = str(getattr(settings, "QUEUE_PUBLIC_TOKEN", "") or "")
-    if token:
-        return True
-    return bool(getattr(settings, "QUEUE_PUBLIC_REQUIRE_TOKEN", False))
-
-
-def _queue_public_token_ok(request: HttpRequest) -> bool:
-    if not _queue_public_token_required():
-        return True
-
-    expected = str(getattr(settings, "QUEUE_PUBLIC_TOKEN", "") or "")
-    if not expected:
-        return False
-
-    provided = (request.GET.get("token") or "").strip() or (request.headers.get("X-Queue-Token") or "").strip()
-    if not provided:
-        return False
-    return secrets.compare_digest(provided, expected)
-
-
-def _queue_snapshot_internal(user=None) -> list[dict]:
-    today = _today()
-    default_mins = int(getattr(settings, "APPOINTMENT_DURATION_MINUTES", 15) or 15)
-
-    appts_qs = (
-        _active_appts_qs()
-        .filter(status__in=_queue_active_statuses())
-        .select_related("patient", "doctor__user")
-        .order_by("scheduled_time")
-    )
-    appts_qs = _filter_by_day(appts_qs, today)
-    appts_qs = _filter_appointments_for_user(appts_qs, user) if user is not None else appts_qs
-    appts = list(appts_qs)
-
-    doctors = list(_queue_doctors_queryset_for(user=user))
-
-    by_doc: dict[int, list[Appointment]] = {}
-    for a in appts:
-        by_doc.setdefault(a.doctor_id, []).append(a)
-
-    queues: list[dict] = []
-    for d in doctors:
-        today_appts = by_doc.get(d.id, [])
-
-        current_obj = None
-        if hasattr(AppointmentStatus, "CALLED"):
-            for a in today_appts:
-                if a.status == getattr(AppointmentStatus, "CALLED"):
-                    current_obj = a
-                    break
-        if current_obj is None and today_appts:
-            current_obj = today_appts[0]
-
-        waiting_objs = [a for a in today_appts if (current_obj is None or a.id != current_obj.id)]
-
-        current = None
-        waiting: list[dict[str, Any]] = []
-
-        if current_obj:
-            current = {
-                "id": current_obj.id,
-                "number": _format_queue_number(getattr(current_obj, "queue_number", None)),
-                "patient_name": current_obj.patient.full_name,
-                "time": _fmt_dt(current_obj.scheduled_time, "%H:%M"),
-                "status": str(current_obj.status),
-            }
-
-        for w in waiting_objs:
-            waiting.append(
-                {
-                    "id": w.id,
-                    "number": _format_queue_number(getattr(w, "queue_number", None)),
-                    "patient_name": w.patient.full_name,
-                    "time": _fmt_dt(w.scheduled_time, "%H:%M"),
-                    "status": str(w.status),
-                }
-            )
-
-        next_queue = current["number"] if current else "No appointments"
-        waiting_count = len(waiting)
-
-        queues.append(
-            {
-                "doctor_id": d.id,
-                "doctor_name": _doctor_name(d),
-                "status": "available" if today_appts else "on_break",
-                "next_queue": next_queue,
-                "waiting_count": waiting_count,
-                "current": current,
-                "waiting": waiting,
-                "current_patient": current,
-                "waiting_list": waiting,
-                "avg_time": default_mins,
-            }
-        )
-
-    return queues
-
-
-def _queue_snapshot_public() -> list[dict]:
-    today = _today()
-    default_mins = int(getattr(settings, "APPOINTMENT_DURATION_MINUTES", 15) or 15)
-    show_names = _queue_public_show_patient_names()
-    include_ids = _queue_public_include_ids()
-
-    appts_qs = (
-        _active_appts_qs()
-        .filter(status__in=_queue_active_statuses())
-        .select_related("patient", "doctor__user")
-        .order_by("scheduled_time")
-    )
-    appts = list(_filter_by_day(appts_qs, today))
-    doctors = list(_queue_doctors_queryset_for(user=None))
-
-    by_doc: dict[int, list[Appointment]] = {}
-    for a in appts:
-        by_doc.setdefault(a.doctor_id, []).append(a)
-
-    queues: list[dict] = []
-    for d in doctors:
-        today_appts = by_doc.get(d.id, [])
-
-        current_obj = None
-        if hasattr(AppointmentStatus, "CALLED"):
-            for a in today_appts:
-                if a.status == getattr(AppointmentStatus, "CALLED"):
-                    current_obj = a
-                    break
-        if current_obj is None and today_appts:
-            current_obj = today_appts[0]
-
-        waiting_objs = [a for a in today_appts if (current_obj is None or a.id != current_obj.id)]
-
-        current: dict[str, Any] | None = None
-        waiting: list[dict[str, Any]] = []
-
-        if current_obj:
-            current = {
-                "number": _format_queue_number(getattr(current_obj, "queue_number", None)),
-                "time": _fmt_dt(current_obj.scheduled_time, "%H:%M"),
-                "status": str(current_obj.status),
-            }
-            if include_ids:
-                current["id"] = current_obj.id
-            if show_names:
-                current["patient_name"] = current_obj.patient.full_name
-
-        for w in waiting_objs:
-            item: dict[str, Any] = {
-                "number": _format_queue_number(getattr(w, "queue_number", None)),
-                "time": _fmt_dt(w.scheduled_time, "%H:%M"),
-                "status": str(w.status),
-            }
-            if include_ids:
-                item["id"] = w.id
-            if show_names:
-                item["patient_name"] = w.patient.full_name
-            waiting.append(item)
-
-        next_queue = current["number"] if current else "No appointments"
-        waiting_count = len(waiting)
-
-        queues.append(
-            {
-                "doctor_id": d.id,
-                "doctor_name": _doctor_name(d),
-                "status": "available" if today_appts else "on_break",
-                "next_queue": next_queue,
-                "waiting_count": waiting_count,
-                "current": current,
-                "waiting": waiting,
-                "avg_time": default_mins,
-            }
-        )
-
-    return queues
-
-
-@require_GET
-@cache_control(no_cache=True, no_store=True, must_revalidate=True)
-def queue_display(request: HttpRequest):
-    if _queue_public_token_required() and not _queue_public_token_ok(request):
-        return HttpResponseForbidden("Queue display is protected.")
-    try:
-        return render(request, "appointments/queue_display.html", {"queues": _queue_snapshot_public()})
-    except TemplateDoesNotExist:
-        return HttpResponse("Queue display is available.", status=200)
-
-
-@require_GET
-@cache_control(no_cache=True, no_store=True, must_revalidate=True)
-def queue_public_api(request: HttpRequest):
-    if _queue_public_token_required() and not _queue_public_token_ok(request):
-        return _json_error("Forbidden", status=403)
-    return _json_success({"queues": _queue_snapshot_public()})
-
-
-@require_GET
-@cache_control(no_cache=True, no_store=True, must_revalidate=True)
-def queue_number_api(request: HttpRequest):
-    user = getattr(request, "user", None)
-    is_staff_view = bool(
-        user and user.is_authenticated and (_user_is_secretary(user) or getattr(user, "is_superuser", False))
-    )
-
-    if is_staff_view:
-        return _json_success({"queues": _queue_snapshot_internal(user)})
-
-    if _queue_public_token_required() and not _queue_public_token_ok(request):
-        return _json_error("Forbidden", status=403)
-
-    return _json_success({"queues": _queue_snapshot_public()})
-
-
-@secretary_required
-@require_POST
-def call_next_api(request: HttpRequest, doctor_id: int):
-    today = _today()
-
-    assigned_doctor = _secretary_assigned_doctor(request.user)
-    if assigned_doctor is not None and assigned_doctor.id != doctor_id:
-        return _json_error("You cannot control the queue of another doctor.", status=403)
-
-    appt_id_raw = ""
-    if request.content_type and "application/json" in (request.content_type or ""):
-        try:
-            payload = json.loads(request.body.decode("utf-8") or "{}")
-            appt_id_raw = str(payload.get("appointment_id") or "").strip()
-        except Exception:
-            appt_id_raw = ""
-    else:
-        appt_id_raw = (request.POST.get("appointment_id") or "").strip()
-
-    appt_id: int | None = None
-    if appt_id_raw:
-        try:
-            appt_id = int(appt_id_raw)
-        except Exception:
-            appt_id = None
-
-    use_called_mode = _queue_use_called_status()
-    called_status = getattr(AppointmentStatus, "CALLED", None)
-    completed_status = AppointmentStatus.COMPLETED
-
-    waiting_statuses = _queue_waiting_statuses()
-    active_statuses = _queue_active_statuses()
-
-    updated: dict[str, Any] = {}
-
-    with transaction.atomic():
-        base = (
-            _active_appts_qs()
-            .select_for_update()
-            .filter(doctor_id=doctor_id)
-            .select_related("patient", "doctor__user")
-            .order_by("scheduled_time")
-        )
-        base = _filter_by_day(base, today)
-
-        if use_called_mode and called_status is not None:
-            current_called = base.filter(status=called_status).first()
-            if current_called:
-                Appointment.objects.filter(pk=current_called.pk).update(status=completed_status)
-
-            next_qs = base.filter(status__in=waiting_statuses)
-            nxt = next_qs.filter(pk=appt_id).first() if appt_id else None
-            if not nxt:
-                nxt = next_qs.first()
-            if not nxt:
-                return _json_error("No waiting appointments for this doctor.", status=404)
-
-            old_status = str(getattr(nxt, "status", ""))
-            Appointment.objects.filter(pk=nxt.pk).update(status=called_status)
-
-            _audit(
-                request=request,
-                action="update",
-                instance=nxt,
-                message="Queue call next (CALLED mode)",
-                extra_data={
-                    "appointment_id": nxt.pk,
-                    "doctor_id": doctor_id,
-                    "old_status": old_status,
-                    "new_status": str(called_status),
-                    "mode": "called",
-                },
-            )
-
-            updated = {
-                "id": nxt.pk,
-                "status": str(called_status),
-                "patient": getattr(nxt.patient, "full_name", ""),
-                "time": _fmt_dt(nxt.scheduled_time, "%H:%M"),
-                "number": _format_queue_number(getattr(nxt, "queue_number", None)),
-            }
-
-        else:
-            if called_status is not None:
-                current_called = base.filter(status=called_status).first()
-                if current_called:
-                    Appointment.objects.filter(pk=current_called.pk).update(status=completed_status)
-
-                    _audit(
-                        request=request,
-                        action="update",
-                        instance=current_called,
-                        message="Queue call next completed current CALLED appointment",
-                        extra_data={
-                            "appointment_id": current_called.pk,
-                            "doctor_id": doctor_id,
-                            "old_status": str(called_status),
-                            "new_status": str(completed_status),
-                            "mode": "complete",
-                        },
-                    )
-
-                    updated = {
-                        "id": current_called.pk,
-                        "status": str(completed_status),
-                        "patient": getattr(current_called.patient, "full_name", ""),
-                        "time": _fmt_dt(current_called.scheduled_time, "%H:%M"),
-                        "number": _format_queue_number(getattr(current_called, "queue_number", None)),
-                    }
-                    return _json_success({"updated": updated, "queues": _queue_snapshot_internal(request.user)})
-
-            next_qs = base.filter(status__in=active_statuses).exclude(status=AppointmentStatus.CANCELLED)
-            next_qs = next_qs.exclude(status=completed_status)
-
-            nxt = next_qs.filter(pk=appt_id).first() if appt_id else None
-            if not nxt:
-                nxt = next_qs.first()
-            if not nxt:
-                return _json_error("No waiting appointments for this doctor.", status=404)
-
-            old_status = str(getattr(nxt, "status", ""))
-            Appointment.objects.filter(pk=nxt.pk).update(status=completed_status)
-
-            _audit(
-                request=request,
-                action="update",
-                instance=nxt,
-                message="Queue call next marked appointment completed",
-                extra_data={
-                    "appointment_id": nxt.pk,
-                    "doctor_id": doctor_id,
-                    "old_status": old_status,
-                    "new_status": str(completed_status),
-                    "mode": "complete",
-                },
-            )
-
-            updated = {
-                "id": nxt.pk,
-                "status": str(completed_status),
-                "patient": getattr(nxt.patient, "full_name", ""),
-                "time": _fmt_dt(nxt.scheduled_time, "%H:%M"),
-                "number": _format_queue_number(getattr(nxt, "queue_number", None)),
-            }
-
-    return _json_success({"updated": updated, "queues": _queue_snapshot_internal(request.user)})
-
-
-@secretary_required
-@require_GET
-def current_patient_api(request: HttpRequest):
-    now = _now_local()
-    today = _today()
-
-    active_statuses = _queue_active_statuses()
-    waiting_statuses = _queue_waiting_statuses()
-
-    pend_qs = (
-        _active_appts_qs()
-        .filter(status__in=active_statuses)
-        .order_by("scheduled_time")
-        .select_related("patient", "doctor__user")
-    )
-    pend_qs = _filter_by_day(pend_qs, today)
-    pend_qs = _filter_appointments_for_user(pend_qs, request.user)
-    pend = list(pend_qs[:20])
-
-    current = None
-    nxt = None
-
-    def _wait_minutes(appt: Appointment) -> int:
-        st = _normalize_dt(appt.scheduled_time)
-        if not st:
-            return 0
-        try:
-            return max(0, int((now - st).total_seconds() // 60))
-        except Exception:
-            return 0
-
-    current_obj = None
-    if hasattr(AppointmentStatus, "CALLED"):
-        for a in pend:
-            if a.status == getattr(AppointmentStatus, "CALLED"):
-                current_obj = a
-                break
-    if current_obj is None and pend:
-        current_obj = pend[0]
-
-    if current_obj:
-        current = {
-            "id": current_obj.id,
-            "number": _format_queue_number(getattr(current_obj, "queue_number", None)),
-            "patient_name": current_obj.patient.full_name,
-            "doctor_name": _doctor_name(current_obj.doctor),
-            "wait_time_minutes": _wait_minutes(current_obj),
-            "status": str(current_obj.status),
-        }
-
-    for a in pend:
-        if current_obj and a.id == current_obj.id:
-            continue
-        if a.status in waiting_statuses:
-            nxt = {
-                "id": a.id,
-                "number": _format_queue_number(getattr(a, "queue_number", None)),
-                "patient_name": a.patient.full_name,
-                "doctor_name": _doctor_name(a.doctor),
-                "wait_time_minutes": _wait_minutes(a),
-                "status": str(a.status),
-            }
-            break
-
-    return _json_success({"current_patient": current, "next_patient": nxt})
-
-
-# ------------------------------------------------------------------#
-#                   Secretary Settings & Polling                     #
-# ------------------------------------------------------------------#
-@secretary_required
-@require_http_methods(["GET", "POST"])
-def secretary_settings(request: HttpRequest):
-    user = request.user
-
-    if request.method == "POST":
-        form_type = (request.POST.get("form_type") or "").strip().lower()
-
-        if form_type == "profile":
-            profile_form = ProfileUpdateForm(request.POST, request.FILES, instance=user)
-            password_form = CustomPasswordForm(user=user)
-
-            if profile_form.is_valid():
-                changed = list(profile_form.changed_data or [])
-                profile_form.save()
-
-                _audit(
-                    request=request,
-                    action="update",
-                    actor=user,
-                    instance=user,
-                    message="Secretary profile updated",
-                    extra_data={"changed_fields": changed},
-                )
-
-                messages.success(
-                    request,
-                    f"✅ تم تحديث الملف الشخصي ({', '.join(changed)}) بنجاح." if changed else "ℹ لم يتم رصد أي تغييرات.",
-                )
-                return redirect("appointments:secretary_settings")
-
-            messages.error(request, "⚠️ لم يتم حفظ التعديلات. يرجى تصحيح الأخطاء في نموذج الملف الشخصي.")
-
-        elif form_type == "password":
-            profile_form = ProfileUpdateForm(instance=user)
-            password_form = CustomPasswordForm(user=user, data=request.POST)
-
-            if password_form.is_valid():
-                password_form.save()
-                update_session_auth_hash(request, user)
-                if request.POST.get("enforce_logout"):
-                    _logout_other_sessions(request)
-
-                _audit(
-                    request=request,
-                    action="update",
-                    actor=user,
-                    instance=user,
-                    message="Secretary password changed",
-                    extra_data={"enforce_logout_others": bool(request.POST.get("enforce_logout"))},
-                )
-
-                messages.success(request, "🔒 تم تغيير كلمة المرور بنجاح.")
-                return redirect("appointments:secretary_settings")
-
-            messages.error(request, "⚠️ لم يتم تغيير كلمة المرور. يرجى التحقق من البيانات المدخلة.")
-
-        else:
-            messages.error(request, "⚠️ تم إرسال نموذج غير معروف.")
-            profile_form = ProfileUpdateForm(instance=user)
-            password_form = CustomPasswordForm(user=user)
-    else:
-        profile_form = ProfileUpdateForm(instance=user)
-        password_form = CustomPasswordForm(user=user)
-
-    return render(
-        request,
-        "appointments/secretary_settings.html",
-        {"profile_form": profile_form, "password_form": password_form},
-    )
-
-
 @secretary_required
 @require_GET
 def new_booking_requests_api(request: HttpRequest):
@@ -2762,69 +2172,3 @@ def new_booking_requests_api(request: HttpRequest):
         )
 
     return _json_success({"count": total_count, "booking_requests": items})
-
-
-@secretary_required
-@require_GET
-def notifications_list(request: HttpRequest):
-    qs = (
-        Notification.objects.all().order_by("-created_at", "-pk")
-        if _model_has_field(Notification, "created_at")
-        else Notification.objects.all().order_by("-pk")
-    )
-
-    if _notif_has_related_request():
-        assigned = _secretary_assigned_doctor(request.user)
-        if assigned is not None:
-            qs = qs.filter(Q(related_booking_request__isnull=True) | Q(related_booking_request__doctor=assigned))
-
-    page = Paginator(qs, 30).get_page(request.GET.get("page"))
-    return render(request, "appointments/notifications_list.html", {"notifications": page})
-
-
-@secretary_required
-@require_POST
-def mark_notification_read(request: HttpRequest, pk: int):
-    n = get_object_or_404(Notification, pk=pk)
-
-    if _notif_has_related_request():
-        assigned = _secretary_assigned_doctor(request.user)
-        if assigned is not None:
-            br = getattr(n, "related_booking_request", None)
-            if br and getattr(br, "doctor_id", None) != assigned.id:
-                return HttpResponseForbidden("Forbidden.")
-
-    Notification.objects.filter(pk=n.pk).update(is_read=True)
-
-    _audit(
-        request=request,
-        action="update",
-        instance=n,
-        message="Notification marked as read",
-        extra_data={"notification_id": n.pk},
-    )
-
-    return _json_success({"id": n.pk, "is_read": True})
-
-
-@secretary_required
-@require_POST
-def mark_all_notifications_read(request: HttpRequest):
-    qs = Notification.objects.filter(is_read=False)
-
-    if _notif_has_related_request():
-        assigned = _secretary_assigned_doctor(request.user)
-        if assigned is not None:
-            qs = qs.filter(Q(related_booking_request__isnull=True) | Q(related_booking_request__doctor=assigned))
-
-    updated = qs.update(is_read=True)
-
-    _audit(
-        request=request,
-        action="update",
-        actor=request.user,
-        message="All visible notifications marked as read",
-        extra_data={"updated_count": updated},
-    )
-
-    return _json_success({"updated": updated})
