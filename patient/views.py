@@ -32,7 +32,16 @@ except Exception:
     HAS_BILLING = False
 
 
+# -----------------------------
+# Settings / constants
+# -----------------------------
 PAGE_SIZE: Final[int] = getattr(settings, "PATIENT_LIST_PAGE_SIZE", 25)
+
+# ✅ إذا السكرتير ما عنده assigned doctor:
+# True  -> يشوف كل المرضى/Recycle Bin
+# False -> يظل لازم يكون مرتبط بطبيب
+SECRETARY_SEES_ALL_PATIENTS: Final[bool] = bool(getattr(settings, "SECRETARY_SEES_ALL_PATIENTS", True))
+
 
 GROUPS_MAP = {
     "doctor": "Doctors",
@@ -40,6 +49,9 @@ GROUPS_MAP = {
 }
 
 
+# -----------------------------
+# Role helpers
+# -----------------------------
 def _has_role(user, role_name: str) -> bool:
     group_name = GROUPS_MAP.get(role_name)
     try:
@@ -65,6 +77,7 @@ def is_med_staff(user) -> bool:  # noqa: ANN001
     return is_doctor(user) or is_secretary(user)
 
 
+# ✅ Keep decorators (but we’ll avoid raising 403 inside views)
 doctor_required = user_passes_test(is_doctor)
 secretary_required = user_passes_test(is_secretary)
 med_staff_required = user_passes_test(is_med_staff)
@@ -81,16 +94,20 @@ def _model_has_field(model_cls: type, name: str) -> bool:
 
 def _prediction_field_name() -> str:
     """
-    ✅ Prefer diabetes_prediction (AI output) for listing/filtering.
-    Fallback to diabetes_status if diabetes_prediction doesn't exist.
+    Prefer diabetes_prediction (AI output) for listing/filtering.
+    Fallback to diabetes_status.
     """
     if _model_has_field(Patient, "diabetes_prediction"):
         return "diabetes_prediction"
     if _model_has_field(Patient, "diabetes_status"):
         return "diabetes_status"
-    raise PermissionDenied(_("Prediction field is not available on Patient model."))
+    # بدل 403: نرجع اسم افتراضي حتى ما يوقف النظام
+    return "diabetes_status"
 
 
+# -----------------------------
+# Doctor assignment helpers
+# -----------------------------
 def _current_doctor_for(user) -> Optional["doctor.Doctor"]:  # type: ignore[name-defined]
     try:
         from doctor.models import Doctor
@@ -147,37 +164,71 @@ def _assigned_doctor_for(user) -> Optional["doctor.Doctor"]:  # type: ignore[nam
     return None
 
 
+def _forbidden_redirect(request, msg: str):
+    """
+    بدل 403: رسالة + Redirect
+    """
+    messages.error(request, msg)
+    # تقدرين تغيّرينها لصفحة dashboard إذا عندك
+    return redirect("home:index")
+
+
 def _patients_qs_for(request):
     """
-    ACTIVE patients only (Patient.objects typically filters is_deleted=False).
-    Scoped to assigned doctor.
+    ACTIVE patients only (Patient.objects may already filter is_deleted=False).
+    Doctor: scoped to his patients.
+    Secretary:
+      - إذا عنده assigned doctor -> scoped
+      - إذا ما عنده و SECRETARY_SEES_ALL_PATIENTS=True -> يشوف الكل
     """
     if not is_med_staff(request.user):
         raise PermissionDenied
 
-    doc = _assigned_doctor_for(request.user)
-    if not doc:
-        raise PermissionDenied(_("No assigned doctor found for your account."))
+    if is_doctor(request.user):
+        doc = _assigned_doctor_for(request.user)
+        if not doc:
+            raise PermissionDenied(_("No doctor profile found for your account."))
+        return Patient.objects.select_related("doctor", "doctor__user").filter(doctor=doc)
 
-    return Patient.objects.select_related("doctor", "doctor__user").filter(doctor=doc)
+    # secretary
+    doc = _assigned_doctor_for(request.user)
+    base = Patient.objects.select_related("doctor", "doctor__user")
+    if doc:
+        return base.filter(doctor=doc)
+
+    if SECRETARY_SEES_ALL_PATIENTS:
+        return base
+
+    raise PermissionDenied(_("No assigned doctor found for your account."))
 
 
 def _patients_deleted_qs_for(request):
     """
-    Deleted patients (Recycle Bin), scoped to assigned doctor.
-    Requires Patient to inherit SoftDeleteModel (deleted_objects/all_objects exist).
+    Deleted patients (Recycle Bin), scoped similarly.
+    Requires Patient.deleted_objects.
     """
     if not is_med_staff(request.user):
         raise PermissionDenied
 
-    doc = _assigned_doctor_for(request.user)
-    if not doc:
-        raise PermissionDenied(_("No assigned doctor found for your account."))
-
     if not hasattr(Patient, "deleted_objects"):
         raise PermissionDenied(_("Recycle Bin is not enabled for Patient model."))
 
-    return Patient.deleted_objects.select_related("doctor", "doctor__user").filter(doctor=doc)
+    if is_doctor(request.user):
+        doc = _assigned_doctor_for(request.user)
+        if not doc:
+            raise PermissionDenied(_("No doctor profile found for your account."))
+        return Patient.deleted_objects.select_related("doctor", "doctor__user").filter(doctor=doc)
+
+    # secretary
+    doc = _assigned_doctor_for(request.user)
+    base = Patient.deleted_objects.select_related("doctor", "doctor__user")
+    if doc:
+        return base.filter(doctor=doc)
+
+    if SECRETARY_SEES_ALL_PATIENTS:
+        return base
+
+    raise PermissionDenied(_("No assigned doctor found for your account."))
 
 
 # -------------------------------------------------------------------
@@ -277,9 +328,8 @@ def _compute_confidence_percent(patient: Patient) -> tuple[Optional[float], Opti
 
 def _should_run_ai_on_save(request) -> bool:
     """
-    ✅ To avoid slow save in workstations:
-    - default: DO NOT run AI on create/edit
-    - enable explicitly via settings.RUN_AI_ON_PATIENT_SAVE = True
+    default: DO NOT run AI on create/edit
+    enable via settings.RUN_AI_ON_PATIENT_SAVE = True
     """
     return bool(getattr(settings, "RUN_AI_ON_PATIENT_SAVE", False)) and is_doctor(request.user)
 
@@ -291,33 +341,58 @@ def _should_run_ai_on_save(request) -> bool:
 @med_staff_required
 @require_http_methods(["GET", "POST"])
 def create_patient(request):
-    doc = _assigned_doctor_for(request.user)
-    if not doc:
-        raise PermissionDenied(_("No assigned doctor found for your account."))
-
+    """
+    ✅ Fix for Render 403:
+    - إذا السكرتير ما عنده assigned doctor: ما نرفع PermissionDenied
+      بل نخلي الفورم يعتمد على حقل doctor إذا موجود، وإلا نرجّع redirect برسالة.
+    """
     FormClass = DoctorPatientForm if is_doctor(request.user) else SecretaryPatientForm
-    form = FormClass(request.POST or None, initial={"doctor": doc})
+
+    assigned_doc = _assigned_doctor_for(request.user)
+
+    # initial doctor فقط إذا متوفر
+    initial = {}
+    if assigned_doc:
+        initial["doctor"] = assigned_doc
+
+    form = FormClass(request.POST or None, initial=initial)
 
     if request.method == "POST":
         if form.is_valid():
             patient: Patient = form.save(commit=False)
-            patient.doctor = doc
+
+            # doctor assignment logic
+            if is_doctor(request.user):
+                if not assigned_doc:
+                    return _forbidden_redirect(request, _("No doctor profile found for your account."))
+                patient.doctor = assigned_doc
+
+            else:
+                # secretary
+                if assigned_doc:
+                    patient.doctor = assigned_doc
+                else:
+                    # إذا السكرتير مو مرتبط بطبيب: لازم الطبيب ينأخذ من الفورم إذا موجود
+                    if hasattr(form, "cleaned_data") and "doctor" in form.cleaned_data and form.cleaned_data.get("doctor"):
+                        patient.doctor = form.cleaned_data["doctor"]
+                    else:
+                        return _forbidden_redirect(
+                            request,
+                            _("Your account is not linked to a doctor. Please assign a doctor to the secretary user or enable doctor selection in the form."),
+                        )
+
             patient.save()
 
-            # ✅ Optional AI on save (disabled by default to avoid slow requests)
+            # Optional AI on save
             if _should_run_ai_on_save(request):
                 try:
                     from patient.services import predict_and_save
                     predict_and_save(patient)
                     patient.refresh_from_db()
                 except Exception:
-                    messages.warning(
-                        request,
-                        _("Patient saved, but AI prediction could not run right now."),
-                    )
+                    messages.warning(request, _("Patient saved, but AI prediction could not run right now."))
 
             messages.success(request, _("Patient created successfully."))
-
             if is_secretary(request.user):
                 return redirect("patient:list")
             return redirect("patient:detail", pk=patient.pk)
@@ -331,7 +406,10 @@ def create_patient(request):
 @med_staff_required
 @require_http_methods(["GET"])
 def patient_list(request):
-    qs = _patients_qs_for(request)
+    try:
+        qs = _patients_qs_for(request)
+    except PermissionDenied:
+        return _forbidden_redirect(request, _("You do not have permission to view patients."))
 
     search_query = (request.GET.get("q") or "").strip()
     statuses = request.GET.getlist("status")
@@ -403,11 +481,14 @@ def patient_list(request):
 @med_staff_required
 @require_http_methods(["GET"])
 def patient_detail(request, pk: int):
-    patient: Patient = get_object_or_404(_patients_qs_for(request), pk=pk)
+    try:
+        patient: Patient = get_object_or_404(_patients_qs_for(request), pk=pk)
+    except PermissionDenied:
+        return _forbidden_redirect(request, _("You do not have permission to view this patient."))
 
     confidence_pct, confidence_angle = _compute_confidence_percent(patient)
 
-    # ✅ Run AI here (on-demand) if not available yet (keeps create/edit fast)
+    # on-demand AI for doctors
     if is_doctor(request.user) and confidence_pct is None:
         try:
             from patient.services import predict_and_save
@@ -459,35 +540,51 @@ def patient_detail(request, pk: int):
 @med_staff_required
 @require_http_methods(["GET", "POST"])
 def edit_patient(request, pk: int):
-    patient: Patient = get_object_or_404(_patients_qs_for(request), pk=pk)
-
-    doc = _assigned_doctor_for(request.user)
-    if not doc:
-        raise PermissionDenied(_("No assigned doctor found for your account."))
+    try:
+        patient: Patient = get_object_or_404(_patients_qs_for(request), pk=pk)
+    except PermissionDenied:
+        return _forbidden_redirect(request, _("You do not have permission to edit this patient."))
 
     FormClass = DoctorPatientForm if is_doctor(request.user) else SecretaryPatientForm
     form = FormClass(request.POST or None, instance=patient)
 
+    assigned_doc = _assigned_doctor_for(request.user)
+
     if request.method == "POST":
         if form.is_valid():
             patient = form.save(commit=False)
-            patient.doctor = doc
+
+            # doctor assignment logic
+            if is_doctor(request.user):
+                if not assigned_doc:
+                    return _forbidden_redirect(request, _("No doctor profile found for your account."))
+                patient.doctor = assigned_doc
+            else:
+                # secretary
+                if assigned_doc:
+                    patient.doctor = assigned_doc
+                else:
+                    if hasattr(form, "cleaned_data") and "doctor" in form.cleaned_data and form.cleaned_data.get("doctor"):
+                        patient.doctor = form.cleaned_data["doctor"]
+                    elif not SECRETARY_SEES_ALL_PATIENTS:
+                        return _forbidden_redirect(
+                            request,
+                            _("Your account is not linked to a doctor. Please assign a doctor to the secretary user or enable doctor selection in the form."),
+                        )
+                    # إذا SECRETARY_SEES_ALL_PATIENTS=True وماكو doctor بالحقل: نخلي doctor كما هو (ما نغيّره)
+
             patient.save()
 
-            # ✅ Optional AI on save (disabled by default to avoid slow requests)
+            # Optional AI on save
             if _should_run_ai_on_save(request):
                 try:
                     from patient.services import predict_and_save
                     predict_and_save(patient)
                     patient.refresh_from_db()
                 except Exception:
-                    messages.warning(
-                        request,
-                        _("Patient saved, but AI prediction could not run right now."),
-                    )
+                    messages.warning(request, _("Patient saved, but AI prediction could not run right now."))
 
             messages.success(request, _("Patient updated successfully."))
-
             if is_secretary(request.user):
                 return redirect("patient:list")
             return redirect("patient:detail", pk=patient.pk)
@@ -505,18 +602,19 @@ def edit_patient(request, pk: int):
 
 
 # -------------------------------------------------------------------
-# ✅ Soft Delete / Recycle Bin / Restore (Patients)
+# Soft Delete / Recycle Bin / Restore
 # -------------------------------------------------------------------
 @login_required
 @med_staff_required
 @require_http_methods(["GET", "POST"])
 def delete_patient(request, pk: int):
     """
-    ✅ Soft delete patient (moves to Recycle Bin).
-    - Only affects Patient row (does not cascade hard delete).
-    - Requires Patient to inherit SoftDeleteModel.
+    Soft delete patient (moves to Recycle Bin).
     """
-    patient: Patient = get_object_or_404(_patients_qs_for(request), pk=pk)
+    try:
+        patient: Patient = get_object_or_404(_patients_qs_for(request), pk=pk)
+    except PermissionDenied:
+        return _forbidden_redirect(request, _("You do not have permission to delete this patient."))
 
     if request.method == "POST":
         try:
@@ -539,9 +637,12 @@ def delete_patient(request, pk: int):
 @require_http_methods(["GET"])
 def patient_recycle_bin(request):
     """
-    List deleted patients for assigned doctor.
+    List deleted patients.
     """
-    qs = _patients_deleted_qs_for(request)
+    try:
+        qs = _patients_deleted_qs_for(request)
+    except PermissionDenied:
+        return _forbidden_redirect(request, _("Recycle Bin is not available for your account."))
 
     q = (request.GET.get("q") or "").strip()
     if q:
@@ -569,14 +670,25 @@ def restore_patient(request, pk: int):
     Restore a soft-deleted patient.
     """
     if not hasattr(Patient, "all_objects"):
-        raise PermissionDenied(_("Restore is not enabled for Patient model."))
+        return _forbidden_redirect(request, _("Restore is not enabled for Patient model."))
 
-    doc = _assigned_doctor_for(request.user)
-    if not doc:
-        raise PermissionDenied(_("No assigned doctor found for your account."))
+    # Scoped restore: doctor -> his, secretary -> assigned or all (حسب setting)
+    base = Patient.all_objects.select_related("doctor", "doctor__user")
 
-    qs = Patient.all_objects.select_related("doctor", "doctor__user").filter(doctor=doc)
-    patient: Patient = get_object_or_404(qs, pk=pk)
+    if is_doctor(request.user):
+        doc = _assigned_doctor_for(request.user)
+        if not doc:
+            return _forbidden_redirect(request, _("No doctor profile found for your account."))
+        base = base.filter(doctor=doc)
+    else:
+        # secretary
+        doc = _assigned_doctor_for(request.user)
+        if doc:
+            base = base.filter(doctor=doc)
+        elif not SECRETARY_SEES_ALL_PATIENTS:
+            return _forbidden_redirect(request, _("No assigned doctor found for your account."))
+
+    patient: Patient = get_object_or_404(base, pk=pk)
 
     is_deleted = bool(getattr(patient, "is_deleted", False))
     if not is_deleted:
@@ -608,10 +720,10 @@ def hard_delete_patient(request, pk: int):
     Permanent delete (SUPERUSER ONLY).
     """
     if not request.user.is_superuser:
-        raise PermissionDenied(_("Hard delete is restricted to administrators only."))
+        return _forbidden_redirect(request, _("Hard delete is restricted to administrators only."))
 
     if not hasattr(Patient, "all_objects"):
-        raise PermissionDenied(_("Hard delete is not enabled for Patient model."))
+        return _forbidden_redirect(request, _("Hard delete is not enabled for Patient model."))
 
     patient: Patient = get_object_or_404(Patient.all_objects.select_related("doctor", "doctor__user"), pk=pk)
 
