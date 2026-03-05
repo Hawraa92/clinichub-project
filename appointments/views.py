@@ -467,6 +467,10 @@ def _mark_booking_requests_seen_bulk(ids: list[int]) -> None:
         PatientBookingRequest.objects.filter(pk__in=ids).update(**updates)
 
 
+def _notif_has_related_request() -> bool:
+    return _model_has_field(Notification, "related_booking_request")
+
+
 def _mark_related_notifications_read(br: PatientBookingRequest | None) -> None:
     if br is None or not _notif_has_related_request():
         return
@@ -557,10 +561,6 @@ def _get_period_range(request: HttpRequest, default_period: str = "day") -> tupl
             start, end = end, start
 
     return period, start, end
-
-
-def _notif_has_related_request() -> bool:
-    return _model_has_field(Notification, "related_booking_request")
 
 
 def _queue_active_statuses() -> list:
@@ -667,6 +667,7 @@ def _ensure_patient_from_booking_request(br: PatientBookingRequest) -> Patient |
     """
     ✅ If no linked patient is found, create one from booking request data
     to avoid failing approval flow.
+    NOTE: might still return None if model constraints fail (unique / required).
     """
     try:
         doc = getattr(br, "doctor", None)
@@ -678,13 +679,13 @@ def _ensure_patient_from_booking_request(br: PatientBookingRequest) -> Patient |
         dob = getattr(br, "date_of_birth", None)
 
         p = Patient()
+
         if _model_has_field(Patient, "doctor"):
             p.doctor = doc
 
         if _model_has_field(Patient, "full_name"):
             p.full_name = full_name
 
-        # map contact -> email/mobile (best-effort)
         if contact:
             if "@" in contact and _model_has_field(Patient, "email"):
                 p.email = contact
@@ -697,11 +698,11 @@ def _ensure_patient_from_booking_request(br: PatientBookingRequest) -> Patient |
         if dob and _model_has_field(Patient, "date_of_birth"):
             p.date_of_birth = dob
 
-        # link user if exists
+        # link user if exists AND Patient actually has user field
         if _model_has_field(PatientBookingRequest, "user"):
             u = getattr(br, "user", None)
             if u is not None and _model_has_field(Patient, "user"):
-                p.user = u
+                p.user = u  # type: ignore[attr-defined]
 
         p.save()
         return p
@@ -1694,12 +1695,17 @@ def approve_booking_request(request: HttpRequest, pk: int):
     """
     Approve MUST create ONE appointment at the requested slot (doctor + scheduled_time)
     and be idempotent + concurrency-safe.
-    ✅ Locks booking request row via SELECT ... FOR UPDATE.
-    ✅ Handles missing patient by creating one from request data.
-    ✅ Never throws 500: catches unexpected errors.
+
+    ✅ FIXES ADDED:
+    - Only query Patient by user if Patient model has `user` field.
+    - Link booking request -> patient once resolved/created (so next approvals are stable).
     """
     fallback_next = reverse("appointments:booking_requests_list")
     next_url = _safe_next_url(request, fallback=fallback_next)
+
+    # Allow GET to just go back (prevents confusing direct visits)
+    if request.method != "POST":
+        return redirect(next_url)
 
     cancelled_status = getattr(AppointmentStatus, "CANCELLED", None)
 
@@ -1714,7 +1720,6 @@ def approve_booking_request(request: HttpRequest, pk: int):
             br_qs = _filter_booking_requests_for_user(br_qs, request.user)
             br = get_object_or_404(br_qs, pk=pk)
 
-            # ensure doctor exists
             if getattr(br, "doctor", None) is None:
                 messages.error(request, "⚠️ لا يمكن اعتماد الطلب لأن الطبيب غير محدد في الطلب.")
                 return redirect(next_url)
@@ -1722,7 +1727,6 @@ def approve_booking_request(request: HttpRequest, pk: int):
             if _booking_request_is_processed(br):
                 _mark_related_notifications_read(br)
                 _mark_booking_request_seen(br)
-
                 _audit(
                     request=request,
                     action="other",
@@ -1730,15 +1734,23 @@ def approve_booking_request(request: HttpRequest, pk: int):
                     message="Booking request approval skipped (already processed)",
                     extra_data={"booking_request_id": br.pk},
                 )
-
                 messages.info(request, "ℹ️ هذا الطلب تمّت معالجته مسبقًا.")
                 return redirect(next_url)
 
-            # Resolve patient
+            # ------------------------------------------------------------
+            # Resolve / Create patient
+            # ------------------------------------------------------------
             patient_obj: Patient | None = None
+
             if _model_has_field(PatientBookingRequest, "patient") and getattr(br, "patient", None):
                 patient_obj = br.patient  # type: ignore[attr-defined]
-            elif _model_has_field(PatientBookingRequest, "user") and getattr(br, "user", None):
+
+            # ✅ FIX: only query Patient.user if Patient has that field
+            elif (
+                _model_has_field(PatientBookingRequest, "user")
+                and getattr(br, "user", None)
+                and _model_has_field(Patient, "user")
+            ):
                 patient_obj = Patient.objects.filter(user=br.user).first()  # type: ignore[attr-defined]
 
             if not patient_obj:
@@ -1761,19 +1773,29 @@ def approve_booking_request(request: HttpRequest, pk: int):
 
                 patient_obj = qs_pat.first()
 
-            # ✅ if still none -> create patient from request
             if not patient_obj:
                 patient_obj = _ensure_patient_from_booking_request(br)
 
             if not patient_obj:
                 messages.error(
                     request,
-                    "⚠️ لا يمكن اعتماد الطلب: لم يتم العثور على/إنشاء سجل المريض. "
-                    "يرجى إنشاء/ربط المريض أولاً.",
+                    "⚠️ لا يمكن اعتماد الطلب: لم يتم العثور على/إنشاء سجل المريض. يرجى إنشاء/ربط المريض أولاً.",
                 )
                 return redirect(next_url)
 
-            # ensure patient doctor matches request doctor
+            # ✅ Link booking request -> patient (VERY IMPORTANT)
+            if _model_has_field(PatientBookingRequest, "patient"):
+                try:
+                    if getattr(br, "patient", None) is None or getattr(br, "patient_id", None) != patient_obj.id:
+                        PatientBookingRequest.objects.filter(pk=br.pk).update(patient=patient_obj)
+                        try:
+                            br.patient = patient_obj  # type: ignore[attr-defined]
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+
+            # ensure patient doctor matches request doctor (best effort)
             try:
                 if _model_has_field(Patient, "doctor") and getattr(patient_obj, "doctor_id", None) != getattr(br.doctor, "id", None):
                     patient_obj.doctor = br.doctor  # type: ignore[attr-defined]
@@ -1786,7 +1808,9 @@ def approve_booking_request(request: HttpRequest, pk: int):
                 messages.error(request, "⚠️ لا يمكن اعتماد الطلب لأن وقت الحجز غير موجود.")
                 return redirect(next_url)
 
-            # Idempotent: already linked to valid appointment
+            # ------------------------------------------------------------
+            # Idempotent: already linked to appointment
+            # ------------------------------------------------------------
             if _model_has_field(PatientBookingRequest, "appointment"):
                 existing_appt = getattr(br, "appointment", None)
                 if isinstance(existing_appt, Appointment):
@@ -1795,29 +1819,18 @@ def approve_booking_request(request: HttpRequest, pk: int):
                         _mark_related_notifications_read(br)
                         _mark_booking_request_seen(br)
 
-                        _audit(
-                            request=request,
-                            action="update",
-                            instance=existing_appt,
-                            message="Booking request approved (already linked appointment)",
-                            extra_data={
-                                "booking_request_id": br.pk,
-                                "appointment_id": existing_appt.pk,
-                                "patient_id": getattr(existing_appt, "patient_id", None),
-                                "doctor_id": getattr(existing_appt, "doctor_id", None),
-                            },
-                        )
-
                         messages.success(request, "✅ تم اعتماد الطلب (الموعد كان مرتبطًا مسبقًا).")
                         return _redirect_with_query("appointments:appointment_list", query={"created": existing_appt.pk})
 
+            # ------------------------------------------------------------
+            # Create or reuse appointment (race-safe)
+            # ------------------------------------------------------------
             appt: Appointment | None = None
             created_new_appointment = False
             approved_status_before = (
                 str(getattr(br, "status", "")) if _model_has_field(PatientBookingRequest, "status") else ""
             )
 
-            # lock slot appointments to prevent race
             slot_qs = (
                 _active_appts_qs()
                 .select_for_update()
@@ -1881,18 +1894,6 @@ def approve_booking_request(request: HttpRequest, pk: int):
                     },
                 )
 
-                _audit(
-                    request=request,
-                    action="update",
-                    instance=br,
-                    message="Booking request approved",
-                    extra_data={
-                        "booking_request_id": br.pk,
-                        "appointment_id": appt.pk,
-                        "approved_by": getattr(request.user, "id", None),
-                    },
-                )
-
             messages.success(request, "✅ تم اعتماد طلب الحجز وإنشاء الموعد تلقائيًا بنفس الوقت المحدد.")
             return _redirect_with_query("appointments:appointment_list", query={"created": appt.pk if appt else None})
 
@@ -1910,7 +1911,6 @@ def approve_booking_request(request: HttpRequest, pk: int):
         messages.error(request, f"⚠️ لم يتم اعتماد طلب الحجز: {error_msg}")
         return redirect(next_url)
     except Exception:
-        # ✅ prevents Render 500
         messages.error(request, "❌ حدث خطأ غير متوقع أثناء اعتماد الطلب. راجعي Render Logs للتفاصيل.")
         return redirect(next_url)
 
@@ -1918,6 +1918,9 @@ def approve_booking_request(request: HttpRequest, pk: int):
 @secretary_required
 @require_http_methods(["GET", "POST"])
 def reject_booking_request(request: HttpRequest, pk: int):
+    if request.method != "POST":
+        return redirect(_safe_next_url(request, fallback=reverse("appointments:booking_requests_list")))
+
     br_qs = _filter_booking_requests_for_user(PatientBookingRequest.objects.all(), request.user)
     br = get_object_or_404(br_qs, pk=pk)
 
