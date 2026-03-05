@@ -1,3 +1,1 @@
-/* ClinicHub Admin RTL */
-html, body { direction: rtl; }
-#content, .module, .form-row { text-align: right; }
+/* ClinicHub Admin RTL - placeholder (avoid breaking Jazzmin layout) */
