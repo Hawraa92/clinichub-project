@@ -1778,7 +1778,8 @@ def approve_booking_request(request: HttpRequest, pk: int):
 
             # link request -> appointment
             if _model_has_field(PatientBookingRequest, "appointment"):
-                PatientBookingRequest.objects.filter(pk=br.pk).update(appointment=appt)
+                # PatientBookingRequest.objects.filter(pk=br.pk).update(appointment=appt)
+                PatientBookingRequest.objects.filter(pk=br.pk).update(appointment_id=appt.pk)
                 try:
                     br.appointment = appt  # type: ignore[attr-defined]
                 except Exception:
