@@ -1,9 +1,10 @@
 /* =========================================
    create_appointment.css (Scoped & Refactored)
    Scope: .create-appt-wrapper
+   ✅ LIGHT ONLY (No Dark Mode)
    ========================================= */
 
-/* -------- CSS Variables -------- */
+/* -------- CSS Variables (LIGHT) -------- */
 :root {
   --font-base: "Inter", "Tajawal", system-ui, Arial, sans-serif;
 
@@ -46,37 +47,6 @@
   --transition: .25s cubic-bezier(.4,.2,.3,1);
 }
 
-/* -------- Dark Mode Overrides -------- */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-bg-page: #0f1b24;
-    --color-card-bg: #1f323f;
-    --color-card-alt: #25383c;
-    --color-border: #2d4350;
-    --color-border-strong: #3c5664;
-
-    --color-text: #e6eef2;
-    --color-text-soft: #a8b9c1;
-    --color-heading: #bcd4ff;
-
-    --color-primary-start: #3c55e6;
-    --color-primary-end:   #6276f0;
-    --color-primary:       #5f7bff;
-    --color-primary-hover: #5070ff;
-
-    --color-success:       #34c186;
-    --color-success-hover: #2ba971;
-
-    --color-danger:        #ff7785;
-    --color-danger-bg:     #3b2528;
-    --color-danger-border: #614146;
-
-    --shadow-card:    0 10px 28px -6px rgba(0,0,0,0.55);
-    --shadow-success: 0 6px 24px -4px rgba(52,193,134,0.35);
-    --shadow-focus:   0 0 0 3px rgba(95,123,255,0.35);
-  }
-}
-
 /* -------- Scoped Page Styling -------- */
 .create-appt-wrapper,
 .create-appt-wrapper * {
@@ -85,6 +55,10 @@
 
 .create-appt-wrapper {
   font-family: var(--font-base);
+  color-scheme: light;              /* ✅ يثبت Light حتى لو جهاز المستخدم Dark */
+  background: var(--color-bg-page);
+  border-radius: var(--radius-lg);
+  color: var(--color-text);
 }
 
 /* بدل ما نخرب body بكل الموقع، نخلي خلفية الصفحة من داخل wrapper */
@@ -95,12 +69,6 @@
   box-shadow: var(--shadow-card);
   overflow: hidden;
   position: relative;
-}
-
-/* Optional: لو تريد نفس لون الخلفية للجزء حول الكارد فقط */
-.create-appt-wrapper {
-  background: var(--color-bg-page);
-  border-radius: var(--radius-lg);
 }
 
 /* Card Header */
@@ -130,7 +98,9 @@
 .create-appt-wrapper .appointment-form-card .card-body {
   background: var(--color-card-alt);
   padding: 2.25rem 2.4rem 2rem;
+  color: var(--color-text);
 }
+
 @media (max-width: 768px) {
   .create-appt-wrapper .appointment-form-card .card-body {
     padding: 1.7rem 1.3rem 1.2rem;
@@ -148,6 +118,7 @@
   align-items: center;
   gap: .25rem;
 }
+
 .create-appt-wrapper .form-label.required-star::after {
   content: "*";
   color: var(--color-danger);
@@ -196,6 +167,7 @@
   color: var(--color-danger);
   box-shadow: 0 0 0 2px rgba(220,53,69,0.15);
 }
+
 .create-appt-wrapper .appointment-form-card .is-invalid:focus {
   box-shadow: 0 0 0 3px rgba(220,53,69,0.25);
 }
@@ -206,6 +178,7 @@
   padding-left: 0;
   margin: .4rem 0 0;
 }
+
 .create-appt-wrapper .field-errors li {
   background: var(--color-danger-bg);
   border: 1px solid var(--color-danger-border);
@@ -248,12 +221,14 @@
   transition: var(--transition);
   position: relative;
 }
+
 .create-appt-wrapper .appointment-form-card .btn-success:hover,
 .create-appt-wrapper .appointment-form-card .btn-success:focus-visible {
   background: var(--color-success-hover);
   transform: translateY(-2px);
   box-shadow: 0 10px 26px -6px rgba(25,135,84,0.35);
 }
+
 .create-appt-wrapper .appointment-form-card .btn-success:active {
   transform: translateY(0);
 }
@@ -263,6 +238,7 @@
   pointer-events: none;
   opacity: .7;
 }
+
 .create-appt-wrapper .appointment-form-card .btn-success.is-busy::after {
   content: "";
   width: 16px;
@@ -349,4 +325,7 @@ body.qp-modal-open { overflow: hidden; }
   color: var(--color-text-soft);
   cursor: pointer;
 }
-.create-appt-wrapper .qp-modal__close:hover { color: var(--color-text); }
+
+.create-appt-wrapper .qp-modal__close:hover {
+  color: var(--color-text);
+}
