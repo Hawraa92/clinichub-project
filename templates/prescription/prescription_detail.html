@@ -124,8 +124,9 @@
     {% firstof d.ar_prefix "" as ar_prefix %}
   {% endwith %}
 {% else %}
-  {% firstof d.ar_title "الدكتور" as ar_title %}
-  {% firstof d.ar_prefix "د." as ar_prefix %}
+  {% with ar_title="Dr." %}
+    {% firstof d.ar_prefix "" as ar_prefix %}
+  {% endwith %}
 {% endif %}
 
 {# Syndicate reg no #}
@@ -190,7 +191,7 @@
               {% if d and d.entity_type == "clinic" %}
                 عيادة
               {% else %}
-                {{ ar_title }}
+                Dr.
               {% endif %}
             </span>
             <bdi class="rxp-docname">{{ doctor_name }}</bdi>

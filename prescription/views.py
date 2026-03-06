@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import io
 import logging
 from datetime import date, datetime
@@ -24,7 +25,7 @@ from django.views.decorators.http import require_GET, require_http_methods
 
 from appointments.models import Appointment
 from doctor.models import Doctor
-from medical_archive.models import ArchiveAttachment, PatientArchive
+from medical_archive.models import ArchiveAttachment, ArchiveVoiceNote, PatientArchive
 
 from .forms import MedicationFormSet, PrescriptionForm
 from .models import Prescription
@@ -72,9 +73,8 @@ def _admin_can_access_prescriptions() -> bool:
 
 def _force_archive_enabled() -> bool:
     """
-    ✅ الأرشفة الآلية 100% (بدون الاعتماد على checkbox)
-    الافتراضي True حتى يطابق نصّ Phase 3 (automatic PDF archiving).
-    لإيقافها: PRESCRIPTION_FORCE_ARCHIVE = False
+    الأرشفة الآلية 100% (بدون الاعتماد على checkbox)
+    الافتراضي True حتى يطابق نص Phase 3.
     """
     return bool(getattr(settings, "PRESCRIPTION_FORCE_ARCHIVE", True))
 
@@ -114,7 +114,7 @@ def _can_view_prescription(user, p: Prescription) -> bool:
 
 def _can_manage_prescription(user, p: Prescription) -> bool:
     """
-    edit/delete: نفس view (أكثر تحفظاً).
+    edit/delete: نفس view تقريباً.
     """
     if getattr(user, "is_superuser", False):
         return True
@@ -228,7 +228,7 @@ def _safe_prescription_form(*args, **kwargs):
 
 def _apply_force_archive_ui(form) -> None:
     """
-    ✅ إذا الأرشفة إجبارية: نخلي checkbox ثابت (disabled) حتى ما يصير لخبطة للمستخدم.
+    إذا الأرشفة إجبارية: نخلي checkbox ثابت (disabled).
     """
     try:
         if _force_archive_enabled() and "archive_prescription" in getattr(form, "fields", {}):
@@ -257,7 +257,7 @@ def _appointments_for_user(user):
 
 def _appointments_without_prescriptions(appt_qs):
     """
-    ✅ آمن بدون الاعتماد على reverse relation name.
+    آمن بدون الاعتماد على reverse relation name.
     """
     try:
         used_ids = Prescription.objects.exclude(appointment_id__isnull=True).values_list("appointment_id", flat=True)
@@ -281,7 +281,6 @@ def _has_explicit_appointment_selection(request, forced_appointment_id: Optional
 
 def _pick_selected_appointment(request, appt_qs, forced_appointment_id: Optional[int]) -> Optional[Appointment]:
     """
-    ✅ FIX:
     لا نختار أول موعد تلقائيًا عند فتح New Prescription.
     نختار الموعد فقط إذا:
     - كان مفروضًا من الرابط
@@ -308,6 +307,372 @@ def _next_appointment_after(appt_qs, selected: Optional[Appointment]) -> Optiona
     return appt_qs.filter(scheduled_time__gt=selected.scheduled_time).first()
 
 
+# =========================
+# Voice helpers
+# =========================
+def _configured_voice_field_name() -> Optional[str]:
+    value = str(getattr(settings, "PRESCRIPTION_VOICE_FIELD_NAME", "") or "").strip()
+    return value or None
+
+
+def _possible_voice_field_names() -> tuple[str, ...]:
+    configured = _configured_voice_field_name()
+    names: list[str] = []
+
+    if configured:
+        names.append(configured)
+
+    names.extend(
+        [
+            "voice_note",
+            "voice_file",
+            "audio_file",
+            "voice_recording",
+            "recording",
+            "audio_note",
+            "voice_message",
+            "audio",
+            "voice",
+        ]
+    )
+
+    unique: list[str] = []
+    for name in names:
+        if name and name not in unique:
+            unique.append(name)
+    return tuple(unique)
+
+
+def _possible_voice_request_keys() -> tuple[str, ...]:
+    extra = getattr(settings, "PRESCRIPTION_VOICE_REQUEST_KEYS", None) or []
+    names = list(_possible_voice_field_names()) + [
+        "voice_note_data",
+        "voice_data",
+        "audio_data",
+        "recording_data",
+        "voice_blob",
+        "audio_blob",
+        "recorded_audio",
+        "recorded_voice",
+        "voice_note_base64",
+        "audio_base64",
+    ]
+
+    for item in extra:
+        item = str(item or "").strip()
+        if item:
+            names.append(item)
+
+    unique: list[str] = []
+    for name in names:
+        if name and name not in unique:
+            unique.append(name)
+    return tuple(unique)
+
+
+def _get_existing_prescription_voice_field_name() -> Optional[str]:
+    for field_name in _possible_voice_field_names():
+        if _model_has_field(Prescription, field_name):
+            return field_name
+    return None
+
+
+def _filefield_has_content(field_obj) -> bool:
+    try:
+        return bool(field_obj and getattr(field_obj, "name", None))
+    except Exception:
+        return False
+
+
+def _guess_audio_extension(filename: str = "", content_type: str = "") -> str:
+    filename = (filename or "").strip().lower()
+    content_type = (content_type or "").strip().lower()
+
+    if "." in filename:
+        ext = "." + filename.rsplit(".", 1)[-1]
+        if len(ext) <= 8:
+            return ext
+
+    mapping = {
+        "audio/webm": ".webm",
+        "video/webm": ".webm",
+        "audio/wav": ".wav",
+        "audio/x-wav": ".wav",
+        "audio/mpeg": ".mp3",
+        "audio/mp3": ".mp3",
+        "audio/mp4": ".m4a",
+        "audio/x-m4a": ".m4a",
+        "video/mp4": ".m4a",
+        "audio/aac": ".aac",
+        "audio/ogg": ".ogg",
+        "audio/oga": ".ogg",
+        "application/ogg": ".ogg",
+    }
+    return mapping.get(content_type, ".webm")
+
+
+def _decode_base64_audio(raw_value: str) -> tuple[Optional[bytes], Optional[str]]:
+    value = str(raw_value or "").strip()
+    if not value:
+        return None, None
+
+    content_type = ""
+    payload = value
+
+    if value.startswith("data:") and "," in value:
+        header, payload = value.split(",", 1)
+        try:
+            content_type = header[5:].split(";", 1)[0].strip().lower()
+        except Exception:
+            content_type = ""
+
+    payload = "".join(payload.split())
+    if not payload or len(payload) < 32:
+        return None, None
+
+    missing_padding = len(payload) % 4
+    if missing_padding:
+        payload += "=" * (4 - missing_padding)
+
+    try:
+        decoded = base64.b64decode(payload, validate=False)
+    except (binascii.Error, ValueError):
+        return None, None
+
+    if not decoded:
+        return None, None
+
+    return decoded, _guess_audio_extension(content_type=content_type)
+
+
+def _save_bytes_to_prescription_voice_field(
+    prescription: Prescription,
+    field_name: str,
+    audio_bytes: bytes,
+    *,
+    filename: str,
+) -> bool:
+    if not audio_bytes:
+        return False
+
+    if not _model_has_field(Prescription, field_name):
+        return False
+
+    field_file = getattr(prescription, field_name, None)
+    if field_file is None:
+        return False
+
+    old_name = getattr(field_file, "name", None)
+
+    try:
+        field_file.save(filename, ContentFile(audio_bytes), save=False)
+        prescription.save(update_fields=[field_name])
+
+        new_name = getattr(getattr(prescription, field_name, None), "name", None)
+        if old_name and new_name and old_name != new_name:
+            try:
+                getattr(prescription, field_name).storage.delete(old_name)
+            except Exception:
+                pass
+
+        return True
+    except Exception as e:
+        logger.warning(
+            "RX %s: failed saving voice content into field '%s': %s",
+            getattr(prescription, "pk", None),
+            field_name,
+            e,
+        )
+        return False
+
+
+def _save_voice_from_value_to_prescription(
+    prescription: Prescription,
+    field_name: str,
+    value,
+) -> bool:
+    if value is None:
+        return False
+
+    # Uploaded file-like object
+    if hasattr(value, "read"):
+        try:
+            raw = value.read()
+            if hasattr(value, "seek"):
+                try:
+                    value.seek(0)
+                except Exception:
+                    pass
+
+            if not raw:
+                return False
+
+            ext = _guess_audio_extension(
+                filename=getattr(value, "name", "") or "",
+                content_type=getattr(value, "content_type", "") or "",
+            )
+            filename = f"rx_voice_{getattr(prescription, 'pk', 'new')}{ext}"
+            return _save_bytes_to_prescription_voice_field(
+                prescription,
+                field_name,
+                raw,
+                filename=filename,
+            )
+        except Exception as e:
+            logger.warning(
+                "RX %s: failed reading uploaded voice object for field '%s': %s",
+                getattr(prescription, "pk", None),
+                field_name,
+                e,
+            )
+            return False
+
+    # Base64 string / data URI
+    if isinstance(value, str):
+        audio_bytes, ext = _decode_base64_audio(value)
+        if not audio_bytes:
+            return False
+
+        filename = f"rx_voice_{getattr(prescription, 'pk', 'new')}{ext or '.webm'}"
+        return _save_bytes_to_prescription_voice_field(
+            prescription,
+            field_name,
+            audio_bytes,
+            filename=filename,
+        )
+
+    return False
+
+
+def _persist_request_voice_to_prescription(request, prescription: Prescription, form=None) -> bool:
+    """
+    يحاول حفظ الصوت داخل الوصفة من أكثر من مصدر:
+    1) form.cleaned_data
+    2) request.FILES
+    3) request.POST (base64 / data URI)
+    وإذا ماكو payload جديد لكنه محفوظ أصلًا داخل الموديل، يعتبر النجاح قائم.
+    """
+    field_name = _get_existing_prescription_voice_field_name()
+    if not field_name:
+        logger.info(
+            "RX %s: no known voice FileField found on Prescription model. "
+            "Set PRESCRIPTION_VOICE_FIELD_NAME if your field name is custom.",
+            getattr(prescription, "pk", None),
+        )
+        return False
+
+    candidate_keys = [field_name, *_possible_voice_request_keys()]
+
+    # 1) حاول من cleaned_data
+    cleaned_data = getattr(form, "cleaned_data", {}) if form is not None else {}
+    if isinstance(cleaned_data, dict):
+        checked: set[str] = set()
+        for key in candidate_keys:
+            if key in checked:
+                continue
+            checked.add(key)
+
+            if key not in cleaned_data:
+                continue
+
+            value = cleaned_data.get(key)
+            if _save_voice_from_value_to_prescription(prescription, field_name, value):
+                logger.info(
+                    "RX %s: voice saved from form.cleaned_data['%s'] into '%s'.",
+                    getattr(prescription, "pk", None),
+                    key,
+                    field_name,
+                )
+                return True
+
+    # 2) حاول من request.FILES
+    checked = set()
+    for key in candidate_keys:
+        if key in checked:
+            continue
+        checked.add(key)
+
+        uploaded = request.FILES.get(key)
+        if uploaded and _save_voice_from_value_to_prescription(prescription, field_name, uploaded):
+            logger.info(
+                "RX %s: voice saved from request.FILES['%s'] into '%s'.",
+                getattr(prescription, "pk", None),
+                key,
+                field_name,
+            )
+            return True
+
+    # 3) حاول من request.POST
+    checked = set()
+    for key in candidate_keys:
+        if key in checked:
+            continue
+        checked.add(key)
+
+        raw_value = request.POST.get(key)
+        if raw_value and _save_voice_from_value_to_prescription(prescription, field_name, raw_value):
+            logger.info(
+                "RX %s: voice saved from request.POST['%s'] into '%s'.",
+                getattr(prescription, "pk", None),
+                key,
+                field_name,
+            )
+            return True
+
+    # 4) إذا موجود أصلًا داخل الموديل
+    current_field_obj = getattr(prescription, field_name, None)
+    if _filefield_has_content(current_field_obj):
+        logger.info(
+            "RX %s: voice already present in model field '%s'.",
+            getattr(prescription, "pk", None),
+            field_name,
+        )
+        return True
+
+    logger.warning(
+        "RX %s: no voice payload found to persist for model field '%s'.",
+        getattr(prescription, "pk", None),
+        field_name,
+    )
+    return False
+
+
+def _schedule_archive_after_commit(prescription_id: int, user, archive_flag: bool) -> None:
+    """
+    يؤجل الأرشفة إلى ما بعد نجاح الـ commit حتى نقرأ الملفات من قاعدة البيانات
+    وهي محفوظة فعليًا.
+    """
+    if not archive_flag:
+        return
+
+    def _callback() -> None:
+        try:
+            fresh = (
+                Prescription.objects.select_related("doctor__user", "appointment__patient__user")
+                .filter(pk=prescription_id)
+                .first()
+            )
+            if not fresh:
+                logger.warning("RX %s: cannot archive after commit because object no longer exists.", prescription_id)
+                return
+
+            _archive_prescription_if_needed(
+                prescription=fresh,
+                user=user,
+                archive_flag=True,
+            )
+        except Exception as e:
+            logger.exception("RX %s: archive after commit failed: %s", prescription_id, e)
+
+    try:
+        transaction.on_commit(_callback)
+    except Exception:
+        _callback()
+
+
+# =========================
+# Assets / Archive helpers
+# =========================
 def _ensure_assets_after_medications(p: Prescription, *, force_pdf: bool = True) -> None:
     """
     بعد حفظ medications، نضمن توليد PDF صحيح (و QR إذا ناقص).
@@ -367,7 +732,6 @@ def _ensure_assets_after_medications(p: Prescription, *, force_pdf: bool = True)
 
 def _upsert_archive_pdf_copy(archive: PatientArchive, prescription: Prescription, user) -> None:
     """
-    ✅ IMPORTANT FIX:
     نخزن نسخة PDF داخل ArchiveAttachment (بدون مشاركة نفس file path)
     حتى حذف الـ attachment ما يحذف ملف الـ prescription الأصلي.
     """
@@ -433,22 +797,12 @@ def _upsert_archive_pdf_copy(archive: PatientArchive, prescription: Prescription
 
 def _get_prescription_voice_field(prescription: Prescription):
     """
-    يحاول يلقط حقل الصوت من الوصفة بأسماء شائعة.
-    إذا كان اسم الحقل عندك مختلفًا، أضيفيه هنا.
+    يحاول يلقط حقل الصوت من الوصفة بأسماء شائعة أو من الإعدادات.
     """
-    possible_names = (
-        "voice_note",
-        "voice_file",
-        "audio_file",
-        "voice_recording",
-        "recording",
-        "audio_note",
-    )
-
-    for field_name in possible_names:
+    for field_name in _possible_voice_field_names():
         if _model_has_field(Prescription, field_name):
             field_obj = getattr(prescription, field_name, None)
-            if field_obj:
+            if _filefield_has_content(field_obj):
                 return field_obj, field_name
 
     return None, None
@@ -456,12 +810,12 @@ def _get_prescription_voice_field(prescription: Prescription):
 
 def _upsert_archive_voice_copy(archive: PatientArchive, prescription: Prescription, user) -> None:
     """
-    ✅ NEW:
-    يخزن نسخة من التسجيل الصوتي داخل ArchiveAttachment
-    بدون مشاركة نفس file path الأصلي.
+    يخزن نسخة من التسجيل الصوتي داخل ArchiveVoiceNote
+    بدل ArchiveAttachment لأن الصوت له model مستقل وvalidators خاصة.
     """
     voice_field, voice_field_name = _get_prescription_voice_field(prescription)
     if not voice_field:
+        logger.info("RX %s: no stored voice file found on prescription to archive.", getattr(prescription, "pk", None))
         return
 
     try:
@@ -480,55 +834,61 @@ def _upsert_archive_voice_copy(archive: PatientArchive, prescription: Prescripti
         return
 
     if not voice_bytes:
+        logger.warning(
+            "RX %s: voice field '%s' exists but returned empty bytes.",
+            getattr(prescription, "pk", None),
+            voice_field_name,
+        )
         return
 
     original_name = getattr(voice_field, "name", "") or ""
-    ext = ".webm"
-    if "." in original_name:
-        ext = "." + original_name.rsplit(".", 1)[-1].lower()
-
+    ext = _guess_audio_extension(filename=original_name)
     filename = f"rx_voice_{getattr(prescription, 'pk', 'new')}{ext}"
 
     try:
-        att = (
-            ArchiveAttachment.objects.filter(archive=archive, description="Prescription Voice Note")
+        note = (
+            ArchiveVoiceNote.objects.filter(
+                archive=archive,
+                title="Prescription Voice Note",
+            )
             .order_by("-id")
             .first()
         )
 
-        if att:
-            old_name = getattr(att.file, "name", None)
-            att.file.save(filename, ContentFile(voice_bytes), save=False)
+        if note:
+            old_name = getattr(note.audio, "name", None)
+            note.audio.save(filename, ContentFile(voice_bytes), save=False)
+            note.title = "Prescription Voice Note"
 
-            if _model_has_field(ArchiveAttachment, "uploaded_by") and getattr(user, "is_authenticated", False):
-                att.uploaded_by = user
+            if _model_has_field(ArchiveVoiceNote, "recorded_by") and getattr(user, "is_authenticated", False):
+                note.recorded_by = user
 
-            att.description = "Prescription Voice Note"
-            att.save()
+            note.save()
 
             try:
-                new_name = getattr(att.file, "name", None)
+                new_name = getattr(note.audio, "name", None)
                 if old_name and new_name and old_name != new_name:
                     try:
-                        att.file.storage.delete(old_name)
+                        note.audio.storage.delete(old_name)
                     except Exception:
                         pass
             except Exception:
                 pass
         else:
-            new_att = ArchiveAttachment(
+            new_note = ArchiveVoiceNote(
                 archive=archive,
-                description="Prescription Voice Note",
+                title="Prescription Voice Note",
             )
-            if _model_has_field(ArchiveAttachment, "uploaded_by") and getattr(user, "is_authenticated", False):
-                new_att.uploaded_by = user
 
-            new_att.file.save(filename, ContentFile(voice_bytes), save=False)
-            new_att.save()
+            if _model_has_field(ArchiveVoiceNote, "recorded_by") and getattr(user, "is_authenticated", False):
+                new_note.recorded_by = user
+
+            new_note.audio.save(filename, ContentFile(voice_bytes), save=False)
+            new_note.save()
 
     except Exception as e:
         logger.warning(
-            "Failed attaching/updating voice copy to archive for RX %s: %s",
+            "Failed attaching/updating voice copy to archive voice notes for RX %s: %s",
             getattr(prescription, "pk", None),
             e,
         )
@@ -536,11 +896,10 @@ def _upsert_archive_voice_copy(archive: PatientArchive, prescription: Prescripti
 
 def _archive_prescription_if_needed(prescription: Prescription, user, archive_flag: bool) -> None:
     """
-    ✅ FIXED:
     - يربط PatientArchive.prescription = Prescription (إذا الحقل موجود)
     - يربط PatientArchive.appointment (إذا الحقل موجود)
-    - يخزن نسخة PDF داخل archive attachments (بدون مشاركة نفس الملف)
-    - يخزن نسخة Voice Note داخل archive attachments إذا كانت موجودة
+    - يخزن نسخة PDF داخل archive attachments
+    - يخزن نسخة Voice Note داخل archive voice notes إذا كانت موجودة
     """
     if not archive_flag:
         return
@@ -550,7 +909,7 @@ def _archive_prescription_if_needed(prescription: Prescription, user, archive_fl
     appt = getattr(prescription, "appointment", None)
 
     if not patient or not doctor:
-        logger.warning("Cannot archive prescription %s: missing patient or doctor.", prescription.pk)
+        logger.warning("Cannot archive prescription %s: missing patient or doctor.", getattr(prescription, "pk", None))
         return
 
     title = f"Prescription #{prescription.pk}"
@@ -670,7 +1029,7 @@ def _archive_prescription_if_needed(prescription: Prescription, user, archive_fl
         _upsert_archive_voice_copy(archive, prescription, user)
 
     except Exception as e:
-        logger.error("Error while archiving prescription %s: %s", prescription.pk, e)
+        logger.exception("Error while archiving prescription %s: %s", getattr(prescription, "pk", None), e)
 
 
 def _public_download_url(request, token: str) -> Optional[str]:
@@ -698,7 +1057,7 @@ def _prescription_order_fields() -> list[str]:
 
 
 # =========================
-# ✅ Appointment Status Helper
+# Appointment Status Helper
 # =========================
 def _mark_appointment_completed(appt: Optional[Appointment]) -> None:
     """
@@ -716,6 +1075,7 @@ def _mark_appointment_completed(appt: Optional[Appointment]) -> None:
         if current in {"completed", "cancelled"}:
             return
 
+            # keep state transition narrow
         setattr(appt, "status", "completed")
         appt.save(update_fields=["status"])
     except Exception as e:
@@ -723,7 +1083,7 @@ def _mark_appointment_completed(appt: Optional[Appointment]) -> None:
 
 
 # =========================
-#   Create / New RX (Core)
+# Create / New RX (Core)
 # =========================
 @login_required
 @require_http_methods(["GET", "POST"])
@@ -765,9 +1125,7 @@ def _new_prescription_core(request, forced_appointment_id: Optional[int] = None)
     selected_appt = _pick_selected_appointment(request, appt_qs_all, forced_appointment_id)
     has_explicit_selection = _has_explicit_appointment_selection(request, forced_appointment_id)
 
-    # ✅ FIX:
     # نحوّل إلى الوصفة الموجودة فقط إذا كان الموعد مختارًا بشكل صريح
-    # أما زر New Prescription العادي فلا يحوّل تلقائيًا.
     if selected_appt is not None and has_explicit_selection:
         existing = Prescription.objects.filter(appointment=selected_appt).only("pk").first()
         if existing and request.method == "GET":
@@ -821,13 +1179,25 @@ def _new_prescription_core(request, forced_appointment_id: Optional[int] = None)
 
                     prescription.save()
 
+                    if hasattr(form, "save_m2m"):
+                        try:
+                            form.save_m2m()
+                        except Exception:
+                            pass
+
+                    _persist_request_voice_to_prescription(
+                        request=request,
+                        prescription=prescription,
+                        form=form,
+                    )
+
                     medication_formset.instance = prescription
                     medication_formset.save()
 
                     _ensure_assets_after_medications(prescription, force_pdf=True)
 
-                    _archive_prescription_if_needed(
-                        prescription=prescription,
+                    _schedule_archive_after_commit(
+                        prescription_id=prescription.pk,
                         user=user,
                         archive_flag=archive_flag,
                     )
@@ -867,7 +1237,7 @@ def _new_prescription_core(request, forced_appointment_id: Optional[int] = None)
 
 
 # =========================
-#   Edit / Update RX
+# Edit / Update RX
 # =========================
 @login_required
 @require_http_methods(["GET", "POST"])
@@ -894,7 +1264,7 @@ def _edit_prescription_core(request, pk: int) -> HttpResponse:
     appt_qs_all = appt_qs_all.order_by("scheduled_time", "pk")
 
     free_qs = _appointments_without_prescriptions(appt_qs_all)
-    appt_qs = free_qs | appt_qs_all.filter(pk=prescription.appointment_id)
+    appt_qs = (free_qs | appt_qs_all.filter(pk=prescription.appointment_id)).order_by("scheduled_time", "pk")
 
     next_appointment = _next_appointment_after(_appointments_without_prescriptions(appt_qs_all), prescription.appointment)
     appointment_id_for_form = prescription.appointment_id
@@ -939,12 +1309,25 @@ def _edit_prescription_core(request, pk: int) -> HttpResponse:
                         prescription.status = "completed"
 
                     prescription.save()
+
+                    if hasattr(form, "save_m2m"):
+                        try:
+                            form.save_m2m()
+                        except Exception:
+                            pass
+
+                    _persist_request_voice_to_prescription(
+                        request=request,
+                        prescription=prescription,
+                        form=form,
+                    )
+
                     medication_formset.save()
 
                     _ensure_assets_after_medications(prescription, force_pdf=True)
 
-                    _archive_prescription_if_needed(
-                        prescription=prescription,
+                    _schedule_archive_after_commit(
+                        prescription_id=prescription.pk,
                         user=user,
                         archive_flag=archive_flag,
                     )
@@ -998,7 +1381,7 @@ def update_prescription(request, pk: int) -> HttpResponse:
 
 
 # =========================
-#   Delete RX
+# Delete RX
 # =========================
 @login_required
 @require_http_methods(["GET", "POST"])
@@ -1033,7 +1416,7 @@ def remove_prescription(request, pk: int) -> HttpResponse:
 
 
 # =========================
-#      List (module index)
+# List (module index)
 # =========================
 @require_GET
 @login_required
@@ -1069,7 +1452,7 @@ list_prescriptions = prescription_list
 
 
 # =========================
-#         Private
+# Private
 # =========================
 @require_GET
 @login_required
@@ -1109,7 +1492,7 @@ def show_prescription(request, pk: int) -> HttpResponse:
 
 
 # =========================
-#     PDF (Private Download)
+# PDF (Private Download)
 # =========================
 @require_GET
 @login_required
@@ -1168,7 +1551,7 @@ def pdf(request, pk: int) -> FileResponse:
 
 
 # =========================
-#      WhatsApp (Private)
+# WhatsApp (Private)
 # =========================
 @require_GET
 @login_required
@@ -1199,7 +1582,7 @@ def send_whatsapp(request, pk: int) -> HttpResponse:
 
 
 # =========================
-#          Public
+# Public
 # =========================
 @require_GET
 @cache_control(no_cache=True, no_store=True, must_revalidate=True)

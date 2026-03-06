@@ -44,8 +44,11 @@ except Exception:  # pragma: no cover
 
 
 # =========================
-# Settings (RBAC toggles)
+# Settings / constants
 # =========================
+VOICE_NOTE_ALLOWED_EXTENSIONS = ["mp3", "wav", "ogg", "m4a", "webm"]
+
+
 def _secretary_can_view() -> bool:
     # افتراضي: False (حسب تفضيلج السابق "الطبيب فقط")
     return bool(getattr(settings, "PRESCRIPTION_SECRETARY_CAN_VIEW", False))
@@ -105,7 +108,7 @@ def _doctor_specialty_value(doc: Doctor) -> str:
     """
     for f in ("specialty", "speciality", "specialization", "department"):
         if hasattr(doc, f):
-            v = (getattr(doc, f, None) or "")
+            v = getattr(doc, f, None) or ""
             v = str(v).strip()
             if v:
                 return v
@@ -123,7 +126,6 @@ def _file_to_data_uri(file_field) -> str:
         mime, _ = mimetypes.guess_type(name)
         mime = mime or "application/octet-stream"
 
-        # open safely
         try:
             file_field.open("rb")
         except Exception:
@@ -132,6 +134,7 @@ def _file_to_data_uri(file_field) -> str:
         data = file_field.read()
         if not data:
             return ""
+
         b64 = base64.b64encode(data).decode("ascii")
         return f"data:{mime};base64,{b64}"
     except Exception:
@@ -155,7 +158,6 @@ class PrescriptionQuerySet(models.QuerySet):
         if not user or not getattr(user, "is_authenticated", False):
             return self.none()
 
-        # ✅ IMPORTANT: superuser first
         if getattr(user, "is_superuser", False):
             return self
 
@@ -171,7 +173,6 @@ class PrescriptionQuerySet(models.QuerySet):
             return self if _admin_can_view() else self.none()
 
         if role == "patient":
-            # Prefer direct patient link; fallback to appointment link for older rows
             return self.filter(
                 models.Q(patient__user=user) | models.Q(appointment__patient__user=user)
             )
@@ -266,12 +267,15 @@ class Prescription(models.Model):
         null=True,
         verbose_name="Additional Instructions",
     )
+
+    # ✅ FIX: add webm because browser recorder غالبًا يطلع WebM
     voice_note = models.FileField(
         upload_to=voice_upload_to,
         blank=True,
         null=True,
         verbose_name="Doctor's Voice Note",
-        validators=[FileExtensionValidator(["mp3", "wav", "ogg", "m4a"])],
+        validators=[FileExtensionValidator(VOICE_NOTE_ALLOWED_EXTENSIONS)],
+        help_text="Allowed formats: mp3, wav, ogg, m4a, webm",
     )
 
     doctor_signature = models.ImageField(
@@ -281,6 +285,7 @@ class Prescription(models.Model):
         verbose_name="Doctor Signature",
         validators=[FileExtensionValidator(["png", "jpg", "jpeg", "webp"])],
     )
+
     doctor_logo = models.ImageField(
         upload_to=logo_upload_to,
         blank=True,
@@ -296,11 +301,13 @@ class Prescription(models.Model):
         verbose_name="Prescription PDF",
         validators=[FileExtensionValidator(["pdf"])],
     )
+
     date_issued = models.DateTimeField(
         auto_now_add=True,
         verbose_name="Date Issued",
         db_index=True,
     )
+
     qr_code = models.ImageField(
         upload_to=qrcode_upload_to,
         blank=True,
@@ -350,21 +357,25 @@ class Prescription(models.Model):
         u = getattr(self.doctor, "user", None)
         if not u:
             return "Doctor"
+
         full = (u.get_full_name() or "").strip()
         if full:
             return full
+
         if getattr(u, "username", None):
             return u.username
+
         if getattr(u, "email", None):
             return (u.email or "").split("@")[0]
+
         return "Doctor"
 
     @property
     def voice_note_mime(self) -> str:
         if self.voice_note and hasattr(self.voice_note, "name"):
             mime, _ = mimetypes.guess_type(self.voice_note.name)
-            return mime or "audio/mpeg"
-        return "audio/mpeg"
+            return mime or "audio/webm"
+        return "audio/webm"
 
     @property
     def effective_logo(self):
@@ -446,6 +457,7 @@ class Prescription(models.Model):
     def make_verification_token(self) -> str:
         if not self.pk:
             raise ValidationError("Cannot create token for unsaved prescription.")
+
         issued_ts = int((self.date_issued or timezone.now()).timestamp())
         payload = {"pid": self.pk, "issued": issued_ts}
         return signing.dumps(payload, salt="rx.verify")
@@ -482,6 +494,7 @@ class Prescription(models.Model):
         data = self._qr_png_bytes()
         if not data:
             return
+
         filename = f"qr_{self.pk}.png"
         self.qr_code.save(filename, ContentFile(data), save=False)
 
@@ -496,7 +509,6 @@ class Prescription(models.Model):
         meds_items = [f"<li>{esc(m.name)} — {esc(m.dosage)}</li>" for m in self.medications.all()]
         meds = "\n".join(meds_items) or "<li>—</li>"
 
-        # safe issued formatting
         issued_dt = self.date_issued or timezone.now()
         if getattr(settings, "USE_TZ", True):
             try:
@@ -512,11 +524,14 @@ class Prescription(models.Model):
             dx = esc(self.diagnosis).replace("\n", "<br/>")
             dx_html = f"<p style='margin:6px 0 0;'><b>Dx:</b> {dx}</p>"
 
-        # ✅ logo/signature as data-uri (reliable for WeasyPrint)
         logo_uri = _file_to_data_uri(self.effective_logo)
         sig_uri = _file_to_data_uri(self.effective_signature)
 
-        logo_tag = f'<img src="{logo_uri}" style="height:42px;vertical-align:middle;margin-right:10px;" />' if logo_uri else ""
+        logo_tag = (
+            f'<img src="{logo_uri}" style="height:42px;vertical-align:middle;margin-right:10px;" />'
+            if logo_uri
+            else ""
+        )
         sig_tag = f'<img src="{sig_uri}" style="height:60px;" />' if sig_uri else ""
 
         html = f"""
@@ -559,8 +574,8 @@ class Prescription(models.Model):
     def _render_pdf_reportlab(self) -> bytes:
         buf = BytesIO()
         c = canvas.Canvas(buf, pagesize=A4)
-        W, H = A4
-        x, y = 20 * mm, H - 20 * mm
+        w_page, h_page = A4
+        x, y = 20 * mm, h_page - 20 * mm
 
         def t(line: str, dx=0, dy=14):
             nonlocal y
@@ -580,7 +595,7 @@ class Prescription(models.Model):
 
         c.setFont("Helvetica", 10)
         t(f"Prescription #{self.pk} — {issued}", dy=14)
-        c.line(x, y - 4, W - 20 * mm, y - 4)
+        c.line(x, y - 4, w_page - 20 * mm, y - 4)
 
         t("Patient:", dy=22)
         c.setFont("Helvetica-Bold", 10)
@@ -612,13 +627,13 @@ class Prescription(models.Model):
         if qr_bytes:
             try:
                 img = ImageReader(BytesIO(qr_bytes))
-                w = h = 40 * mm
+                img_w = img_h = 40 * mm
                 c.drawImage(
                     img,
-                    W - w - 20 * mm,
+                    w_page - img_w - 20 * mm,
                     20 * mm,
-                    width=w,
-                    height=h,
+                    width=img_w,
+                    height=img_h,
                     preserveAspectRatio=True,
                     mask="auto",
                 )
@@ -675,7 +690,7 @@ class Prescription(models.Model):
         is_new = self.pk is None
         super().save(*args, **kwargs)
 
-        updated_fields = []
+        updated_fields: list[str] = []
 
         if (is_new or not self.qr_code) and self.pk:
             self.generate_qr_code()
@@ -713,6 +728,7 @@ class Medication(models.Model):
         on_delete=models.CASCADE,
         db_index=True,
     )
+
     name = models.CharField(max_length=200, verbose_name="Medication Name")
     dosage = models.CharField(
         max_length=255,

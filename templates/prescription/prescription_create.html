@@ -83,7 +83,7 @@
           {% if form.age.errors %}<div class="invalid-feedback d-block">{{ form.age.errors|striptags }}</div>{% endif %}
         </div>
 
-        <!-- Dx (Diagnosis) -->
+        <!-- Diagnosis -->
         {% if form.diagnosis %}
           <div class="col-md-6">
             <label for="{{ form.diagnosis.id_for_label }}" class="form-label fw-semibold">
@@ -126,14 +126,13 @@
         </div>
       </div>
 
-      <!-- Section: Medications & Dosage (SIMPLE) -->
+      <!-- Section: Medications & Dosage -->
       <div class="section-title">
         <i class="bi bi-capsule-pill"></i> Medications & Dosage
       </div>
 
       {{ medication_formset.management_form }}
 
-      <!-- Header row (labels) -->
       <div class="p-3 rounded-3 border bg-light mb-2">
         <div class="row g-2 align-items-center small text-muted fw-semibold">
           <div class="col-lg-6">Medication</div>
@@ -148,7 +147,6 @@
             {{ mform.id }} {{ mform.DELETE }}
 
             <div class="row g-2 align-items-start">
-              <!-- Name -->
               <div class="col-lg-6">
                 {{ mform.name }}
                 {% if mform.name.errors %}
@@ -156,7 +154,6 @@
                 {% endif %}
               </div>
 
-              <!-- Dosage -->
               <div class="col-lg-5">
                 {{ mform.dosage }}
                 {% if mform.dosage.errors %}
@@ -164,7 +161,6 @@
                 {% endif %}
               </div>
 
-              <!-- Remove -->
               <div class="col-lg-1 d-flex justify-content-end">
                 <button type="button" class="btn btn-outline-danger remove-medication" title="Remove">
                   <i class="bi bi-dash-circle-fill"></i>
@@ -175,7 +171,6 @@
         {% endfor %}
       </div>
 
-      <!-- Empty template for dynamic cloning (KEEP ID for existing JS) -->
       <div id="empty-form" class="d-none">
         <div class="medication-entry p-3 rounded-3 border mb-2">
           {{ medication_formset.empty_form.id }} {{ medication_formset.empty_form.DELETE }}
@@ -202,25 +197,37 @@
         <i class="bi bi-plus-circle-fill"></i> Add Another Medication
       </button>
 
-      <!-- Section: Voice Note Controls -->
+      <!-- Section: Voice Note -->
       <div class="section-title">
         <i class="bi bi-mic-fill"></i> Voice Note
       </div>
+
       <div class="voice-controls d-flex flex-wrap gap-2 mb-3">
         <button type="button" class="btn btn-outline-primary" id="startRecordBtn">🎙️ Start</button>
         <button type="button" class="btn btn-outline-danger" id="stopRecordBtn" disabled>🛑 Stop</button>
         <button type="button" class="btn btn-outline-secondary" id="resetRecordBtn" disabled>🔄 Reset</button>
       </div>
+
       <div id="recordStatus" class="form-text text-info mb-2">No recording yet</div>
       <audio id="audioPlayer" controls class="w-100 d-none mb-2"></audio>
 
-      {# هذا الحقل الخفي يستقبل ملف الصوت من الـ JS ويُرسَل كـ voice_note #}
-      <input type="file" name="voice_note" id="id_voice_note" accept="audio/*" hidden>
+      {# استخدمي حقل Django الحقيقي بدل input يدوي #}
+      <div class="d-none">
+        {{ form.voice_note }}
+      </div>
+
+      {% if form.voice_note.help_text %}
+        <div class="form-text mb-2">{{ form.voice_note.help_text }}</div>
+      {% endif %}
+      {% if form.voice_note.errors %}
+        <div class="invalid-feedback d-block mb-3">{{ form.voice_note.errors|striptags }}</div>
+      {% endif %}
 
       <!-- Section: Archive Option -->
       <div class="section-title">
         <i class="bi bi-folder-plus"></i> Archive Option
       </div>
+
       <div class="form-check mb-4">
         {{ form.archive_prescription }}
         <label class="form-check-label" for="{{ form.archive_prescription.id_for_label }}">
@@ -232,7 +239,7 @@
 
       <!-- Submit Button -->
       <div class="text-center mt-4">
-        <button type="submit" class="btn btn-success btn-lg px-5 shadow">
+        <button type="submit" id="savePrescriptionBtn" class="btn btn-success btn-lg px-5 shadow">
           <i class="bi bi-check-circle-fill"></i>
           {% if editing %} Update & View {% else %} Save & View {% endif %}
         </button>
