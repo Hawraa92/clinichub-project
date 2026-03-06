@@ -1,4 +1,3 @@
-# appointments/views.py
 from __future__ import annotations
 
 import base64
@@ -232,6 +231,28 @@ def _user_is_patient(user) -> bool:
     return role == "patient"
 
 
+def _user_is_admin(user) -> bool:
+    role = getattr(user, "role", None)
+    if hasattr(User, "Roles"):
+        try:
+            return role == User.Roles.ADMIN
+        except Exception:
+            pass
+    return role == "admin"
+
+
+def _user_can_manage_appointments(user) -> bool:
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+    if getattr(user, "is_superuser", False):
+        return True
+    if _user_is_admin(user):
+        return True
+    if _user_is_secretary(user):
+        return True
+    return False
+
+
 def _audit(
     *,
     request: HttpRequest | None = None,
@@ -304,35 +325,41 @@ def _secretary_assigned_doctor(user) -> Doctor | None:
 
 
 def _filter_appointments_for_user(qs, user):
-    if user is None:
-        return qs
-    if getattr(user, "is_superuser", False):
+    if user is None or not getattr(user, "is_authenticated", False):
+        return qs.none()
+
+    if getattr(user, "is_superuser", False) or _user_is_admin(user):
         return qs
 
     assigned = _secretary_assigned_doctor(user)
     if assigned is not None:
         return qs.filter(doctor_id=assigned.id)
 
-    if _user_is_secretary(user) and getattr(settings, "STRICT_SECRETARY_SCOPE", False):
-        return qs.none()
+    if _user_is_secretary(user):
+        if getattr(settings, "STRICT_SECRETARY_SCOPE", False):
+            return qs.none()
+        return qs
 
-    return qs
+    return qs.none()
 
 
 def _filter_booking_requests_for_user(qs, user):
-    if user is None:
-        return qs
-    if getattr(user, "is_superuser", False):
+    if user is None or not getattr(user, "is_authenticated", False):
+        return qs.none()
+
+    if getattr(user, "is_superuser", False) or _user_is_admin(user):
         return qs
 
     assigned = _secretary_assigned_doctor(user)
     if assigned is not None:
         return qs.filter(doctor_id=assigned.id)
 
-    if _user_is_secretary(user) and getattr(settings, "STRICT_SECRETARY_SCOPE", False):
-        return qs.none()
+    if _user_is_secretary(user):
+        if getattr(settings, "STRICT_SECRETARY_SCOPE", False):
+            return qs.none()
+        return qs
 
-    return qs
+    return qs.none()
 
 
 def _doctor_specialty(doc: Doctor) -> str:
@@ -469,7 +496,7 @@ def secretary_required(view: Callable):
     @wraps(view)
     @login_required
     def wrapper(request, *a, **kw):
-        if (not _user_is_secretary(request.user)) and (not request.user.is_superuser):
+        if not _user_can_manage_appointments(request.user):
             return HttpResponseForbidden("You do not have permission to access this page.")
         return view(request, *a, **kw)
 
@@ -480,11 +507,9 @@ def staff_ticket_required(view: Callable):
     @wraps(view)
     @login_required
     def wrapper(request, *a, **kw):
-        if request.user.is_superuser:
-            return view(request, *a, **kw)
-        if _user_is_secretary(request.user):
-            return view(request, *a, **kw)
-        return HttpResponseForbidden("You do not have permission to access this page.")
+        if not _user_can_manage_appointments(request.user):
+            return HttpResponseForbidden("You do not have permission to access this page.")
+        return view(request, *a, **kw)
 
     return wrapper
 
@@ -2514,9 +2539,7 @@ def queue_public_api(request: HttpRequest):
 @cache_control(no_cache=True, no_store=True, must_revalidate=True)
 def queue_number_api(request: HttpRequest):
     user = getattr(request, "user", None)
-    is_staff_view = bool(
-        user and user.is_authenticated and (_user_is_secretary(user) or getattr(user, "is_superuser", False))
-    )
+    is_staff_view = _user_can_manage_appointments(user)
 
     if is_staff_view:
         return _json_success({"queues": _queue_snapshot_internal(user)})
