@@ -56,7 +56,7 @@ def _role(user) -> str:
 
 def _secretary_can_access_prescriptions() -> bool:
     """
-    افتراضياً: السكرتيرة ما تشوف الوصفات (حسب تفضيلك السابق).
+    افتراضياً: السكرتيرة ما تشوف الوصفات.
     فعّليها إذا تريدين: PRESCRIPTION_SECRETARY_CAN_VIEW = True
     """
     return bool(getattr(settings, "PRESCRIPTION_SECRETARY_CAN_VIEW", False))
@@ -92,7 +92,6 @@ def _can_view_prescription(user, p: Prescription) -> bool:
 
     r = _role(user)
 
-    # optional access (ONLY if enabled)
     if r == "secretary" or _user_in_group(user, "Secretaries"):
         return _secretary_can_access_prescriptions()
 
@@ -122,7 +121,6 @@ def _can_manage_prescription(user, p: Prescription) -> bool:
 
     r = _role(user)
 
-    # optional manage (ONLY if enabled)
     if r == "secretary" or _user_in_group(user, "Secretaries"):
         return _secretary_can_access_prescriptions()
 
@@ -268,7 +266,27 @@ def _appointments_without_prescriptions(appt_qs):
         return appt_qs
 
 
+def _has_explicit_appointment_selection(request, forced_appointment_id: Optional[int]) -> bool:
+    """
+    هل المستخدم اختار موعدًا بشكل صريح؟
+    - من route parameter
+    - أو query/post appointment
+    """
+    if forced_appointment_id:
+        return True
+
+    appt_id_param = request.GET.get("appointment") or request.POST.get("appointment")
+    return bool(appt_id_param)
+
+
 def _pick_selected_appointment(request, appt_qs, forced_appointment_id: Optional[int]) -> Optional[Appointment]:
+    """
+    ✅ FIX:
+    لا نختار أول موعد تلقائيًا عند فتح New Prescription.
+    نختار الموعد فقط إذا:
+    - كان مفروضًا من الرابط
+    - أو مختارًا صراحةً من query/post
+    """
     if forced_appointment_id:
         selected = appt_qs.filter(pk=forced_appointment_id).first()
         if not selected:
@@ -281,8 +299,7 @@ def _pick_selected_appointment(request, appt_qs, forced_appointment_id: Optional
         if selected:
             return selected
 
-    today = timezone.localdate()
-    return appt_qs.filter(scheduled_time__date=today).first()
+    return None
 
 
 def _next_appointment_after(appt_qs, selected: Optional[Appointment]) -> Optional[Appointment]:
@@ -329,7 +346,6 @@ def _ensure_assets_after_medications(p: Prescription, *, force_pdf: bool = True)
         except Exception as e:
             logger.warning("Saving updated assets failed for RX %s: %s", getattr(p, "pk", None), e)
 
-    # cleanup old files (best-effort)
     try:
         if old_pdf_name and new_pdf_name and old_pdf_name != new_pdf_name:
             try:
@@ -542,7 +558,6 @@ def _archive_prescription_if_needed(prescription: Prescription, user, archive_fl
     has_rx_link = _model_has_field(PatientArchive, "prescription")
     has_appt_link = _model_has_field(PatientArchive, "appointment")
 
-    # ---------- Build create/default fields ----------
     base_fields: dict = {
         "patient": patient,
         "doctor": doctor,
@@ -600,7 +615,6 @@ def _archive_prescription_if_needed(prescription: Prescription, user, archive_fl
         if not archive:
             return
 
-        # ---------- Update existing archive to ensure consistency ----------
         updated = False
 
         if has_rx_link and getattr(archive, "prescription_id", None) != prescription.pk:
@@ -650,11 +664,9 @@ def _archive_prescription_if_needed(prescription: Prescription, user, archive_fl
         if updated and not created:
             archive.save()
 
-        # ---------- Attach PDF as a COPY inside archive ----------
         if getattr(prescription, "pdf_file", None):
             _upsert_archive_pdf_copy(archive, prescription, user)
 
-        # ---------- Attach Voice Note as a COPY inside archive ----------
         _upsert_archive_voice_copy(archive, prescription, user)
 
     except Exception as e:
@@ -751,8 +763,12 @@ def _new_prescription_core(request, forced_appointment_id: Optional[int] = None)
     appt_qs = _appointments_without_prescriptions(appt_qs_all)
 
     selected_appt = _pick_selected_appointment(request, appt_qs_all, forced_appointment_id)
+    has_explicit_selection = _has_explicit_appointment_selection(request, forced_appointment_id)
 
-    if selected_appt is not None:
+    # ✅ FIX:
+    # نحوّل إلى الوصفة الموجودة فقط إذا كان الموعد مختارًا بشكل صريح
+    # أما زر New Prescription العادي فلا يحوّل تلقائيًا.
+    if selected_appt is not None and has_explicit_selection:
         existing = Prescription.objects.filter(appointment=selected_appt).only("pk").first()
         if existing and request.method == "GET":
             messages.info(request, "هذا الموعد عنده وصفة مسبقًا. تم فتح الوصفة الموجودة.")
