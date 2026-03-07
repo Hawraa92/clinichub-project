@@ -44,7 +44,7 @@ ORDER_STATUSES = {
     LabOrder.Status.CANCELLED,
 }
 
-# Actions المقبولة من الأزرار
+# Actions المقبولة
 VERIFY_ACTIONS = {"verify", "send", "submit", "approve", "ready"}
 SAVE_ACTIONS = {"save", "draft", "update"}
 
@@ -99,6 +99,12 @@ def _user_has_doctor_profile(user) -> bool:
 
 
 def is_doctor(user) -> bool:
+    """
+    Doctor check:
+    - superuser => True
+    - role in DOCTOR_ROLES => True
+    - fallback: if Doctor profile exists => True
+    """
     if not user or not user.is_authenticated:
         return False
     if user.is_superuser:
@@ -210,6 +216,9 @@ def _get_doctor_profile(user) -> Optional[Doctor]:
 
 
 def _doctor_can_access_patient(doctor: Doctor, patient: Patient) -> bool:
+    """
+    تحقق نطاق المريض للطبيب.
+    """
     if not doctor or not patient:
         return False
 
@@ -349,9 +358,9 @@ def _configure_doctor_order_form(form: LabOrderCreateForm, doctor: Doctor, patie
     form.fields["appointment"].required = patient is None
 
     if patient is not None:
-        form.fields["appointment"].help_text = "يمكنك ترك الموعد فارغًا لأن المريض محدد مسبقًا."
+        form.fields["appointment"].help_text = "You can leave the appointment empty because the patient is already selected."
     else:
-        form.fields["appointment"].help_text = "اختاري موعدًا يخص هذا الطبيب ومربوطًا بمريض."
+        form.fields["appointment"].help_text = "Select an appointment that belongs to this doctor and is linked to a patient."
 
 
 # ------------------------------------------------------------
@@ -590,7 +599,7 @@ def doctor_orders_inbox(request: HttpRequest) -> HttpResponse:
 
     doctor = _get_doctor_profile(request.user)
     if not doctor:
-        messages.error(request, "لا يوجد ملف Doctor مرتبط بهذا المستخدم.")
+        messages.error(request, "No Doctor profile is linked to this user.")
         return _try_redirect("doctor:dashboard", fallback_name="home:index")
 
     ready_count = _doctor_ready_count(doctor)
@@ -636,7 +645,7 @@ def doctor_create_lab_order(request: HttpRequest, patient_id: int | None = None)
 
     doctor = _get_doctor_profile(request.user)
     if not doctor:
-        messages.error(request, "لا يوجد ملف Doctor مرتبط بهذا المستخدم.")
+        messages.error(request, "No Doctor profile is linked to this user.")
         return _try_redirect("doctor:dashboard", fallback_name="home:index")
 
     ready_count = _doctor_ready_count(doctor)
@@ -646,7 +655,7 @@ def doctor_create_lab_order(request: HttpRequest, patient_id: int | None = None)
         patient = get_object_or_404(Patient, pk=patient_id)
 
         if _enforce_doctor_patient_scope() and not _doctor_can_access_patient(doctor, patient):
-            messages.error(request, "هذا المريض خارج نطاق هذا الطبيب.")
+            messages.error(request, "This patient is outside this doctor's scope.")
             return _try_redirect("lab:doctor_orders_inbox", fallback_name="doctor:dashboard")
 
     form = LabOrderCreateForm(request.POST or None, request.FILES or None)
@@ -656,17 +665,15 @@ def doctor_create_lab_order(request: HttpRequest, patient_id: int | None = None)
         if form.is_valid():
             order: LabOrder = form.save(commit=False)
 
-            # 1) إذا المريض محدد من الرابط، نستخدمه مباشرة
             if patient is not None:
                 order.patient = patient
 
-            # 2) إذا ماكو patient، نستنتجه من appointment
             if not getattr(order, "patient_id", None):
                 inferred = _infer_patient_from_order(order)
                 if inferred is not None:
                     if _enforce_doctor_patient_scope() and not _doctor_can_access_patient(doctor, inferred):
-                        form.add_error("appointment", "هذا الموعد يخص مريضًا خارج نطاق هذا الطبيب.")
-                        messages.error(request, "هذا المريض خارج نطاق هذا الطبيب.")
+                        form.add_error("appointment", "This appointment belongs to a patient outside this doctor's scope.")
+                        messages.error(request, "This patient is outside this doctor's scope.")
                         return render(
                             request,
                             "lab/doctor_create_order.html",
@@ -674,22 +681,20 @@ def doctor_create_lab_order(request: HttpRequest, patient_id: int | None = None)
                         )
                     order.patient = inferred
 
-            # 3) لازم يصير عندنا patient بالنهاية
             if not getattr(order, "patient_id", None):
                 if "appointment" in form.fields:
-                    form.add_error("appointment", "اختاري Appointment صالحًا يحتوي على مريض.")
-                messages.error(request, "رجاءً اختاري موعدًا صالحًا قبل إنشاء طلب المختبر.")
+                    form.add_error("appointment", "Please select a valid appointment linked to a patient.")
+                messages.error(request, "Please select a valid appointment before creating the lab order.")
                 return render(
                     request,
                     "lab/doctor_create_order.html",
                     {"form": form, "patient": patient, "ready_count": ready_count},
                 )
 
-            # 4) إذا انختار appointment، لازم يخص نفس الطبيب
             if not _appointment_belongs_to_doctor(order, doctor):
                 if "appointment" in form.fields:
-                    form.add_error("appointment", "الـ Appointment المختار لا يخص هذا الطبيب.")
-                messages.error(request, "الـ Appointment المختار لا يخص هذا الطبيب.")
+                    form.add_error("appointment", "The selected appointment does not belong to this doctor.")
+                messages.error(request, "The selected appointment does not belong to this doctor.")
                 return render(
                     request,
                     "lab/doctor_create_order.html",
@@ -705,10 +710,15 @@ def doctor_create_lab_order(request: HttpRequest, patient_id: int | None = None)
                 order.notes = (getattr(order, "notes", "") or "").strip()
 
             order.save()
-            messages.success(request, "✅ تم إرسال طلب المختبر.")
+            messages.success(request, "Lab order sent successfully.")
             return redirect("lab:doctor_order_detail", order_id=order.id)
 
-        messages.error(request, "❌ تأكدي من الحقول.")
+        for field_name, errors in form.errors.items():
+            label = form.fields[field_name].label if field_name in form.fields else field_name
+            for err in errors:
+                messages.error(request, f"{label}: {err}")
+
+        messages.error(request, "Please correct the highlighted fields and try again.")
 
     return render(
         request,
@@ -724,7 +734,7 @@ def doctor_order_detail(request: HttpRequest, order_id: int) -> HttpResponse:
 
     doctor = _get_doctor_profile(request.user)
     if not doctor:
-        messages.error(request, "لا يوجد ملف Doctor مرتبط بهذا المستخدم.")
+        messages.error(request, "No Doctor profile is linked to this user.")
         return _try_redirect("doctor:dashboard", fallback_name="home:index")
 
     order = get_object_or_404(
