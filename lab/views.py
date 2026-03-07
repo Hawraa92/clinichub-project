@@ -1,3 +1,4 @@
+# lab/views.py
 from __future__ import annotations
 
 import json
@@ -11,7 +12,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import FieldError
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count, Q, QuerySet
 from django.http import (
     HttpRequest,
     HttpResponse,
@@ -31,12 +32,12 @@ from .models import LabOrder, LabResult, LabSettings
 
 
 # ------------------------------------------------------------
-# Roles
+# Roles (عدّليها إذا قيم User.role مختلفة عندج)
 # ------------------------------------------------------------
-DOCTOR_ROLES = {"doctor"}
+DOCTOR_ROLES = {"doctor"}  # ضيفي مثل {"doctor","physician","dermatologist"} إذا أدواركم مختلفة
 LAB_ROLES = {"lab", "laboratory", "lab_tech", "lab_staff"}
 
-# حالات الطلب
+# حالات الطلب (لازم تطابق قيم الـ model choices)
 ORDER_STATUSES = {
     LabOrder.Status.PENDING,
     LabOrder.Status.IN_PROGRESS,
@@ -44,7 +45,7 @@ ORDER_STATUSES = {
     LabOrder.Status.CANCELLED,
 }
 
-# Actions المقبولة
+# ✅ Actions المقبولة من الأزرار (حتى لو template يرسل send/submit)
 VERIFY_ACTIONS = {"verify", "send", "submit", "approve", "ready"}
 SAVE_ACTIONS = {"save", "draft", "update"}
 
@@ -55,12 +56,14 @@ SAVE_ACTIONS = {"save", "draft", "update"}
 def _enforce_doctor_patient_scope() -> bool:
     """
     إذا True: الطبيب ما يگدر ينشئ LabOrder لمريض خارج نطاقه.
+    الافتراضي False حتى ما نكسر أي سلوك قديم، وتكدرين تفعليه من settings:
+      LAB_DOCTOR_ENFORCE_PATIENT_SCOPE=True
     """
     return bool(getattr(settings, "LAB_DOCTOR_ENFORCE_PATIENT_SCOPE", False))
 
 
 # ------------------------------------------------------------
-# Cached model fields
+# Cached model fields (يشمل fields + many-to-many)
 # ------------------------------------------------------------
 @lru_cache(maxsize=1)
 def _order_fields() -> set[str]:
@@ -73,10 +76,12 @@ def _order_fields() -> set[str]:
 
 
 def _has_order_field(field_name: str) -> bool:
+    """فحص سريع إذا حقل موجود بالموديل (حتى ما نكسر إذا migration مو مطبق بعد)."""
     return field_name in _order_fields()
 
 
 def _safe_save_update_fields(obj, fields: list[str]) -> None:
+    """Save مع update_fields بشكل آمن."""
     existing = {f.name for f in obj._meta.fields}
     use = [f for f in fields if f in existing]
     if use:
@@ -85,8 +90,45 @@ def _safe_save_update_fields(obj, fields: list[str]) -> None:
         obj.save()
 
 
+def _safe_form_save_m2m(form: Any) -> None:
+    """
+    يحفظ حقول ManyToMany بشكل آمن بعد save(commit=False) + obj.save().
+    مهم جدًا حتى requested_tests أو أي M2M ما تضيع.
+    """
+    save_m2m = getattr(form, "save_m2m", None)
+    if callable(save_m2m):
+        save_m2m()
+
+
+def _order_select_related_paths() -> tuple[str, ...]:
+    """
+    select_related آمن حسب الحقول الموجودة فعليًا بالموديل.
+    """
+    paths: list[str] = []
+
+    if _has_order_field("patient"):
+        paths.append("patient")
+    if _has_order_field("doctor"):
+        paths.append("doctor__user")
+    if _has_order_field("appointment"):
+        paths.append("appointment")
+
+    return tuple(paths)
+
+
+def _maybe_distinct_orders(qs: QuerySet[LabOrder]) -> QuerySet[LabOrder]:
+    """
+    إذا البحث مرّ على requested_tests (M2M) ممكن يرجع صفوف مكررة.
+    distinct يمنع التكرار.
+    """
+    try:
+        return qs.distinct()
+    except Exception:
+        return qs
+
+
 # ------------------------------------------------------------
-# Helpers
+# Helpers (صلاحيات + أدوات)
 # ------------------------------------------------------------
 def _get_role(user) -> str:
     return (getattr(user, "role", "") or "").strip().lower()
@@ -103,7 +145,7 @@ def is_doctor(user) -> bool:
     Doctor check:
     - superuser => True
     - role in DOCTOR_ROLES => True
-    - fallback: if Doctor profile exists => True
+    - fallback: if Doctor profile exists => True (helps if role values differ)
     """
     if not user or not user.is_authenticated:
         return False
@@ -123,7 +165,13 @@ def is_lab(user) -> bool:
     return _get_role(user) in LAB_ROLES
 
 
-def _try_redirect(url_name: str, *, fallback_name: str = "home:index", kwargs: dict | None = None):
+def _try_redirect(
+    url_name: str,
+    *,
+    fallback_name: str = "home:index",
+    kwargs: dict | None = None,
+) -> HttpResponse:
+    """Redirect آمن: إذا صار NoReverseMatch يروح fallback."""
     try:
         if kwargs:
             return redirect(url_name, **kwargs)
@@ -133,6 +181,11 @@ def _try_redirect(url_name: str, *, fallback_name: str = "home:index", kwargs: d
 
 
 def _deny_lab_area(request: HttpRequest) -> HttpResponse:
+    """
+    إذا غير المختبر حاول يدخل صفحات المختبر:
+    - الطبيب: نرجعه لواجهة طلباته بالمختبر
+    - غير ذلك: 403
+    """
     if is_doctor(request.user) and not is_lab(request.user):
         messages.warning(request, "هذه الصفحة خاصة بالمختبر. تم تحويلك لواجهة الطبيب.")
         return _try_redirect("lab:doctor_orders_inbox", fallback_name="doctor:dashboard")
@@ -140,6 +193,11 @@ def _deny_lab_area(request: HttpRequest) -> HttpResponse:
 
 
 def _deny_doctor_area(request: HttpRequest) -> HttpResponse:
+    """
+    إذا غير الطبيب حاول يدخل صفحات الطبيب الخاصة بطلبات المختبر:
+    - المختبر: نرجعه لداشبورد المختبر
+    - غير ذلك: 403
+    """
     if is_lab(request.user) and not is_doctor(request.user):
         messages.warning(request, "هذه الصفحة خاصة بالطبيب. تم تحويلك لواجهة المختبر.")
         return _try_redirect("lab:dashboard", fallback_name="home:index")
@@ -147,6 +205,7 @@ def _deny_doctor_area(request: HttpRequest) -> HttpResponse:
 
 
 def _get_lab_settings() -> LabSettings:
+    """جلب إعدادات المختبر بشكل آمن سواء كنتِ تستخدمين django-solo أو لا."""
     if hasattr(LabSettings, "get_solo"):
         return LabSettings.get_solo()
 
@@ -157,6 +216,9 @@ def _get_lab_settings() -> LabSettings:
 
 
 def _laborder_text_search_q_basic(q: str) -> Q:
+    """
+    بحث آمن 100% (بدون M2M) حتى ما يصير FieldError.
+    """
     q = (q or "").strip()
     if not q:
         return Q()
@@ -173,6 +235,11 @@ def _laborder_text_search_q_basic(q: str) -> Q:
 
 
 def _m2m_requested_tests_search_q(q: str) -> Q:
+    """
+    محاولة ذكية للبحث ضمن requested_tests (ManyToMany) بدون كسر:
+    نبحث على حقول شائعة في جدول الفحوصات: name/title/code/label...
+    إذا ما نكدر نحدد حقل مناسب، نرجع Q() فقط.
+    """
     q = (q or "").strip()
     if not q:
         return Q()
@@ -185,8 +252,8 @@ def _m2m_requested_tests_search_q(q: str) -> Q:
 
         candidate_fields = ("name", "title", "label", "code", "test_name", "test", "short_name")
         related_field_names = {x.name for x in related_model._meta.fields}
-
         chosen = next((c for c in candidate_fields if c in related_field_names), None)
+
         if not chosen:
             return Q()
 
@@ -196,6 +263,11 @@ def _m2m_requested_tests_search_q(q: str) -> Q:
 
 
 def _laborder_text_search_q(q: str) -> Q:
+    """
+    يبني Q للبحث.
+    - الأساس يعتمد على patient/full_name + requested_tests_text + notes
+    - وإذا requested_tests (M2M) موجودة: نضيف بحث ذكي على name/title/code...
+    """
     q = (q or "").strip()
     if not q:
         return Q()
@@ -208,7 +280,24 @@ def _laborder_text_search_q(q: str) -> Q:
     return cond
 
 
+def _apply_order_search(qs: QuerySet[LabOrder], q: str) -> QuerySet[LabOrder]:
+    """
+    فلترة البحث مع fallback آمن ومنع التكرار إذا كان البحث يتضمن M2M.
+    """
+    q = (q or "").strip()
+    if not q:
+        return qs
+
+    try:
+        qs = qs.filter(_laborder_text_search_q(q))
+    except FieldError:
+        qs = qs.filter(_laborder_text_search_q_basic(q))
+
+    return _maybe_distinct_orders(qs)
+
+
 def _get_doctor_profile(user) -> Optional[Doctor]:
+    """يرجع Doctor profile أو None بدل 404 حتى نعطي رسالة واضحة."""
     try:
         return Doctor.objects.select_related("user").get(user=user)
     except Doctor.DoesNotExist:
@@ -217,7 +306,10 @@ def _get_doctor_profile(user) -> Optional[Doctor]:
 
 def _doctor_can_access_patient(doctor: Doctor, patient: Patient) -> bool:
     """
-    تحقق نطاق المريض للطبيب.
+    تحقق نطاق المريض للطبيب (اختياري حسب setting).
+    يدعم:
+    - Patient.doctor FK إذا موجود
+    - Appointment linkage إذا موجود
     """
     if not doctor or not patient:
         return False
@@ -239,21 +331,25 @@ def _doctor_can_access_patient(doctor: Doctor, patient: Patient) -> bool:
 
 
 def _build_result_form(*, request: HttpRequest, instance: LabResult, settings_obj: LabSettings) -> Any:
+    """يبني LabResultForm بشكل آمن حتى لو الفورم ما يدعم settings_obj."""
     if request.method == "POST":
         try:
             return LabResultForm(request.POST, request.FILES, instance=instance, settings_obj=settings_obj)
         except TypeError:
             return LabResultForm(request.POST, request.FILES, instance=instance)
-    else:
-        try:
-            return LabResultForm(instance=instance, settings_obj=settings_obj)
-        except TypeError:
-            return LabResultForm(instance=instance)
+
+    try:
+        return LabResultForm(instance=instance, settings_obj=settings_obj)
+    except TypeError:
+        return LabResultForm(instance=instance)
 
 
 def _infer_patient_from_order(order: LabOrder) -> Optional[Patient]:
     """
-    استنتاج المريض من appointment داخل LabOrder.
+    يستنتج المريض تلقائياً من الـ appointment إذا موجودة داخل LabOrder.
+    يدعم:
+    - order.appointment (FK object)
+    - order.appointment_id (FK id)
     """
     appt_obj = getattr(order, "appointment", None)
     if appt_obj is not None:
@@ -281,7 +377,8 @@ def _infer_patient_from_order(order: LabOrder) -> Optional[Patient]:
 
 def _appointment_belongs_to_doctor(order: LabOrder, doctor: Doctor) -> bool:
     """
-    إذا الطلب مرتبط بموعد، لازم الموعد يكون لنفس الطبيب.
+    تحقق اختياري قوي: إذا الطلب مرتبط بموعد، لازم الموعد يكون لنفس الطبيب.
+    إذا ماكو appointment أصلاً → True.
     """
     appt_obj = getattr(order, "appointment", None)
     if appt_obj is not None:
@@ -303,6 +400,10 @@ def _appointment_belongs_to_doctor(order: LabOrder, doctor: Doctor) -> bool:
 
 
 def _normalize_action(raw: str) -> str:
+    """
+    Normalize incoming action from template buttons/inputs.
+    Accepts multiple names for verify/send.
+    """
     a = (raw or "").strip().lower()
     if not a:
         return "save"
@@ -313,60 +414,15 @@ def _normalize_action(raw: str) -> str:
     return "save"
 
 
-def _doctor_appointments_qs(doctor: Doctor, patient: Patient | None = None):
-    """
-    مواعيد الطبيب فقط، ومربوطة بمريض، وغير ملغية.
-    """
-    try:
-        Appointment = apps.get_model("appointments", "Appointment")
-    except Exception:
-        return None
-
-    qs = (
-        Appointment.objects
-        .select_related("patient", "doctor")
-        .filter(doctor=doctor, patient__isnull=False)
-    )
-
-    if patient is not None:
-        qs = qs.filter(patient=patient)
-
-    try:
-        qs = qs.exclude(status__iexact="cancelled")
-    except Exception:
-        pass
-
-    try:
-        qs = qs.order_by("-scheduled_time")
-    except Exception:
-        qs = qs.order_by("-pk")
-
-    return qs
-
-
-def _configure_doctor_order_form(form: LabOrderCreateForm, doctor: Doctor, patient: Patient | None = None) -> None:
-    """
-    يقيّد appointment للطبيب الحالي فقط، ويجعله اختياريًا إذا patient معروف من الرابط.
-    """
-    if "appointment" not in form.fields:
-        return
-
-    appt_qs = _doctor_appointments_qs(doctor, patient=patient)
-    if appt_qs is not None:
-        form.fields["appointment"].queryset = appt_qs
-
-    form.fields["appointment"].required = patient is None
-
-    if patient is not None:
-        form.fields["appointment"].help_text = "You can leave the appointment empty because the patient is already selected."
-    else:
-        form.fields["appointment"].help_text = "Select an appointment that belongs to this doctor and is linked to a patient."
-
-
 # ------------------------------------------------------------
-# Doctor notifications + KPIs
+# Doctor notifications (READY unseen count) + Doctor KPIs
 # ------------------------------------------------------------
 def _doctor_ready_count(doctor: Doctor) -> int:
+    """
+    عدد النتائج الجاهزة للطبيب (READY) وغير المقروءة.
+    إذا يوجد doctor_seen_at → نعد فقط doctor_seen_at IS NULL
+    إذا غير موجود → نعد كل READY.
+    """
     qs = LabOrder.objects.filter(doctor=doctor, status=LabOrder.Status.READY)
     if _has_order_field("doctor_seen_at"):
         qs = qs.filter(doctor_seen_at__isnull=True)
@@ -374,6 +430,9 @@ def _doctor_ready_count(doctor: Doctor) -> int:
 
 
 def _doctor_kpis(doctor: Doctor) -> dict[str, int]:
+    """
+    ✅ أرقام ثابتة للطبيب (لا تعتمد على التبويب الحالي بالـ inbox)
+    """
     today = timezone.localdate()
     base = LabOrder.objects.filter(doctor=doctor)
 
@@ -395,6 +454,7 @@ def _doctor_kpis(doctor: Doctor) -> dict[str, int]:
 
 
 def _mark_seen_by_doctor_if_ready(order: LabOrder) -> None:
+    """أول ما الطبيب يفتح تفاصيل طلب READY: نخليه مقروء."""
     if order.status != LabOrder.Status.READY:
         return
     if not _has_order_field("doctor_seen_at"):
@@ -405,7 +465,7 @@ def _mark_seen_by_doctor_if_ready(order: LabOrder) -> None:
 
 
 # ------------------------------------------------------------
-# Lab "Seen"
+# Lab "Seen" (when lab opens request)
 # ------------------------------------------------------------
 def _mark_order_seen_if_pending(order: LabOrder, user) -> None:
     """
@@ -441,14 +501,12 @@ def _mark_order_seen_if_pending(order: LabOrder, user) -> None:
 
 
 # ------------------------------------------------------------
-# APIs
+# Doctor API (DOCTOR ONLY) - for polling badge/notifications
 # ------------------------------------------------------------
 @require_GET
 @login_required
 def doctor_ready_count_api(request: HttpRequest) -> JsonResponse:
-    """
-    {"count": READY unseen orders for this doctor}
-    """
+    """Returns JSON: {"count": <READY unseen orders for this doctor>}"""
     if not is_doctor(request.user):
         return JsonResponse({"count": 0}, status=403)
 
@@ -457,20 +515,6 @@ def doctor_ready_count_api(request: HttpRequest) -> JsonResponse:
         return JsonResponse({"count": 0})
 
     return JsonResponse({"count": _doctor_ready_count(doctor)})
-
-
-@require_GET
-@login_required
-def lab_pending_count_api(request: HttpRequest) -> JsonResponse:
-    """
-    {"count": pending lab orders}
-    For LAB users only.
-    """
-    if not is_lab(request.user):
-        return JsonResponse({"count": 0}, status=403)
-
-    count = LabOrder.objects.filter(status=LabOrder.Status.PENDING).count()
-    return JsonResponse({"count": count})
 
 
 # ------------------------------------------------------------
@@ -487,15 +531,13 @@ def lab_dashboard(request: HttpRequest) -> HttpResponse:
     status_filter = (request.GET.get("status", "") or "").strip().upper()
     q = (request.GET.get("q", "") or "").strip()
 
-    base_qs = LabOrder.objects.select_related("patient", "doctor__user").all()
+    base_qs = LabOrder.objects.select_related(*_order_select_related_paths()).all()
+
     if status_filter in ORDER_STATUSES:
         base_qs = base_qs.filter(status=status_filter)
 
     if q:
-        try:
-            base_qs = base_qs.filter(_laborder_text_search_q(q))
-        except FieldError:
-            base_qs = base_qs.filter(_laborder_text_search_q_basic(q))
+        base_qs = _apply_order_search(base_qs, q)
 
     qs_all = LabOrder.objects.all()
 
@@ -525,7 +567,8 @@ def lab_dashboard(request: HttpRequest) -> HttpResponse:
         urgent_pending = 0
 
     latest_orders = (
-        LabOrder.objects.select_related("patient", "doctor__user")
+        LabOrder.objects
+        .select_related(*_order_select_related_paths())
         .order_by("-created_at")[:12]
     )
 
@@ -547,7 +590,6 @@ def lab_dashboard(request: HttpRequest) -> HttpResponse:
     context = {
         "today": today,
         "settings_obj": settings_obj,
-        "pending_count": pending,
         "stats": {
             "pending": pending,
             "in_progress": in_progress,
@@ -599,7 +641,7 @@ def doctor_orders_inbox(request: HttpRequest) -> HttpResponse:
 
     doctor = _get_doctor_profile(request.user)
     if not doctor:
-        messages.error(request, "No Doctor profile is linked to this user.")
+        messages.error(request, "لا يوجد ملف Doctor مرتبط بهذا المستخدم.")
         return _try_redirect("doctor:dashboard", fallback_name="home:index")
 
     ready_count = _doctor_ready_count(doctor)
@@ -612,15 +654,13 @@ def doctor_orders_inbox(request: HttpRequest) -> HttpResponse:
     q = (request.GET.get("q", "") or "").strip()
 
     qs = (
-        LabOrder.objects.select_related("patient", "doctor__user")
+        LabOrder.objects
+        .select_related(*_order_select_related_paths())
         .filter(doctor=doctor, status=status)
     )
 
     if q:
-        try:
-            qs = qs.filter(_laborder_text_search_q(q))
-        except FieldError:
-            qs = qs.filter(_laborder_text_search_q_basic(q))
+        qs = _apply_order_search(qs, q)
 
     qs = qs.order_by("-created_at")[:200]
 
@@ -645,7 +685,7 @@ def doctor_create_lab_order(request: HttpRequest, patient_id: int | None = None)
 
     doctor = _get_doctor_profile(request.user)
     if not doctor:
-        messages.error(request, "No Doctor profile is linked to this user.")
+        messages.error(request, "لا يوجد ملف Doctor مرتبط بهذا المستخدم.")
         return _try_redirect("doctor:dashboard", fallback_name="home:index")
 
     ready_count = _doctor_ready_count(doctor)
@@ -655,25 +695,24 @@ def doctor_create_lab_order(request: HttpRequest, patient_id: int | None = None)
         patient = get_object_or_404(Patient, pk=patient_id)
 
         if _enforce_doctor_patient_scope() and not _doctor_can_access_patient(doctor, patient):
-            messages.error(request, "This patient is outside this doctor's scope.")
+            messages.error(request, "هذا المريض خارج نطاق هذا الطبيب.")
             return _try_redirect("lab:doctor_orders_inbox", fallback_name="doctor:dashboard")
 
-    form = LabOrderCreateForm(request.POST or None, request.FILES or None)
-    _configure_doctor_order_form(form, doctor, patient=patient)
-
     if request.method == "POST":
+        form = LabOrderCreateForm(request.POST, request.FILES)
         if form.is_valid():
             order: LabOrder = form.save(commit=False)
 
+            # 1) patient من الرابط أولاً
             if patient is not None:
                 order.patient = patient
 
+            # 2) إذا ماكو patient، استنتجه من appointment
             if not getattr(order, "patient_id", None):
                 inferred = _infer_patient_from_order(order)
                 if inferred is not None:
                     if _enforce_doctor_patient_scope() and not _doctor_can_access_patient(doctor, inferred):
-                        form.add_error("appointment", "This appointment belongs to a patient outside this doctor's scope.")
-                        messages.error(request, "This patient is outside this doctor's scope.")
+                        messages.error(request, "هذا المريض خارج نطاق هذا الطبيب.")
                         return render(
                             request,
                             "lab/doctor_create_order.html",
@@ -681,20 +720,18 @@ def doctor_create_lab_order(request: HttpRequest, patient_id: int | None = None)
                         )
                     order.patient = inferred
 
+            # 3) لازم يكون صار عندنا patient بالنهاية
             if not getattr(order, "patient_id", None):
-                if "appointment" in form.fields:
-                    form.add_error("appointment", "Please select a valid appointment linked to a patient.")
-                messages.error(request, "Please select a valid appointment before creating the lab order.")
+                messages.error(request, "رجاءً اختاري المريض قبل إنشاء طلب المختبر.")
                 return render(
                     request,
                     "lab/doctor_create_order.html",
                     {"form": form, "patient": patient, "ready_count": ready_count},
                 )
 
+            # 4) appointment (إن وجد) لازم يخص نفس الطبيب
             if not _appointment_belongs_to_doctor(order, doctor):
-                if "appointment" in form.fields:
-                    form.add_error("appointment", "The selected appointment does not belong to this doctor.")
-                messages.error(request, "The selected appointment does not belong to this doctor.")
+                messages.error(request, "الـ Appointment المختار لا يخص هذا الطبيب.")
                 return render(
                     request,
                     "lab/doctor_create_order.html",
@@ -704,21 +741,25 @@ def doctor_create_lab_order(request: HttpRequest, patient_id: int | None = None)
             order.doctor = doctor
             order.status = LabOrder.Status.PENDING
 
+            # تنظيف النصوص
             if _has_order_field("requested_tests_text"):
                 order.requested_tests_text = (getattr(order, "requested_tests_text", "") or "").strip()
             if _has_order_field("notes"):
                 order.notes = (getattr(order, "notes", "") or "").strip()
 
-            order.save()
-            messages.success(request, "Lab order sent successfully.")
+            with transaction.atomic():
+                order.save()
+                _safe_form_save_m2m(form)  # ✅ مهم جدًا لحفظ requested_tests أو أي M2M
+                if _has_order_field("doctor_seen_at"):
+                    order.doctor_seen_at = None
+                    _safe_save_update_fields(order, ["doctor_seen_at"])
+
+            messages.success(request, "✅ تم إرسال طلب المختبر.")
             return redirect("lab:doctor_order_detail", order_id=order.id)
 
-        for field_name, errors in form.errors.items():
-            label = form.fields[field_name].label if field_name in form.fields else field_name
-            for err in errors:
-                messages.error(request, f"{label}: {err}")
-
-        messages.error(request, "Please correct the highlighted fields and try again.")
+        messages.error(request, "❌ تأكدي من الحقول.")
+    else:
+        form = LabOrderCreateForm()
 
     return render(
         request,
@@ -734,11 +775,11 @@ def doctor_order_detail(request: HttpRequest, order_id: int) -> HttpResponse:
 
     doctor = _get_doctor_profile(request.user)
     if not doctor:
-        messages.error(request, "No Doctor profile is linked to this user.")
+        messages.error(request, "لا يوجد ملف Doctor مرتبط بهذا المستخدم.")
         return _try_redirect("doctor:dashboard", fallback_name="home:index")
 
     order = get_object_or_404(
-        LabOrder.objects.select_related("patient", "doctor__user", "appointment"),
+        LabOrder.objects.select_related(*_order_select_related_paths()),
         pk=order_id,
         doctor=doctor,
     )
@@ -772,29 +813,20 @@ def lab_inbox(request: HttpRequest) -> HttpResponse:
     q = (request.GET.get("q", "") or "").strip()
 
     qs = (
-        LabOrder.objects.select_related("patient", "doctor__user")
+        LabOrder.objects
+        .select_related(*_order_select_related_paths())
         .filter(status=status)
     )
 
     if q:
-        try:
-            qs = qs.filter(_laborder_text_search_q(q))
-        except FieldError:
-            qs = qs.filter(_laborder_text_search_q_basic(q))
+        qs = _apply_order_search(qs, q)
 
     qs = qs.order_by("-created_at")[:200]
-    pending_count = LabOrder.objects.filter(status=LabOrder.Status.PENDING).count()
 
     return render(
         request,
         "lab/lab_inbox.html",
-        {
-            "orders": qs,
-            "status": status,
-            "q": q,
-            "settings_obj": settings_obj,
-            "pending_count": pending_count,
-        },
+        {"orders": qs, "status": status, "q": q, "settings_obj": settings_obj},
     )
 
 
@@ -803,6 +835,9 @@ def lab_order_detail(request: HttpRequest, order_id: int) -> HttpResponse:
     """
     Lab staff can view a specific order and create/edit/verify results.
     Respects LabSettings.require_verify_before_ready
+
+    ✅ Guard:
+    - إذا الطلب CANCELLED: ما نسمح بتعديل/إرسال نتائج
     """
     if not is_lab(request.user):
         if is_doctor(request.user):
@@ -815,13 +850,14 @@ def lab_order_detail(request: HttpRequest, order_id: int) -> HttpResponse:
         return _deny_lab_area(request)
 
     order = get_object_or_404(
-        LabOrder.objects.select_related("patient", "doctor__user", "appointment"),
+        LabOrder.objects.select_related(*_order_select_related_paths()),
         pk=order_id,
     )
 
     settings_obj = _get_lab_settings()
     require_verify = bool(getattr(settings_obj, "require_verify_before_ready", True))
 
+    # ✅ Seen on OPEN (GET)
     if request.method == "GET":
         _mark_order_seen_if_pending(order, request.user)
 
@@ -840,13 +876,16 @@ def lab_order_detail(request: HttpRequest, order_id: int) -> HttpResponse:
 
             with transaction.atomic():
                 if action == "verify":
+                    # ✅ VERIFIED + READY + reset doctor_seen_at
                     result.verify(request.user)
                     messages.success(request, "✅ تم اعتماد النتيجة وإرسالها للطبيب.")
                 else:
+                    # draft save
                     if order.status == LabOrder.Status.PENDING:
                         order.status = LabOrder.Status.IN_PROGRESS
                         _safe_save_update_fields(order, ["status"])
 
+                    # إذا verify غير مطلوب: الحفظ يعتبر إرسال
                     if not require_verify:
                         result.verify(request.user)
                         messages.success(request, "✅ تم حفظ النتيجة وإرسالها للطبيب.")
