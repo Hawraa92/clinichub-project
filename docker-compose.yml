@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   db:
     image: postgres:16
@@ -30,8 +28,6 @@ services:
       - .env.docker
     ports:
       - "8000:8000"
-    volumes:
-      - .:/app
 
 volumes:
   postgres_data:

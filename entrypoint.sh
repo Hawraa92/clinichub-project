@@ -1,12 +1,18 @@
 #!/usr/bin/env bash
 set -e
 
-# انتظري DB شوي (مهم بالبداية)
-python -c "import time; time.sleep(2)"
+echo "Waiting for database..."
 
-# migrations + static
-python manage.py migrate --noinput
+until python manage.py migrate --noinput; do
+  echo "Database is unavailable - sleeping"
+  sleep 2
+done
+
 python manage.py collectstatic --noinput
 
-# run server
-gunicorn ClinicHub.wsgi:application --bind 0.0.0.0:8000 --log-file -
+exec gunicorn ClinicHub.wsgi:application \
+  --bind 0.0.0.0:8000 \
+  --workers 2 \
+  --timeout 120 \
+  --access-logfile - \
+  --error-logfile -

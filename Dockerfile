@@ -1,4 +1,3 @@
-# Dockerfile
 FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -7,10 +6,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# أنشئي مستخدم قبل COPY --chown
 RUN useradd -m appuser
 
-# System deps (PostgreSQL + Cairo/Pango for PDF libs)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
@@ -20,15 +17,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgdk-pixbuf-2.0-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install requirements first (better caching)
 COPY requirements.txt /app/requirements.txt
-RUN pip install --upgrade pip && pip install -r /app/requirements.txt
 
-# Copy project (خلي الملفات ملك appuser مباشرة)
+RUN pip install --upgrade pip && pip install --no-cache-dir -r /app/requirements.txt
+
 COPY --chown=appuser:appuser . /app
 
-# Entrypoint (تأكد من LF + صلاحية التنفيذ)
-RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh
+RUN mkdir -p /app/staticfiles /app/media \
+    && sed -i 's/\r$//' /app/entrypoint.sh \
+    && chmod +x /app/entrypoint.sh \
+    && chown -R appuser:appuser /app
 
 USER appuser
 
