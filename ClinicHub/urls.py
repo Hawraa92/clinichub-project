@@ -21,7 +21,8 @@ from django.contrib import admin
 from django.contrib.staticfiles.urls import staticfiles_urlpatterns
 from django.http import HttpResponseRedirect
 from django.templatetags.static import static as static_url
-from django.urls import include, path
+from django.urls import include, path, re_path
+from django.views.static import serve
 
 
 def favicon_view(request):
@@ -74,10 +75,17 @@ urlpatterns = [
 ]
 
 
-# ✅ Serve MEDIA in development
-if settings.DEBUG or getattr(settings, "SERVE_MEDIA", False):
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-
-# ✅ Serve STATIC in development
+# ✅ Serve MEDIA + STATIC in development
 if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     urlpatterns += staticfiles_urlpatterns()
+
+# ✅ Serve MEDIA in production only when explicitly enabled
+elif getattr(settings, "SERVE_MEDIA", False):
+    urlpatterns += [
+        re_path(
+            r"^media/(?P<path>.*)$",
+            serve,
+            {"document_root": settings.MEDIA_ROOT},
+        ),
+    ]
