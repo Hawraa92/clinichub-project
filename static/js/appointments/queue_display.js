@@ -88,7 +88,7 @@
 
   const i18n = {
     en: {
-      headerSubtitle: "Digital Queue Management – Powered by MisbahTech",
+      headerSubtitle: "Digital Queue Management",
       headerMessage:
         "Please wait until your ticket and name appear on the screen.",
       filterLabel: "Filter by doctor",
@@ -114,7 +114,7 @@
       errGeneric: "Cannot load queue from server.",
     },
     ar: {
-      headerSubtitle: "نظام إدارة الطابور الرقمي – بدعم من MisbahTech",
+      headerSubtitle: "نظام إدارة الطابور الرقمي",
       headerMessage: "يرجى الانتظار حتى يظهر رقمك واسمك على الشاشة.",
       filterLabel: "تصفية حسب الطبيب",
       filterAll: "جميع الأطباء",
@@ -157,12 +157,12 @@
   // ---------- Dynamic ticker messages ----------
   const tickerMessages = {
     en: [
-      "ClinicHub Digital Queue System – Powered by MisbahTech.",
+      "ClinicHub Digital Queue System.",
       "Please keep your ticket ready and wait until your number and name appear on the screen.",
       "Please keep noise to a minimum and respect patient privacy inside the clinic.",
     ],
     ar: [
-      "نظام إدارة الطابور ClinicHub – بدعم من MisbahTech.",
+      "نظام إدارة الطابور ClinicHub.",
       "يرجى الاحتفاظ برقم الدور لحين ظهور رقمك واسمك على الشاشة.",
       "نرجو الحفاظ على الهدوء واحترام خصوصية المرضى داخل العيادة.",
     ],
@@ -197,6 +197,7 @@
       month: "short",
       day: "numeric",
     };
+
     dateEl.textContent = now.toLocaleDateString(undefined, dateOptions);
     timeEl.textContent = now.toLocaleTimeString(undefined, {
       hour: "2-digit",
@@ -211,7 +212,9 @@
     const cookies = document.cookie ? document.cookie.split(";") : [];
     for (let c of cookies) {
       c = c.trim();
-      if (c.startsWith(name + "=")) return c.substring((name + "=").length);
+      if (c.startsWith(name + "=")) {
+        return c.substring((name + "=").length);
+      }
     }
     return "";
   }
@@ -224,10 +227,16 @@
     const tpl = String(CALL_NEXT_API_TEMPLATE || "");
     if (!tpl) return null;
 
-    if (tpl.includes("__DOCTOR_ID__"))
+    if (tpl.includes("__DOCTOR_ID__")) {
       return tpl.replace("__DOCTOR_ID__", String(doctorId));
-    if (/\/0\/?$/.test(tpl)) return tpl.replace(/\/0\/?$/, `/${doctorId}/`);
-    if (tpl.includes("/0/")) return tpl.replace("/0/", `/${doctorId}/`);
+    }
+    if (/\/0\/?$/.test(tpl)) {
+      return tpl.replace(/\/0\/?$/, `/${doctorId}/`);
+    }
+    if (tpl.includes("/0/")) {
+      return tpl.replace("/0/", `/${doctorId}/`);
+    }
+
     return tpl;
   }
 
@@ -243,10 +252,12 @@
 
   function getActiveDoctorIndex() {
     if (!doctors.length) return 0;
+
     if (activeDoctorId) {
       const idx = doctors.findIndex((d) => d.id === String(activeDoctorId));
       if (idx >= 0) return idx;
     }
+
     return 0;
   }
 
@@ -268,8 +279,9 @@
         activeDoc &&
         Array.isArray(activeDoc.queue) &&
         activeDoc.queue.length > 0
-      )
+      ) {
         return;
+      }
     }
 
     const docWithQueue = firstDoctorWithQueue();
@@ -299,7 +311,10 @@
           name: current.patient_name || current.patient || current.name || "",
         });
       } else if (q.next_queue && q.next_queue !== "No appointments") {
-        queueItems.push({ ticket: q.next_queue, name: "" });
+        queueItems.push({
+          ticket: q.next_queue,
+          name: "",
+        });
       }
 
       if (Array.isArray(waitingList)) {
@@ -326,7 +341,7 @@
   // ==============
   // AUTO ANNOUNCER (ON CHANGE)
   // ==============
-  const announceState = {}; // docId -> { ticket, lastAt }
+  const announceState = {};
   let announceInFlight = false;
 
   let audioCtx = null;
@@ -342,7 +357,9 @@
   async function unlockAudio() {
     const ctx = getAudioCtx();
     try {
-      if (ctx && ctx.state === "suspended") await ctx.resume();
+      if (ctx && ctx.state === "suspended") {
+        await ctx.resume();
+      }
     } catch (_) {}
     audioUnlocked = true;
   }
@@ -355,19 +372,16 @@
     const overlay = document.getElementById("sound-unlock");
     const btn = document.getElementById("sound-unlock-btn");
     const close = document.getElementById("sound-unlock-close");
+
     if (!overlay || !btn || !close) return;
 
     const LS_KEY = "ch_sound_enabled_v1";
     const SS_KEY = "ch_sound_overlay_dismiss_v1";
 
     try {
-      // إذا تم تفعيل الصوت سابقاً → لا تظهر
       if (localStorage.getItem(LS_KEY) === "1") return;
-      // إذا ضغط Later في نفس التب → لا تظهر بالرفريش
       if (sessionStorage.getItem(SS_KEY) === "1") return;
-    } catch (_) {
-      // إذا التخزين ممنوع، نكمل بشكل طبيعي
-    }
+    } catch (_) {}
 
     overlay.hidden = false;
 
@@ -381,10 +395,12 @@
     btn.addEventListener("click", async () => {
       await unlockAudio();
       overlay.hidden = true;
+
       try {
         localStorage.setItem(LS_KEY, "1");
         sessionStorage.setItem(SS_KEY, "1");
       } catch (_) {}
+
       try {
         await beep({ duration: 120, frequency: 880, volume: 0.06 });
       } catch (_) {}
@@ -393,6 +409,7 @@
 
   async function beep(opts = {}) {
     if (!ENABLE_BEEP) return;
+
     const ctx = getAudioCtx();
     if (!ctx) return;
 
@@ -439,6 +456,7 @@
       if (!voices.length) return null;
 
       const low = String(langTag || "").toLowerCase();
+
       const exact = voices.find(
         (v) => String(v.lang || "").toLowerCase() === low
       );
@@ -468,22 +486,22 @@
       if (ANNOUNCE_REQUIRE_VISIBLE_TAB && document.hidden) return resolve();
 
       try {
-        const u = new SpeechSynthesisUtterance(cleaned);
+        const utterance = new SpeechSynthesisUtterance(cleaned);
 
         const langTag = getLangTag(shortLang);
-        u.lang = langTag;
+        utterance.lang = langTag;
 
-        const v = pickBestVoice(langTag);
-        if (v) u.voice = v;
+        const voice = pickBestVoice(langTag);
+        if (voice) utterance.voice = voice;
 
-        u.rate = Number(CONFIG.SPEECH_RATE || 1.0);
-        u.pitch = Number(CONFIG.SPEECH_PITCH || 1.0);
-        u.volume = Number(CONFIG.SPEECH_VOLUME || 1.0);
+        utterance.rate = Number(CONFIG.SPEECH_RATE || 1.0);
+        utterance.pitch = Number(CONFIG.SPEECH_PITCH || 1.0);
+        utterance.volume = Number(CONFIG.SPEECH_VOLUME || 1.0);
 
-        u.onend = () => resolve();
-        u.onerror = () => resolve();
+        utterance.onend = () => resolve();
+        utterance.onerror = () => resolve();
 
-        window.speechSynthesis.speak(u);
+        window.speechSynthesis.speak(utterance);
 
         setTimeout(resolve, 9000);
       } catch (_) {
@@ -550,8 +568,8 @@
   async function playQueueAnnouncement(payload) {
     if (!(ENABLE_BEEP || ENABLE_VOICE)) return;
     if (!payload || !payload.number || !payload.doctor) return;
-
     if (announceInFlight) return;
+
     announceInFlight = true;
 
     try {
@@ -563,6 +581,7 @@
 
       for (const lang of ANNOUNCE_SEQUENCE) {
         if (lang !== "ar" && lang !== "en") continue;
+
         const text = buildAnnouncementText(payload, lang);
         await speakOnce(text, lang);
         await new Promise((r) => setTimeout(r, 220));
@@ -572,7 +591,6 @@
     }
   }
 
-  // نخليها متاحة لأي كود ثاني إذا احتجتي
   window.playQueueAnnouncement = playQueueAnnouncement;
 
   async function announceChangesIfAny() {
@@ -589,21 +607,21 @@
       if (!ticket) return;
 
       const docId = String(doc.id);
-      const st = announceState[docId] || { ticket: null, lastAt: 0 };
+      const state = announceState[docId] || { ticket: null, lastAt: 0 };
 
-      const changed = st.ticket !== ticket;
+      const changed = state.ticket !== ticket;
 
-      // حدّث التذكرة دائماً حتى ما يكرر نفس الحالة
-      st.ticket = ticket;
-      announceState[docId] = st;
+      state.ticket = ticket;
+      announceState[docId] = state;
 
       if (!changed) return;
 
-      const cooldownOk = now - st.lastAt >= PER_DOCTOR_ANNOUNCE_COOLDOWN_MS;
+      const cooldownOk =
+        now - state.lastAt >= PER_DOCTOR_ANNOUNCE_COOLDOWN_MS;
       if (!cooldownOk) return;
 
-      st.lastAt = now;
-      announceState[docId] = st;
+      state.lastAt = now;
+      announceState[docId] = state;
 
       const next = doc.queue && doc.queue[1] ? doc.queue[1] : null;
 
@@ -616,8 +634,8 @@
       });
     });
 
-    for (const p of toAnnounce) {
-      await playQueueAnnouncement(p);
+    for (const payload of toAnnounce) {
+      await playQueueAnnouncement(payload);
       await new Promise((r) => setTimeout(r, 350));
     }
   }
@@ -630,6 +648,7 @@
       loadQueued = true;
       return;
     }
+
     loadInFlight = true;
 
     const previousFilter = (() => {
@@ -646,11 +665,15 @@
       });
 
       if (res.status === 401 || res.status === 403) {
-        if (window.onQueueFetchError)
+        if (window.onQueueFetchError) {
           window.onQueueFetchError(t("errUnauthorized"));
+        }
         return;
       }
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
 
       const payload = await res.json();
 
@@ -675,17 +698,20 @@
       renderDoctorFilterOptions(previousFilter);
       renderAll();
 
-      // ✅ إعلان تلقائي إذا تغيّر الدور (حتى لو السكرتيرة نادت من تب ثاني)
       void announceChangesIfAny();
 
-      if (window.onQueueFetchError) window.onQueueFetchError("");
+      if (window.onQueueFetchError) {
+        window.onQueueFetchError("");
+      }
     } catch (err) {
       console.error("Queue load error:", err);
+
       if (window.onQueueFetchError) {
         window.onQueueFetchError((err && err.message) || t("errGeneric"));
       }
     } finally {
       loadInFlight = false;
+
       if (loadQueued) {
         loadQueued = false;
         void loadQueues();
@@ -712,6 +738,7 @@
   // ==============
   function getAllTickets() {
     const items = [];
+
     doctors.forEach((doc) => {
       (doc.queue || []).forEach((q, index) => {
         items.push({
@@ -723,6 +750,7 @@
         });
       });
     });
+
     return items;
   }
 
@@ -735,11 +763,14 @@
     if (!doctors.length) return null;
 
     let doc = null;
+
     if (filterValue && filterValue !== "all") {
       doc = getDoctorById(filterValue);
     } else {
       doc = activeDoctorId ? getDoctorById(activeDoctorId) : null;
-      if (!doc || !doc.queue || doc.queue.length === 0) doc = firstDoctorWithQueue();
+      if (!doc || !doc.queue || doc.queue.length === 0) {
+        doc = firstDoctorWithQueue();
+      }
     }
 
     if (!doc || !doc.queue || doc.queue.length === 0) return null;
@@ -763,6 +794,7 @@
     if (!panel) return;
 
     panel.innerHTML = "";
+
     const current = getCurrentTicket();
     const div = document.createElement("div");
 
@@ -797,7 +829,9 @@
           t("labelWaitingForDoctor")
         )}: <strong>${escapeHTML(String(current.waitingCount))}</strong></span>
         <span class="status-pill">
-          <i class="fa-solid fa-volume-high"></i> ${escapeHTML(t("statusCalling"))}
+          <i class="fa-solid fa-volume-high"></i> ${escapeHTML(
+            t("statusCalling")
+          )}
         </span>
       </div>
     `;
@@ -813,6 +847,7 @@
     if (!container) return;
 
     container.innerHTML = "";
+
     const activeIdx = getActiveDoctorIndex();
 
     doctors.forEach((doc, index) => {
@@ -820,7 +855,10 @@
 
       const card = document.createElement("article");
       card.className = "doctor-card";
-      if (index === activeIdx) card.classList.add("active");
+
+      if (index === activeIdx) {
+        card.classList.add("active");
+      }
 
       const current = (doc.queue || [])[0];
       const waitingCount = Math.max((doc.queue || []).length - 1, 0);
@@ -862,9 +900,9 @@
         <ul class="doc-next-list">${nextListHTML}</ul>
 
         <div class="doc-footer">
-          <span class="badge-waiting">${escapeHTML(String(waitingCount))} ${escapeHTML(
-            t("waitingWord")
-          )}</span>
+          <span class="badge-waiting">${escapeHTML(
+            String(waitingCount)
+          )} ${escapeHTML(t("waitingWord"))}</span>
           <span>${escapeHTML(String((doc.queue || []).length))} ${escapeHTML(
             t("totalWord")
           )}</span>
@@ -909,9 +947,12 @@
       allOpt.value = "all";
       select.appendChild(allOpt);
     }
+
     allOpt.textContent = t("filterAll");
 
-    while (select.options.length > 1) select.remove(1);
+    while (select.options.length > 1) {
+      select.remove(1);
+    }
 
     doctors.forEach((doc) => {
       const opt = document.createElement("option");
@@ -984,11 +1025,11 @@
     if (now - lastCallAt < MIN_CALL_GAP_MS) return;
     lastCallAt = now;
 
-    // gesture يساعد unlock
     await unlockAudio();
 
     const select = document.getElementById("doctor-filter");
     const filterValue = select ? select.value : "all";
+
     ensureActiveDoctorForServing(filterValue);
 
     const targetDoctorId =
@@ -998,7 +1039,6 @@
 
     if (!targetDoctorId) return;
 
-    // ✅ لا تحرك الدور إذا ماكو منتظرين
     if (!doctorHasWaiting(targetDoctorId)) return;
 
     const url = buildCallNextUrl(targetDoctorId);
@@ -1022,7 +1062,6 @@
 
       activeDoctorId = String(targetDoctorId);
 
-      // يعتمد على auto announce داخل loadQueues
       await loadQueues();
     } catch (err) {
       console.error("Error calling next ticket:", err);
@@ -1047,7 +1086,6 @@
 
     if (!targetDoctorId) return;
 
-    // ✅ إذا ماكو منتظرين، أوقف الأوتو حتى ما يظل “يكنس”
     if (!doctorHasWaiting(targetDoctorId)) {
       stopAutoMode();
       return;
@@ -1055,7 +1093,9 @@
 
     await callNextTicket();
 
-    if (!doctorHasWaiting(targetDoctorId)) stopAutoMode();
+    if (!doctorHasWaiting(targetDoctorId)) {
+      stopAutoMode();
+    }
   }
 
   async function startAutoMode() {
@@ -1074,6 +1114,7 @@
 
   function stopAutoMode() {
     if (!autoCallTimer) return;
+
     clearInterval(autoCallTimer);
     autoCallTimer = null;
     applyLanguageStaticTexts();
@@ -1088,7 +1129,6 @@
 
     showSoundOverlayIfNeeded();
 
-    // ✅ Unlock audio on first user interaction (helps auto announce)
     document.addEventListener(
       "pointerdown",
       () => {
@@ -1101,6 +1141,7 @@
       btn.addEventListener("click", () => {
         const lang = btn.dataset.lang || "en";
         if (lang === currentLang) return;
+
         currentLang = lang;
 
         document
@@ -1130,8 +1171,11 @@
         callNextBtn.style.display = "none";
       } else {
         callNextBtn.addEventListener("click", () => {
-          if (!autoCallTimer) void startAutoMode();
-          else stopAutoMode();
+          if (!autoCallTimer) {
+            void startAutoMode();
+          } else {
+            stopAutoMode();
+          }
         });
       }
     }
@@ -1149,7 +1193,11 @@
         const cur = getCurrentTicket();
         if (!cur) return [];
         return [
-          { number: cur.ticket, patient: cur.patient, doctor: cur.doctorName },
+          {
+            number: cur.ticket,
+            patient: cur.patient,
+            doctor: cur.doctorName,
+          },
         ];
       },
     };
