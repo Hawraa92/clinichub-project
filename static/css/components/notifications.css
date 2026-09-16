@@ -1,0 +1,371 @@
+.clinic-notification-root {
+    position: relative;
+  }
+  
+  .notification-bell-button {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    color: #475569;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 50%;
+    transition:
+      background-color 0.2s ease,
+      color 0.2s ease,
+      transform 0.2s ease;
+  }
+  
+  .notification-bell-button:hover,
+  .notification-bell-button:focus-visible,
+  .notification-bell-button[aria-expanded="true"] {
+    color: #0284c7;
+    background: rgba(14, 165, 233, 0.12);
+    outline: none;
+    transform: translateY(-1px);
+  }
+  
+  .notification-bell-button .bi {
+    font-size: 1.25rem;
+  }
+  
+  .notification-count-badge {
+    position: absolute;
+    top: 1px;
+    right: 0;
+    min-width: 19px;
+    height: 19px;
+    padding: 0 5px;
+    color: #ffffff;
+    font-size: 0.67rem;
+    font-weight: 700;
+    line-height: 19px;
+    text-align: center;
+    background: #ef4444;
+    border: 2px solid #ffffff;
+    border-radius: 999px;
+    box-shadow: 0 3px 8px rgba(239, 68, 68, 0.35);
+  }
+  
+  .notification-dropdown-menu {
+    width: min(390px, calc(100vw - 24px));
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    border-radius: 18px;
+    box-shadow: 0 20px 45px rgba(15, 23, 42, 0.18);
+  }
+  
+  .notification-dropdown-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 18px 20px;
+    color: #0f172a;
+    background: linear-gradient(
+      135deg,
+      rgba(14, 165, 233, 0.14),
+      rgba(20, 184, 166, 0.08)
+    );
+    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  }
+  
+  .notification-dropdown-header strong {
+    display: block;
+    font-size: 1rem;
+  }
+  
+  .notification-dropdown-header small {
+    display: block;
+    margin-top: 2px;
+    color: #64748b;
+    font-size: 0.78rem;
+  }
+  
+  .notification-dropdown-header > .bi {
+    color: #0284c7;
+    font-size: 1.35rem;
+  }
+  
+  .notification-dropdown-list {
+    max-height: 390px;
+    overflow-y: auto;
+    background: #ffffff;
+  }
+  
+  .notification-dropdown-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    min-height: 125px;
+    padding: 24px;
+    color: #64748b;
+    font-size: 0.9rem;
+    text-align: center;
+  }
+  
+  .notification-dropdown-item {
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: start;
+    padding: 15px 18px;
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+    transition: background-color 0.2s ease;
+  }
+  
+  .notification-dropdown-item:hover,
+  .notification-dropdown-item:focus-visible {
+    color: inherit;
+    background: #f8fafc;
+    outline: none;
+  }
+  
+  .notification-dropdown-item.is-unread {
+    background: rgba(14, 165, 233, 0.055);
+  }
+  
+  .notification-dropdown-icon,
+  .notification-page-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 42px;
+    height: 42px;
+    color: #0369a1;
+    background: rgba(14, 165, 233, 0.13);
+    border-radius: 13px;
+  }
+  
+  .notification-dropdown-icon.is-pharmacy,
+  .notification-page-icon.is-pharmacy {
+    color: #047857;
+    background: rgba(16, 185, 129, 0.14);
+  }
+  
+  .notification-dropdown-icon.is-booking,
+  .notification-page-icon.is-booking {
+    color: #7c3aed;
+    background: rgba(139, 92, 246, 0.13);
+  }
+  
+  .notification-dropdown-content {
+    min-width: 0;
+  }
+  
+  .notification-dropdown-title {
+    display: block;
+    overflow: hidden;
+    color: #0f172a;
+    font-size: 0.9rem;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  
+  .notification-dropdown-message {
+    display: -webkit-box;
+    margin-top: 3px;
+    overflow: hidden;
+    color: #64748b;
+    font-size: 0.82rem;
+    line-height: 1.45;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+  
+  .notification-dropdown-time {
+    display: block;
+    margin-top: 6px;
+    color: #94a3b8;
+    font-size: 0.72rem;
+  }
+  
+  .notification-unread-dot {
+    width: 8px;
+    height: 8px;
+    margin-top: 7px;
+    background: #0ea5e9;
+    border-radius: 50%;
+    box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.12);
+  }
+  
+  .notification-dropdown-footer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 14px 18px;
+    color: #0284c7;
+    font-size: 0.88rem;
+    font-weight: 700;
+    text-decoration: none;
+    background: #ffffff;
+  }
+  
+  .notification-dropdown-footer:hover {
+    color: #0369a1;
+    background: #f8fafc;
+  }
+  
+  .notification-page {
+    padding-top: 24px;
+    padding-bottom: 48px;
+  }
+  
+  .notification-page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 22px;
+  }
+  
+  .notification-page-subtitle {
+    margin: 5px 0 0;
+    color: #64748b;
+  }
+  
+  .notification-page-list {
+    overflow: hidden;
+    background: #ffffff;
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 20px;
+    box-shadow: 0 14px 35px rgba(15, 23, 42, 0.07);
+  }
+  
+  .notification-page-item {
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr) auto;
+    gap: 16px;
+    align-items: start;
+    padding: 20px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.17);
+  }
+  
+  .notification-page-item:last-child {
+    border-bottom: 0;
+  }
+  
+  .notification-page-item.is-unread {
+    background: rgba(14, 165, 233, 0.045);
+  }
+  
+  .notification-page-item h2 {
+    margin: 0;
+    color: #0f172a;
+    font-size: 1rem;
+    font-weight: 750;
+  }
+  
+  .notification-page-item p {
+    margin: 6px 0 8px;
+    color: #475569;
+    line-height: 1.55;
+  }
+  
+  .notification-page-meta {
+    color: #94a3b8;
+    font-size: 0.8rem;
+  }
+  
+  .notification-page-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  
+  .notification-empty-state {
+    padding: 70px 24px;
+    color: #64748b;
+    text-align: center;
+  }
+  
+  .notification-empty-state .bi {
+    display: block;
+    margin-bottom: 14px;
+    color: #94a3b8;
+    font-size: 2.5rem;
+  }
+  
+  html[data-theme="dark"] .notification-bell-button {
+    color: #cbd5e1;
+  }
+  
+  html[data-theme="dark"] .notification-count-badge {
+    border-color: #0f172a;
+  }
+  
+  html[data-theme="dark"] .notification-dropdown-menu,
+  html[data-theme="dark"] .notification-dropdown-list,
+  html[data-theme="dark"] .notification-dropdown-footer,
+  html[data-theme="dark"] .notification-page-list {
+    color: #e2e8f0;
+    background: #0f172a;
+  }
+  
+  html[data-theme="dark"] .notification-dropdown-header {
+    color: #f8fafc;
+    background: linear-gradient(
+      135deg,
+      rgba(14, 165, 233, 0.2),
+      rgba(20, 184, 166, 0.12)
+    );
+  }
+  
+  html[data-theme="dark"] .notification-dropdown-title,
+  html[data-theme="dark"] .notification-page-item h2 {
+    color: #f8fafc;
+  }
+  
+  html[data-theme="dark"] .notification-dropdown-message,
+  html[data-theme="dark"] .notification-page-item p,
+  html[data-theme="dark"] .notification-page-subtitle {
+    color: #94a3b8;
+  }
+  
+  html[data-theme="dark"] .notification-dropdown-item:hover,
+  html[data-theme="dark"] .notification-dropdown-footer:hover {
+    background: #1e293b;
+  }
+  
+  html[data-theme="dark"] .notification-dropdown-item.is-unread,
+  html[data-theme="dark"] .notification-page-item.is-unread {
+    background: rgba(14, 165, 233, 0.1);
+  }
+  
+  @media (max-width: 991.98px) {
+    .clinic-notification-root {
+      margin-top: 8px;
+    }
+  
+    .notification-dropdown-menu {
+      position: absolute;
+      right: 0;
+      left: auto;
+    }
+  }
+  
+  @media (max-width: 575.98px) {
+    .notification-page-header {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+  
+    .notification-page-item {
+      grid-template-columns: 42px minmax(0, 1fr);
+    }
+  
+    .notification-page-actions {
+      grid-column: 2;
+    }
+  }

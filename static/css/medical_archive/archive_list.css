@@ -1,5 +1,14 @@
-/* ========== Container ========== */
-.container {
+/* =========================================================
+   archive_list.css (Scoped, Bootstrap-safe) - PATCHED
+   Fixes:
+   - Row click cursor only on non-action cells
+   - Prevent hover style from affecting buttons/links
+   - Better focus-visible for keyboard navigation
+   - Table radius + overflow works reliably (avoid border-collapse conflicts)
+   - Safer overrides for Bootstrap buttons within this page
+   ========================================================= */
+
+.archive-list-page {
   max-width: 1100px;
   margin-top: 40px;
   padding: 20px;
@@ -7,36 +16,40 @@
   border-radius: 10px;
 }
 
-/* ========== Headings ========== */
-h2 {
-  font-size: 2.2rem;
-  font-weight: 700;
+/* Title */
+.archive-list-page .page-title {
+  font-size: 2rem;
+  font-weight: 800;
   color: #004085;
-  text-align: center;
-  margin-bottom: 30px;
   letter-spacing: 0.5px;
   text-transform: uppercase;
+  margin: 0;
 }
 
-/* ========== New Archive Button ========== */
-.btn-success {
+/* New Archive Button (scope to header only to avoid overriding other .btn-success) */
+.archive-list-page .archive-list-header .btn-success {
   font-size: 1.1rem;
   padding: 12px 24px;
   border-radius: 8px;
   background-color: #28a745;
-  color: white;
+  color: #fff;
   border: none;
-  transition: all 0.3s ease-in-out;
+  transition: transform 0.25s ease, background-color 0.25s ease, box-shadow 0.25s ease;
 }
 
-.btn-success:hover {
-  transform: scale(1.05);
+.archive-list-page .archive-list-header .btn-success:hover {
+  transform: translateY(-1px);
   background-color: #218838;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
 }
 
-/* ========== Filter Form Styling ========== */
-form.row {
+.archive-list-page .archive-list-header .btn-success:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.25);
+}
+
+/* Filter Form */
+.archive-list-page form.row {
   background-color: #ffffff;
   padding: 20px;
   border-radius: 10px;
@@ -44,200 +57,258 @@ form.row {
   margin-bottom: 30px;
 }
 
-.form-label {
-  font-weight: 600;
+.archive-list-page .form-label {
+  font-weight: 700;
   color: #004085;
 }
 
-.form-select {
+.archive-list-page .form-select,
+.archive-list-page .form-control {
   border-radius: 8px;
   padding: 10px;
   font-size: 1rem;
   border: 1px solid #ced4da;
-  transition: border-color 0.3s ease-in-out;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
 }
 
-.form-select:focus {
+.archive-list-page .form-select:focus,
+.archive-list-page .form-control:focus {
   border-color: #007bff;
   box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.2);
+  outline: none;
 }
 
-/* Filter Buttons */
-button[type="submit"],
-.btn-outline-secondary {
+/* Buttons (keep scope narrow) */
+.archive-list-page #archiveFilterForm button[type="submit"],
+.archive-list-page #archiveFilterForm .btn-outline-secondary {
   padding: 10px 16px;
   font-size: 1rem;
   border-radius: 8px;
-  transition: all 0.3s ease-in-out;
+  transition: transform 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease, color 0.2s ease;
 }
 
-button[type="submit"] {
+.archive-list-page #archiveFilterForm button[type="submit"] {
   background-color: #007bff;
-  color: white;
+  color: #fff;
   border: none;
 }
 
-button[type="submit"]:hover {
+.archive-list-page #archiveFilterForm button[type="submit"]:hover {
   background-color: #0056b3;
-  transform: scale(1.03);
+  transform: translateY(-1px);
 }
 
-.btn-outline-secondary {
+.archive-list-page #archiveFilterForm button[type="submit"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
+}
+
+.archive-list-page #archiveFilterForm .btn-outline-secondary {
   border: 1px solid #6c757d;
   color: #6c757d;
-  background-color: white;
+  background-color: #fff;
 }
 
-.btn-outline-secondary:hover {
+.archive-list-page #archiveFilterForm .btn-outline-secondary:hover {
   background-color: #f8f9fa;
   border-color: #495057;
   color: #343a40;
-  transform: scale(1.03);
+  transform: translateY(-1px);
 }
 
-/* ========== Table ========== */
-.table {
-  background-color: #ffffff;
-  border-radius: 15px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+.archive-list-page #archiveFilterForm .btn-outline-secondary:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(108, 117, 125, 0.25);
+}
+
+/* Table wrapper (radius + shadow) */
+.archive-list-page .table-responsive {
+  border-radius: 12px;
+  overflow: hidden; /* ensures rounded corners show */
+  margin-bottom: 30px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+  background: #fff;
+}
+
+/* Table */
+.archive-list-page .table {
+  margin: 0;
   font-size: 1rem;
-  margin-top: 20px;
-  border-collapse: separate;
-  border-spacing: 0 15px;
+  background-color: #ffffff;
+  border-collapse: separate; /* important with border-radius */
+  border-spacing: 0;
 }
 
-.table th,
-.table td {
-  vertical-align: middle;
-  text-align: center;
-  padding: 15px;
-  font-weight: 500;
-  transition: background-color 0.3s ease-in-out;
-}
-
-.table th {
+/* Header cells */
+.archive-list-page .table thead th {
   background-color: #343a40;
   color: #ffffff;
-  border-radius: 10px 10px 0 0;
+  text-align: center;
+  padding: 15px;
+  font-weight: 700;
+  vertical-align: middle;
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
-.table td {
+/* Body cells */
+.archive-list-page .table tbody td {
   background-color: #f8f9fa;
-  border-radius: 0 0 10px 10px;
+  text-align: center;
+  padding: 14px;
+  font-weight: 500;
+  vertical-align: middle;
+  transition: background-color 0.15s ease-in-out;
 }
 
-.table-hover tbody tr:hover {
+/* Hover row effect (do not affect action buttons) */
+.archive-list-page .table-hover tbody tr:hover td {
   background-color: #e2e6ea;
+}
+
+/* ✅ Row navigation UX:
+   - show pointer only for cells that are NOT actions
+   - keep actions cell normal cursor */
+.archive-list-page tr.archive-row td:not(:last-child) {
   cursor: pointer;
-  transition: background-color 0.3s ease-in-out;
 }
 
-/* ========== Badge Coloring ========== */
-.badge.bg-primary {
-  background-color: #007bff;
-  color: white;
+.archive-list-page tr.archive-row td:last-child {
+  cursor: default;
 }
 
-.badge.bg-success {
-  background-color: #28a745;
-  color: white;
+/* Keyboard focus for clickable row (when JS enables Enter/Space) */
+.archive-list-page tr.archive-row:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 3px rgba(0, 123, 255, 0.25);
 }
 
-.badge.bg-warning {
-  background-color: #ffc107;
-  color: #212529;
+/* Badges (Bootstrap 4 & 5) */
+.archive-list-page .badge.bg-primary,
+.archive-list-page .badge.text-bg-primary {
+  background-color: #007bff !important;
+  color: #fff !important;
 }
 
-.badge.bg-info {
+.archive-list-page .badge.bg-success,
+.archive-list-page .badge.text-bg-success {
+  background-color: #28a745 !important;
+  color: #fff !important;
+}
+
+.archive-list-page .badge.bg-warning,
+.archive-list-page .badge.text-bg-warning {
+  background-color: #ffc107 !important;
+  color: #212529 !important;
+}
+
+.archive-list-page .badge.bg-info,
+.archive-list-page .badge.text-bg-info {
+  background-color: #17a2b8 !important;
+  color: #fff !important;
+}
+
+.archive-list-page .badge.bg-secondary,
+.archive-list-page .badge.text-bg-secondary {
+  background-color: #6c757d !important;
+  color: #fff !important;
+}
+
+/* Action buttons (view/edit/delete) — keep Bootstrap vibe */
+.archive-list-page .table a.btn {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.archive-list-page .table a.btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+}
+
+/* View Button (avoid overriding global .btn-info everywhere) */
+.archive-list-page .table a.btn-info {
   background-color: #17a2b8;
-  color: white;
-}
-
-.badge.bg-secondary {
-  background-color: #6c757d;
-  color: white;
-}
-
-/* ========== Responsive ========== */
-.table-responsive {
-  border-radius: 12px;
-  overflow-x: auto;
-  margin-bottom: 30px;
-}
-
-@media (max-width: 768px) {
-  .table th, .table td {
-    font-size: 0.9rem;
-    padding: 10px;
-  }
-
-  h2 {
-    font-size: 1.6rem;
-  }
-
-  .btn-success {
-    font-size: 1rem;
-    padding: 10px 18px;
-  }
-
-  form.row {
-    flex-direction: column;
-    gap: 1rem;
-  }
-}
-
-/* ========== View Button ========== */
-.btn-info {
-  background-color: #17a2b8;
-  color: white;
-  border-radius: 5px;
+  color: #fff;
+  border-radius: 999px;
+  border: none;
   padding: 6px 12px;
-  transition: background-color 0.3s ease, box-shadow 0.3s ease;
 }
 
-.btn-info:hover {
+.archive-list-page .table a.btn-info:hover {
   background-color: #138496;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
-/* ========== Pagination Styling ========== */
-.pagination {
+.archive-list-page .table a.btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.22);
+}
+
+/* Pagination */
+.archive-list-page .pagination {
   display: flex;
   justify-content: center;
   gap: 5px;
   padding: 10px 0;
 }
 
-.page-item {
+.archive-list-page .page-item {
   border-radius: 8px;
 }
 
-.page-item.active .page-link {
+.archive-list-page .page-item.active .page-link {
   background-color: #007bff;
   border-color: #007bff;
+  color: #fff;
 }
 
-.page-link {
+.archive-list-page .page-link {
   border-radius: 8px;
   padding: 10px 15px;
   font-size: 1rem;
   color: #007bff;
-  transition: all 0.3s ease;
+  transition: background-color 0.2s ease, color 0.2s ease;
   text-decoration: none;
+  border: 1px solid #ced4da;
 }
 
-.page-link:hover {
+.archive-list-page .page-link:hover {
   background-color: #0056b3;
-  color: white;
-  cursor: pointer;
+  color: #fff;
 }
 
-.page-item.disabled .page-link {
+.archive-list-page .page-link:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.22);
+}
+
+.archive-list-page .page-item.disabled .page-link {
   background-color: #f8f9fa;
   color: #6c757d;
   pointer-events: none;
 }
 
-.page-item .page-link {
-  border: 1px solid #ced4da;
+/* Responsive */
+@media (max-width: 768px) {
+  .archive-list-page .table thead th,
+  .archive-list-page .table tbody td {
+    font-size: 0.9rem;
+    padding: 10px;
+  }
+
+  .archive-list-page .page-title {
+    font-size: 1.5rem;
+  }
+
+  .archive-list-page form.row {
+    flex-direction: column;
+    gap: 1rem;
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .archive-list-page *,
+  .archive-list-page *::before,
+  .archive-list-page *::after {
+    transition: none !important;
+    animation: none !important;
+  }
 }

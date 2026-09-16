@@ -31,6 +31,10 @@
     .range .bar{position:relative;height:8px;background:#e5e7eb;border-radius:999px;overflow:hidden}
     .range .bar i{position:absolute;inset:0 auto 0 0;width:0;background:var(--primary,#2563eb);border-radius:999px;transition:width .8s ease}
     .metric-card:hover .range .bar i{filter:brightness(1.05)}
+
+    /* ✅ Logout as POST: keep the same look */
+    .user-actions form{display:inline}
+    .user-actions .medical-btn{cursor:pointer;border:none}
   </style>
 </head>
 <body>
@@ -47,10 +51,14 @@
       <!-- 🔒 زر واحد فقط: Login أو Logout (بدون قائمة منسدلة) -->
       <div class="user-actions">
         {% if user.is_authenticated %}
-          <a href="{% url 'accounts:logout' %}" class="medical-btn login-btn">
-            <i class="fas fa-right-from-bracket"></i>
-            <span>Logout</span>
-          </a>
+          {# ✅ IMPORTANT: logout should be POST in production #}
+          <form method="post" action="{% url 'accounts:logout' %}">
+            {% csrf_token %}
+            <button type="submit" class="medical-btn login-btn">
+              <i class="fas fa-right-from-bracket"></i>
+              <span>Logout</span>
+            </button>
+          </form>
         {% else %}
           <a href="{% url 'accounts:patient_login' %}" class="medical-btn login-btn">
             <i class="fas fa-fingerprint"></i>

@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Diabetes Prediction{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 960px; margin: 24px auto;">
+  <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:16px;">
+    <div>
+      <h2 style="margin:0;">Diabetes Screening</h2>
+      <p style="margin:6px 0 0; opacity:0.85;">
+        This is a screening tool (not a final diagnosis). If risk is high, consider confirmatory tests (HbA1c / Fasting glucose).
+      </p>
+    </div>
+  </div>
+
+  <div style="display:grid; grid-template-columns: 1fr; gap: 16px;">
+    <div style="border:1px solid rgba(0,0,0,.1); border-radius:12px; padding:16px;">
+      <form method="post" novalidate>
+        {% csrf_token %}
+
+        {% if form.errors %}
+          <div style="padding:12px; border-radius:10px; margin-bottom:12px; border:1px solid rgba(220,53,69,.35); background:rgba(220,53,69,.08);">
+            <strong>Please fix the errors below.</strong>
+          </div>
+        {% endif %}
+
+        {{ form.as_p }}
+
+        <div style="display:flex; gap:10px; margin-top:12px;">
+          <button type="submit" class="btn btn-primary">Predict</button>
+          <a href="{% url 'patient:diabetes_predict' %}" class="btn btn-outline-secondary">Reset</a>
+        </div>
+      </form>
+    </div>
+
+    {% if result %}
+      <div style="border:1px solid rgba(0,0,0,.1); border-radius:12px; padding:16px;">
+        <h3 style="margin-top:0;">Result</h3>
+
+        <p style="font-size:18px; margin-bottom:10px;">
+          <strong>Label:</strong>
+          {% if result.label == "Diabetic" %}
+            <span style="color:#b00020;">{{ result.label }}</span>
+          {% else %}
+            <span style="color:#0b6b2f;">{{ result.label }}</span>
+          {% endif %}
+        </p>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:12px;">
+          <div style="border:1px solid rgba(0,0,0,.08); border-radius:10px; padding:10px;">
+            <div style="opacity:.75; font-size:12px;">Probability</div>
+            <div style="font-size:18px; font-weight:700;">{{ result.probability|floatformat:3 }}</div>
+          </div>
+          <div style="border:1px solid rgba(0,0,0,.08); border-radius:10px; padding:10px;">
+            <div style="opacity:.75; font-size:12px;">Threshold</div>
+            <div style="font-size:18px; font-weight:700;">{{ result.threshold }}</div>
+          </div>
+        </div>
+
+        <p style="margin:0 0 10px;">
+          <strong>Risk Level:</strong>
+          {% if result.risk_level == "High" %}
+            <span style="display:inline-block; padding:3px 10px; border-radius:999px; background:rgba(176,0,32,.10); color:#b00020; font-weight:700;">
+              High
+            </span>
+          {% elif result.risk_level == "Medium" %}
+            <span style="display:inline-block; padding:3px 10px; border-radius:999px; background:rgba(245,158,11,.12); color:#a16207; font-weight:700;">
+              Medium
+            </span>
+          {% else %}
+            <span style="display:inline-block; padding:3px 10px; border-radius:999px; background:rgba(11,107,47,.10); color:#0b6b2f; font-weight:700;">
+              Low
+            </span>
+          {% endif %}
+        </p>
+
+        <div style="padding:12px; border-radius:10px; border:1px solid rgba(0,0,0,.08); background:rgba(0,0,0,.03); margin-bottom:10px;">
+          <strong>Recommendation:</strong>
+          <div style="margin-top:6px; opacity:.9;">
+            {{ result.recommendation }}
+          </div>
+        </div>
+
+        <div style="opacity:0.85;">
+          <small>
+            Tip: If the probability is close to the threshold, treat it as “borderline” and rely on clinical judgment + lab tests.
+          </small>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

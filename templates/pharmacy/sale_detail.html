@@ -1,0 +1,204 @@
+{% extends "pharmacy/base.html" %}
+
+{% block title %}{{ sale.sale_number }} | ClinicHub{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+    <div>
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+            <h1 class="h2 mb-0">{{ sale.sale_number }}</h1>
+
+            {% if sale.status == "completed" %}
+                <span class="badge rounded-pill text-bg-success">Completed</span>
+            {% elif sale.status == "voided" %}
+                <span class="badge rounded-pill text-bg-danger">Voided</span>
+            {% else %}
+                <span class="badge rounded-pill text-bg-secondary">{{ sale.get_status_display }}</span>
+            {% endif %}
+
+            {% if sale.payment_status == "paid" %}
+                <span class="badge rounded-pill text-bg-success">Paid</span>
+            {% elif sale.payment_status == "partially_paid" %}
+                <span class="badge rounded-pill text-bg-warning">Partially paid</span>
+            {% else %}
+                <span class="badge rounded-pill text-bg-danger">Unpaid</span>
+            {% endif %}
+        </div>
+        <p class="text-muted mb-0">
+            Direct sale created {{ sale.created_at|date:"Y-m-d H:i" }}
+        </p>
+    </div>
+
+    <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-outline-secondary" href="{% url 'pharmacy:sales' %}">
+            <i class="bi bi-arrow-left me-1"></i>
+            Sales
+        </a>
+        <a class="btn btn-primary" href="{% url 'pharmacy:sale_receipt' sale.pk %}">
+            <i class="bi bi-receipt me-1"></i>
+            Receipt
+        </a>
+        {% if can_record_payment %}
+            <a class="btn btn-success" href="{% url 'pharmacy:sale_payment' sale.pk %}">
+                <i class="bi bi-cash-coin me-1"></i>
+                Record payment
+            </a>
+        {% endif %}
+        {% if can_void %}
+            <a class="btn btn-outline-danger" href="{% url 'pharmacy:sale_void' sale.pk %}">
+                <i class="bi bi-x-octagon me-1"></i>
+                Void sale
+            </a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-12 col-lg-7">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-header bg-white py-3">
+                <h2 class="h5 mb-0">Customer and pharmacy</h2>
+            </div>
+            <div class="card-body p-4">
+                <dl class="row mb-0">
+                    <dt class="col-sm-4 text-muted">Customer</dt>
+                    <dd class="col-sm-8">{{ sale.customer_name|default:"Walk-in customer" }}</dd>
+
+                    <dt class="col-sm-4 text-muted">Phone</dt>
+                    <dd class="col-sm-8">{{ sale.customer_phone|default:"—" }}</dd>
+
+                    <dt class="col-sm-4 text-muted">Pharmacy</dt>
+                    <dd class="col-sm-8">{{ sale.pharmacy.name }}</dd>
+
+                    <dt class="col-sm-4 text-muted">Operating mode</dt>
+                    <dd class="col-sm-8">{{ sale.pharmacy.get_operating_mode_display }}</dd>
+
+                    <dt class="col-sm-4 text-muted">Branch</dt>
+                    <dd class="col-sm-8">{{ sale.pharmacy.branch.name }}</dd>
+
+                    <dt class="col-sm-4 text-muted">Cashier</dt>
+                    <dd class="col-sm-8">{{ sale.cashier.user }}</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-5">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-header bg-white py-3">
+                <h2 class="h5 mb-0">Payment summary</h2>
+            </div>
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="text-muted">Subtotal</span>
+                    <strong>{{ sale.subtotal|floatformat:2 }} IQD</strong>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="text-muted">Discount</span>
+                    <strong>{{ sale.discount_amount|floatformat:2 }} IQD</strong>
+                </div>
+                <hr>
+                <div class="d-flex justify-content-between fs-5 mb-3">
+                    <span>Total</span>
+                    <strong>{{ sale.total_amount|floatformat:2 }} IQD</strong>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="text-muted">Paid</span>
+                    <strong class="text-success">{{ sale.amount_paid|floatformat:2 }} IQD</strong>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <span class="text-muted">Balance due</span>
+                    <strong class="{% if sale.balance_due > 0 %}text-danger{% endif %}">
+                        {{ sale.balance_due|floatformat:2 }} IQD
+                    </strong>
+                </div>
+                <hr>
+                <div class="small text-muted">
+                    Method:
+                    {% if sale.payment_method %}
+                        {{ sale.get_payment_method_display }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </div>
+                <div class="small text-muted">
+                    Reference: {{ sale.transaction_reference|default:"—" }}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm rounded-4 overflow-hidden mb-4">
+    <div class="card-header bg-white py-3">
+        <h2 class="h5 mb-0">Sale items</h2>
+    </div>
+    <div class="table-responsive">
+        <table class="table align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>#</th>
+                    <th>Medicine</th>
+                    <th>Stock allocation</th>
+                    <th>Quantity</th>
+                    <th>Unit price</th>
+                    <th>Discount</th>
+                    <th>Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in sale_items %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td>
+                            <strong>{{ item.medicine.display_name }}</strong>
+                            <div class="small text-muted">{{ item.medicine.code }}</div>
+                            {% if item.notes %}
+                                <div class="small text-muted mt-1">{{ item.notes }}</div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% for allocation in item.allocations.all %}
+                                <div class="small">
+                                    {{ allocation.stock_batch.batch_number }}
+                                    <span class="text-muted">× {{ allocation.quantity }}</span>
+                                </div>
+                            {% empty %}
+                                <span class="text-muted">—</span>
+                            {% endfor %}
+                        </td>
+                        <td>{{ item.quantity }}</td>
+                        <td>{{ item.unit_price|floatformat:2 }} IQD</td>
+                        <td>{{ item.discount_amount|floatformat:2 }} IQD</td>
+                        <td class="fw-semibold">{{ item.total_price|floatformat:2 }} IQD</td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-4">No sale items.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% if sale.notes or sale.status == "voided" %}
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body p-4">
+            {% if sale.notes %}
+                <h2 class="h6">Sale notes</h2>
+                <p class="mb-0">{{ sale.notes|linebreaksbr }}</p>
+            {% endif %}
+
+            {% if sale.status == "voided" %}
+                {% if sale.notes %}<hr>{% endif %}
+                <div class="alert alert-danger mb-0">
+                    <strong>Voided:</strong>
+                    {{ sale.voided_at|date:"Y-m-d H:i" }}
+                    {% if sale.voided_by %} by {{ sale.voided_by }}{% endif %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+{% endif %}
+{% endblock %}

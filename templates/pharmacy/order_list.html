@@ -1,0 +1,356 @@
+{% extends "pharmacy/base.html" %}
+{% load static %}
+
+{% block title %}Pharmacy Orders | ClinicHub{% endblock %}
+
+{% block extra_head %}
+<link
+    rel="stylesheet"
+    href="{% static 'css/pharmacy/orders.css' %}?v=1"
+>
+{% endblock %}
+
+{% block content %}
+<div class="orders-page">
+
+    <!-- Page Hero -->
+    <section class="orders-hero">
+        <div class="orders-hero-content">
+            <div class="orders-eyebrow">
+                <i class="bi bi-prescription2"></i>
+                Prescription workflow
+            </div>
+
+            <h1>Pharmacy Orders</h1>
+
+            <p>
+                Review prescriptions sent by doctors, monitor their priority,
+                and follow each order through the dispensing process.
+            </p>
+        </div>
+
+        <div class="orders-hero-summary">
+            <div class="orders-summary-icon">
+                <i class="bi bi-bag-heart"></i>
+            </div>
+
+            <div>
+                <span>Matching orders</span>
+                <strong>{{ page_obj.paginator.count|default:0 }}</strong>
+            </div>
+        </div>
+    </section>
+
+    <!-- Filter Panel -->
+    <section class="orders-filter-card">
+        <div class="orders-section-heading">
+            <div class="orders-section-icon">
+                <i class="bi bi-funnel"></i>
+            </div>
+
+            <div>
+                <h2>Search and filter</h2>
+                <p>Find orders by patient, prescription, status or pharmacy.</p>
+            </div>
+        </div>
+
+        <form method="get" class="orders-filter-form">
+            <div class="row g-3 align-items-end">
+
+                <!-- Search -->
+                <div class="col-12 col-xl-4">
+                    <label class="form-label" for="order-search">
+                        Search
+                    </label>
+
+                    <div class="orders-input-group">
+                        <i class="bi bi-search"></i>
+
+                        <input
+                            class="form-control"
+                            id="order-search"
+                            type="search"
+                            name="q"
+                            value="{{ filters.q|default:'' }}"
+                            placeholder="Order, prescription or patient"
+                            autocomplete="off"
+                        >
+                    </div>
+                </div>
+
+                <!-- Status -->
+                <div class="col-12 col-md-4 col-xl-2">
+                    <label class="form-label" for="order-status">
+                        Status
+                    </label>
+
+                    <select
+                        class="form-select"
+                        id="order-status"
+                        name="status"
+                    >
+                        <option value="">All statuses</option>
+
+                        {% for value, label in status_choices %}
+                            <option
+                                value="{{ value }}"
+                                {% if filters.status == value %}selected{% endif %}
+                            >
+                                {{ label }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Priority -->
+                <div class="col-12 col-md-4 col-xl-2">
+                    <label class="form-label" for="order-priority">
+                        Priority
+                    </label>
+
+                    <select
+                        class="form-select"
+                        id="order-priority"
+                        name="priority"
+                    >
+                        <option value="">All priorities</option>
+
+                        {% for value, label in priority_choices %}
+                            <option
+                                value="{{ value }}"
+                                {% if filters.priority == value %}selected{% endif %}
+                            >
+                                {{ label }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Pharmacy -->
+                <div class="col-12 col-md-4 col-xl-2">
+                    <label class="form-label" for="order-pharmacy">
+                        Pharmacy
+                    </label>
+
+                    <select
+                        class="form-select"
+                        id="order-pharmacy"
+                        name="pharmacy"
+                    >
+                        <option value="">All pharmacies</option>
+
+                        {% for pharmacy in pharmacies %}
+                            <option
+                                value="{{ pharmacy.pk }}"
+                                {% if filters.pharmacy == pharmacy.pk|stringformat:"s" %}selected{% endif %}
+                            >
+                                {{ pharmacy.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Buttons -->
+                <div class="col-12 col-xl-2">
+                    <div class="orders-filter-actions">
+                        <button
+                            class="btn orders-filter-button"
+                            type="submit"
+                        >
+                            <i class="bi bi-funnel-fill"></i>
+                            Filter
+                        </button>
+
+                        {% if filters.q or filters.status or filters.priority or filters.pharmacy %}
+                            <a
+                                class="btn orders-clear-button"
+                                href="{% url 'pharmacy:orders' %}"
+                                title="Clear filters"
+                            >
+                                <i class="bi bi-arrow-counterclockwise"></i>
+                            </a>
+                        {% endif %}
+                    </div>
+                </div>
+
+            </div>
+        </form>
+    </section>
+
+    <!-- Orders Table -->
+    <section class="orders-table-card">
+        <div class="orders-table-header">
+            <div class="orders-section-heading">
+                <div class="orders-section-icon">
+                    <i class="bi bi-list-check"></i>
+                </div>
+
+                <div>
+                    <h2>Orders</h2>
+                    <p>
+                        {{ page_obj.paginator.count|default:0 }}
+                        order{{ page_obj.paginator.count|pluralize }}
+                        found
+                    </p>
+                </div>
+            </div>
+
+            {% if filters.q or filters.status or filters.priority or filters.pharmacy %}
+                <span class="orders-filtered-badge">
+                    <i class="bi bi-funnel-fill"></i>
+                    Filtered results
+                </span>
+            {% endif %}
+        </div>
+
+        <div class="table-responsive">
+            <table class="table orders-table align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th scope="col">Order</th>
+                        <th scope="col">Patient</th>
+                        <th scope="col">Doctor</th>
+                        <th scope="col">Pharmacy</th>
+                        <th scope="col">Priority</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Sent</th>
+                        <th scope="col" class="text-end">Action</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for order in page_obj %}
+                        <tr>
+                            <!-- Order -->
+                            <td data-label="Order">
+                                <span class="order-number">
+                                    #{{ order.pk }}
+                                </span>
+                            </td>
+
+                            <!-- Patient -->
+                            <td data-label="Patient">
+                                <div class="orders-person">
+                                    <span class="orders-avatar patient-avatar">
+                                        <i class="bi bi-person"></i>
+                                    </span>
+
+                                    <div>
+                                        <strong>
+                                            {{ order.prescription.patient_full_name|default:"Unknown patient" }}
+                                        </strong>
+                                        <small>Patient</small>
+                                    </div>
+                                </div>
+                            </td>
+
+                            <!-- Doctor -->
+                            <td data-label="Doctor">
+                                <div class="orders-person">
+                                    <span class="orders-avatar doctor-avatar">
+                                        <i class="bi bi-heart-pulse"></i>
+                                    </span>
+
+                                    <div>
+                                        <strong>
+                                            {{ order.prescription.doctor.user|default:"—" }}
+                                        </strong>
+                                        <small>Prescribing doctor</small>
+                                    </div>
+                                </div>
+                            </td>
+
+                            <!-- Pharmacy -->
+                            <td data-label="Pharmacy">
+                                <div class="orders-pharmacy-name">
+                                    <i class="bi bi-shop"></i>
+                                    <span>{{ order.pharmacy.name|default:"—" }}</span>
+                                </div>
+                            </td>
+
+                            <!-- Priority -->
+                            <td data-label="Priority">
+                                <span class="priority priority-{{ order.priority }}">
+                                    {% if order.priority == "urgent" %}
+                                        <i class="bi bi-exclamation-triangle-fill"></i>
+                                    {% elif order.priority == "stat" %}
+                                        <i class="bi bi-lightning-charge-fill"></i>
+                                    {% else %}
+                                        <i class="bi bi-dash-circle"></i>
+                                    {% endif %}
+
+                                    {{ order.get_priority_display }}
+                                </span>
+                            </td>
+
+                            <!-- Status -->
+                            <td data-label="Status">
+                                <span class="status status-{{ order.status }}">
+                                    <span class="orders-status-dot"></span>
+                                    {{ order.get_status_display }}
+                                </span>
+                            </td>
+
+                            <!-- Date -->
+                            <td data-label="Sent">
+                                <div class="orders-date">
+                                    <strong>
+                                        {{ order.sent_at|date:"Y-m-d" }}
+                                    </strong>
+                                    <small>
+                                        <i class="bi bi-clock"></i>
+                                        {{ order.sent_at|date:"h:i A" }}
+                                    </small>
+                                </div>
+                            </td>
+
+                            <!-- Action -->
+                            <td data-label="Action" class="text-end">
+                                <a
+                                    href="{% url 'pharmacy:order_detail' order.pk %}"
+                                    class="orders-open-button"
+                                    aria-label="Open order {{ order.pk }}"
+                                >
+                                    <i class="bi bi-eye"></i>
+                                    <span>Open</span>
+                                </a>
+                            </td>
+                        </tr>
+
+                    {% empty %}
+                        <tr>
+                            <td colspan="8">
+                                <div class="orders-empty-state">
+                                    <div class="orders-empty-icon">
+                                        <i class="bi bi-inbox"></i>
+                                    </div>
+
+                                    <h3>No matching orders</h3>
+
+                                    <p>
+                                        No pharmacy orders match the selected
+                                        search and filter options.
+                                    </p>
+
+                                    {% if filters.q or filters.status or filters.priority or filters.pharmacy %}
+                                        <a
+                                            class="btn orders-empty-button"
+                                            href="{% url 'pharmacy:orders' %}"
+                                        >
+                                            <i class="bi bi-arrow-counterclockwise"></i>
+                                            Clear filters
+                                        </a>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    {% include "pharmacy/_pagination.html" %}
+
+</div>
+{% endblock %}

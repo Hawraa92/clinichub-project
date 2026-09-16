@@ -14,7 +14,10 @@ class PerformanceTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(email='stress@test.com', password='pass', username='stress')
         self.doctor = Doctor.objects.create(user=self.user, full_name='Dr. Stress', specialty='Stress')
-        self.patient = Patient.objects.create(user=self.user, full_name='Ali Stress')
+        self.patient, _ = Patient.objects.update_or_create(
+            user=self.user,
+            defaults={"full_name": "Ali Stress"},
+        )
         self.archive = PatientArchive.objects.create(
             patient=self.patient,
             doctor=self.doctor,

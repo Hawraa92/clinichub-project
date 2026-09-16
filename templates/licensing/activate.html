@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Activate License | ClinicHub{% endblock %}
+
+{% block extra_head %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'css/licensing/licensing.css' %}?v=1">
+{% endblock %}
+
+{% block content %}
+<section class="license-page">
+  <div class="container py-5">
+    <div class="activation-shell">
+      <div class="activation-main">
+        <a class="license-back" href="{% url 'licensing:status' %}">
+          <i class="bi bi-arrow-left"></i>
+          License status
+        </a>
+        <span class="license-eyebrow">
+          <i class="bi bi-key me-1"></i>
+          Secure activation
+        </span>
+        <h1>Activate ClinicHub</h1>
+        <p>
+          Paste the complete signed license supplied by the ClinicHub vendor.
+          It will be verified locally before being stored.
+        </p>
+
+        <form method="post" class="activation-form" novalidate>
+          {% csrf_token %}
+
+          {% if form.non_field_errors %}
+            <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+          {% endif %}
+
+          <label class="form-label fw-semibold"
+                 for="{{ form.license_token.id_for_label }}">
+            {{ form.license_token.label }}
+          </label>
+          {{ form.license_token }}
+          {% for error in form.license_token.errors %}
+            <div class="invalid-feedback d-block">{{ error }}</div>
+          {% endfor %}
+          <div class="form-text">{{ form.license_token.help_text }}</div>
+
+          <div class="d-flex flex-wrap gap-2 mt-4">
+            <button class="btn btn-primary" type="submit">
+              <i class="bi bi-shield-check me-1"></i>
+              Verify and activate
+            </button>
+            <a class="btn btn-outline-secondary"
+               href="{% url 'licensing:status' %}">
+              Cancel
+            </a>
+          </div>
+        </form>
+      </div>
+
+      <aside class="activation-aside">
+        <div class="aside-icon"><i class="bi bi-pc-display"></i></div>
+        <h2>This installation</h2>
+        <p>Send this ID to the vendor when requesting a license.</p>
+        <code>{{ installation.pk }}</code>
+        <a class="btn btn-outline-primary w-100 mt-3"
+           href="{% url 'licensing:installation_request' %}">
+          <i class="bi bi-download me-1"></i>
+          Download request
+        </a>
+        <div class="security-note">
+          <i class="bi bi-lock"></i>
+          The private signing key must never be placed on this server.
+        </div>
+      </aside>
+    </div>
+  </div>
+</section>
+{% endblock %}

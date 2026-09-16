@@ -1,96 +1,181 @@
 # accounts/urls.py
-from django.urls import path, reverse_lazy
-from django.contrib.auth import views as auth_views
-from .views import register, login_view, logout_view
 
-app_name = 'accounts'
+from django.contrib.auth import views as auth_views
+from django.urls import path, reverse_lazy
+from django.views.generic import RedirectView
+
+from .permissions_views import (
+    permissions_dashboard,
+    user_permissions_edit,
+)
+from .views import (
+    login_view,
+    logout_view,
+    register,
+)
+
+
+app_name = "accounts"
+
+
+LOGIN_SHOW_SIGNUP = {
+    "show_signup": True,
+}
+
+LOGIN_HIDE_SIGNUP = {
+    "show_signup": False,
+}
+
 
 urlpatterns = [
-    # -----------------------------
-    # 1. Patient public registration
-    # -----------------------------
+    # -------------------------------------------------
+    # 1) Accounts index
+    # /accounts/ -> /accounts/login/
+    # -------------------------------------------------
     path(
-        'register/',
+        "",
+        RedirectView.as_view(
+            pattern_name="accounts:login",
+            permanent=False,
+        ),
+        name="index",
+    ),
+
+    # -------------------------------------------------
+    # 2) Patient public registration
+    # -------------------------------------------------
+    path(
+        "register/",
         register,
-        name='register'
+        name="register",
     ),
 
-    # ---------------------------------------
-    # 2. Unified login (alias routes supported)
-    #    show_signup=True => يعرض رابط "إنشاء حساب"
-    # ---------------------------------------
+    # -------------------------------------------------
+    # 3) Unified login
+    # -------------------------------------------------
     path(
-        'login/',
+        "login/",
         login_view,
-        kwargs={'show_signup': True},
-        name='login'
-    ),
-    path(
-        'patient-login/',
-        login_view,
-        kwargs={'show_signup': True},  # مستخدم في home.html
-        name='patient_login'
+        LOGIN_SHOW_SIGNUP,
+        name="login",
     ),
 
-    # ------------------------------------------------
-    # 2b. (اختياري) تسجيل دخول الطاقم بدون رابط تسجيل
-    # ------------------------------------------------
     path(
-        'staff-login/',
+        "patient-login/",
         login_view,
-        kwargs={'show_signup': False},
-        name='staff_login'
+        LOGIN_SHOW_SIGNUP,
+        name="patient_login",
     ),
 
-    # 3. Logout
+    # Staff login without signup link
     path(
-        'logout/',
+        "staff-login/",
+        login_view,
+        LOGIN_HIDE_SIGNUP,
+        name="staff_login",
+    ),
+
+    # -------------------------------------------------
+    # 4) Logout
+    # -------------------------------------------------
+    path(
+        "logout/",
         logout_view,
-        name='logout'
+        name="logout",
     ),
 
     # -------------------------------------------------
-    # 4. Password reset (flow عبر البريد - نسيان كلمة المرور)
-    # مسارات Django القياسية مع قوالب مخصصة
+    # 5) Super Admin permissions management
     # -------------------------------------------------
 
-    # طلب إعادة ضبط
+    # قائمة المستخدمين وإدارة الصلاحيات
     path(
-        'password-reset/',
+        "permissions/",
+        permissions_dashboard,
+        name="permissions_dashboard",
+    ),
+
+    # تعديل صلاحيات مستخدم محدد
+    path(
+        "permissions/users/<int:user_id>/",
+        user_permissions_edit,
+        name="user_permissions_edit",
+    ),
+
+    # -------------------------------------------------
+    # 6) Password reset
+    # HTML + TXT email flow
+    # -------------------------------------------------
+    path(
+        "password-reset/",
         auth_views.PasswordResetView.as_view(
-            template_name='registration/password_reset_form.html',
-            email_template_name='registration/password_reset_email.html',
-            subject_template_name='registration/password_reset_subject.txt',
-            success_url=reverse_lazy('accounts:password_reset_done'),
+            template_name=(
+                "registration/"
+                "password_reset_form.html"
+            ),
+
+            # TXT fallback
+            email_template_name=(
+                "registration/"
+                "password_reset_email.txt"
+            ),
+
+            # HTML email
+            html_email_template_name=(
+                "registration/"
+                "password_reset_email.html"
+            ),
+
+            subject_template_name=(
+                "registration/"
+                "password_reset_subject.txt"
+            ),
+
+            success_url=reverse_lazy(
+                "accounts:password_reset_done"
+            ),
         ),
-        name='password_reset'
+        name="password_reset",
     ),
 
-    # تم إرسال البريد
     path(
-        'password-reset/done/',
+        "password-reset/done/",
         auth_views.PasswordResetDoneView.as_view(
-            template_name='registration/password_reset_done.html',
+            template_name=(
+                "registration/"
+                "password_reset_done.html"
+            ),
         ),
-        name='password_reset_done'
+        name="password_reset_done",
     ),
 
-    # رابط من البريد (uid + token)
+    # هذا الاسم مطلوب داخل رسالة إعادة تعيين كلمة المرور:
+    #
+    # {% url 'accounts:password_reset_confirm'
+    #     uidb64=uid token=token %}
     path(
-        'reset/<uidb64>/<token>/',
+        "reset/<uidb64>/<token>/",
         auth_views.PasswordResetConfirmView.as_view(
-            template_name='registration/password_reset_confirm.html',
-            success_url=reverse_lazy('accounts:password_reset_complete'),
+            template_name=(
+                "registration/"
+                "password_reset_confirm.html"
+            ),
+
+            success_url=reverse_lazy(
+                "accounts:password_reset_complete"
+            ),
         ),
-        name='password_reset_confirm'
+        name="password_reset_confirm",
     ),
 
-    # الاكتمال النهائي
     path(
-        'reset/done/',
+        "reset/done/",
         auth_views.PasswordResetCompleteView.as_view(
-            template_name='registration/password_reset_complete.html',
+            template_name=(
+                "registration/"
+                "password_reset_complete.html"
+            ),
         ),
-        name='password_reset_complete'
+        name="password_reset_complete",
     ),
 ]

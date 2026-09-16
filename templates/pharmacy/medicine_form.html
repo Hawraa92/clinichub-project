@@ -1,0 +1,191 @@
+{% extends "pharmacy/base.html" %}
+
+{% block title %}{{ page_title }} | ClinicHub{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-12 col-xl-11">
+        <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+            <div>
+                <h1 class="h2 mb-2">{{ page_title }}</h1>
+                <p class="text-secondary mb-0">{{ page_subtitle }}</p>
+            </div>
+            <a class="btn btn-outline-secondary" href="{{ cancel_url }}">
+                <i class="bi bi-arrow-left me-1"></i>
+                Back to medicines
+            </a>
+        </div>
+
+        <form method="post" novalidate>
+            {% csrf_token %}
+
+            {% if form.non_field_errors %}
+                <div class="alert alert-danger" role="alert">
+                    {% for error in form.non_field_errors %}
+                        <div>{{ error }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            <div class="row g-4">
+                <div class="col-12 col-lg-8">
+                    <div class="card pharmacy-card mb-4">
+                        <div class="card-header bg-white py-3">
+                            <h2 class="h5 mb-0">
+                                <i class="bi bi-capsule me-2 text-primary"></i>
+                                Medicine information
+                            </h2>
+                        </div>
+                        <div class="card-body p-4">
+                            <div class="row g-3">
+                                {% for field in form %}
+                                    {% if field.name != "add_to_inventory" and field.name != "reorder_level" and field.name != "target_stock" %}
+                                        <div class="{% if field.name == 'description' %}col-12{% elif field.field.widget.input_type == 'checkbox' %}col-12 col-md-4{% else %}col-12 col-md-6{% endif %}">
+                                            {% if field.field.widget.input_type == "checkbox" %}
+                                                <div class="form-check mt-md-4 pt-md-2">
+                                                    {{ field }}
+                                                    <label
+                                                        class="form-check-label fw-semibold"
+                                                        for="{{ field.id_for_label }}"
+                                                    >
+                                                        {{ field.label }}
+                                                    </label>
+                                                </div>
+                                            {% else %}
+                                                <label
+                                                    class="form-label fw-semibold"
+                                                    for="{{ field.id_for_label }}"
+                                                >
+                                                    {{ field.label }}
+                                                    {% if field.field.required %}
+                                                        <span class="text-danger">*</span>
+                                                    {% endif %}
+                                                </label>
+                                                {{ field }}
+                                            {% endif %}
+
+                                            {% if field.help_text %}
+                                                <div class="form-text">{{ field.help_text }}</div>
+                                            {% endif %}
+                                            {% for error in field.errors %}
+                                                <div class="invalid-feedback d-block">
+                                                    {{ error }}
+                                                </div>
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card pharmacy-card">
+                        <div class="card-header bg-white py-3">
+                            <h2 class="h5 mb-0">
+                                <i class="bi bi-box-seam me-2 text-primary"></i>
+                                Inventory preparation
+                            </h2>
+                        </div>
+                        <div class="card-body p-4">
+                            <div class="form-check mb-4">
+                                {{ form.add_to_inventory }}
+                                <label
+                                    class="form-check-label fw-semibold"
+                                    for="{{ form.add_to_inventory.id_for_label }}"
+                                >
+                                    {{ form.add_to_inventory.label }}
+                                </label>
+                                {% if form.add_to_inventory.help_text %}
+                                    <div class="form-text">
+                                        {{ form.add_to_inventory.help_text }}
+                                    </div>
+                                {% endif %}
+                                {% for error in form.add_to_inventory.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ error }}
+                                    </div>
+                                {% endfor %}
+                            </div>
+
+                            <div class="row g-3">
+                                <div class="col-12 col-md-6">
+                                    <label
+                                        class="form-label fw-semibold"
+                                        for="{{ form.reorder_level.id_for_label }}"
+                                    >
+                                        {{ form.reorder_level.label }}
+                                    </label>
+                                    {{ form.reorder_level }}
+                                    <div class="form-text">
+                                        {{ form.reorder_level.help_text }}
+                                    </div>
+                                    {% for error in form.reorder_level.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ error }}
+                                        </div>
+                                    {% endfor %}
+                                </div>
+
+                                <div class="col-12 col-md-6">
+                                    <label
+                                        class="form-label fw-semibold"
+                                        for="{{ form.target_stock.id_for_label }}"
+                                    >
+                                        {{ form.target_stock.label }}
+                                    </label>
+                                    {{ form.target_stock }}
+                                    <div class="form-text">
+                                        {{ form.target_stock.help_text }}
+                                    </div>
+                                    {% for error in form.target_stock.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ error }}
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-lg-4">
+                    <div class="card pharmacy-card sticky-lg-top" style="top: 90px;">
+                        <div class="card-body p-4">
+                            <h2 class="h5 mb-3">
+                                {% if is_edit %}Save medicine{% else %}Create medicine{% endif %}
+                            </h2>
+                            <p class="text-secondary">
+                                The selected pharmacy determines which hospital
+                                or standalone organization owns this catalogue entry.
+                            </p>
+
+                            <div class="alert alert-info small">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Adding the inventory record does not add physical
+                                quantity. After saving, use
+                                <strong>Receive stock</strong> to enter a batch,
+                                expiry date, quantity and prices.
+                            </div>
+
+                            {% if is_edit %}
+                                <div class="alert alert-warning small">
+                                    The owning hospital cannot be changed after
+                                    the medicine is created.
+                                </div>
+                            {% endif %}
+
+                            <button class="btn btn-primary w-100 mb-2" type="submit">
+                                <i class="bi bi-check-circle me-1"></i>
+                                {{ submit_label }}
+                            </button>
+                            <a class="btn btn-outline-secondary w-100" href="{{ cancel_url }}">
+                                Cancel
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

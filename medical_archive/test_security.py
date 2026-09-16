@@ -14,7 +14,10 @@ class SecurityTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(email='test@security.com', password='pass', username='user')
         self.doctor = Doctor.objects.create(user=self.user, full_name='Dr. Secure', specialty='Test')
-        self.patient = Patient.objects.create(user=self.user, full_name="Ali Secure")
+        self.patient, _ = Patient.objects.update_or_create(
+            user=self.user,
+            defaults={"full_name": "Ali Secure"},
+        )
         self.archive = PatientArchive.objects.create(
             patient=self.patient,
             doctor=self.doctor,

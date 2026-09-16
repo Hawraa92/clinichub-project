@@ -1,67 +1,190 @@
-{# templates/appointments/book_patient.html #}
 {% extends "base.html" %}
-{% load tz %}
+{% load static tz %}
 
 {% block title %}Book Appointment{% endblock %}
 
-{% block content %}
-<div class="container py-4">
-  <div class="row justify-content-center">
-    <div class="col-lg-8">
-      <div class="card shadow-sm border-0">
-        <div class="card-header bg-white">
-          <h3 class="m-0">Book Appointment</h3>
-        </div>
+{% block extra_head %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'css/appointments/book_patient.css' %}">
+{% endblock %}
 
-        <div class="card-body">
-          <!-- Doctor & patient info (read-only) -->
-          <div class="d-flex flex-wrap gap-3 mb-4">
-            <div class="p-2 bg-light rounded-3 flex-grow-1">
-              <div class="text-muted small">Doctor</div>
-              <div class="fw-semibold">
-                Dr. {{ doctor.user.get_full_name|default:doctor.user.username }}
-                {% if doctor.specialty %}<span class="text-muted"> — {{ doctor.specialty }}</span>{% endif %}
-              </div>
+{% block content %}
+<div class="book-appointment">
+  <div class="container">
+    <!-- Header -->
+    <div class="page-header">
+      <h1>Book Appointment</h1>
+      <p class="subtitle">
+        Schedule your consultation with Dr. {{ doctor.user.get_full_name|default:doctor.user.username }}
+      </p>
+    </div>
+
+    <div class="appointment-card">
+      <!-- Doctor & Patient Info -->
+      <div class="info-section">
+        <div class="info-row">
+          <div class="info-item">
+            <div class="info-icon">👨‍⚕️</div>
+            <div class="info-content">
+              <div class="info-label">Doctor</div>
+              <div class="info-name">Dr. {{ doctor.user.get_full_name|default:doctor.user.username }}</div>
+              {% if doctor.specialty %}
+                <div class="info-detail">{{ doctor.specialty }}</div>
+              {% endif %}
             </div>
-            <div class="p-2 bg-light rounded-3 flex-grow-1">
-              <div class="text-muted small">Patient</div>
-              <div class="fw-semibold">
+          </div>
+
+          <div class="info-item">
+            <div class="info-icon">👤</div>
+            <div class="info-content">
+              <div class="info-label">Patient</div>
+              <div class="info-name">
                 {{ patient.full_name|default:request.user.get_full_name|default:request.user.username }}
               </div>
             </div>
           </div>
+        </div>
+      </div>
 
-          {% if form.non_field_errors %}
-            <div class="alert alert-danger">
-              {% for e in form.non_field_errors %}<div>{{ e }}</div>{% endfor %}
-            </div>
-          {% endif %}
+      <!-- Display non-field errors -->
+      {% if form.non_field_errors %}
+        <div class="alert alert-error">
+          <div class="alert-icon">⚠️</div>
+          <div class="alert-message">
+            {% for e in form.non_field_errors %}<div>{{ e }}</div>{% endfor %}
+          </div>
+        </div>
+      {% endif %}
 
-          <form method="post" novalidate>
-            {% csrf_token %}
-            <div class="mb-3">
-              <label class="form-label">Preferred Time</label>
-              {{ form.scheduled_time }}
-              <div class="form-text">Choose a future time (local timezone).</div>
-              {% if form.scheduled_time.errors %}
-                <div class="invalid-feedback d-block">
-                  {% for e in form.scheduled_time.errors %}{{ e }}{% endfor %}
-                </div>
-              {% endif %}
+      <!-- Appointment Form -->
+      <form method="post" novalidate class="appointment-form" id="appointmentForm">
+        {% csrf_token %}
+
+        <!-- Date & Time Selection -->
+        <div class="form-section">
+          <div class="section-title">
+            <h3>Select Time</h3>
+            <p class="help-text">Choose your preferred appointment date and time</p>
+          </div>
+
+          <div class="form-group">
+            <label for="{{ form.scheduled_time.id_for_label }}" class="form-label">
+              Appointment Date &amp; Time
+            </label>
+
+            <div class="input-with-icon">
+              <input
+                type="datetime-local"
+                name="scheduled_time"
+                id="{{ form.scheduled_time.id_for_label }}"
+                class="datetime-input {% if form.scheduled_time.errors %}error{% endif %}"
+                {% if form.is_bound %}
+                  value="{{ form.data.scheduled_time|default:'' }}"
+                {% else %}
+                  value="{{ form.scheduled_time.value|date:'Y-m-d\\TH:i'|default:'' }}"
+                {% endif %}
+                required
+              >
+              <span class="input-icon">📅</span>
             </div>
 
-            <div class="d-flex gap-2">
-              <button class="btn btn-success px-4" type="submit">Submit Request</button>
-              <a class="btn btn-outline-secondary" href="{% url 'appointments:my_appointments' %}">My Appointments</a>
-              <a class="btn btn-outline-primary ms-auto" href="{% url 'doctor:available_doctors' %}">Back to Doctors</a>
+            {% if form.scheduled_time.errors %}
+              <div class="error-message">
+                {% for error in form.scheduled_time.errors %}
+                  <div>{{ error }}</div>
+                {% endfor %}
+              </div>
+            {% endif %}
+
+            <div class="hint">
+              You can request any time. Please choose a future time in 15-minute intervals.
             </div>
-          </form>
+          </div>
         </div>
 
-        <div class="card-footer bg-white text-muted small">
-          After submitting, your request will appear as <strong>Pending</strong> until the secretary approves it.
-          The queue number is generated upon approval.
+        <!-- Additional Notes -->
+        {% if form.notes %}
+        <div class="form-section">
+          <div class="section-title">
+            <h3>Additional Information</h3>
+            <p class="help-text">Optional details for the doctor</p>
+          </div>
+
+          <div class="form-group">
+            <label for="{{ form.notes.id_for_label }}" class="form-label">Notes (Optional)</label>
+            <textarea
+              name="notes"
+              id="{{ form.notes.id_for_label }}"
+              class="notes-input {% if form.notes.errors %}error{% endif %}"
+              rows="3"
+              maxlength="500"
+              placeholder="Describe any symptoms, concerns, or special requests..."
+            >{{ form.notes.value|default:'' }}</textarea>
+
+            {% if form.notes.errors %}
+              <div class="error-message">
+                {% for error in form.notes.errors %}
+                  <div>{{ error }}</div>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
         </div>
+        {% endif %}
+
+        <!-- Form Actions -->
+        <div class="form-actions">
+          <div class="confirmation-section">
+            <div class="confirmation-text">
+              <h4>Ready to Confirm?</h4>
+              <p>Please review your appointment details before confirming.</p>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-confirm">
+              <span class="btn-icon">✓</span> Confirm Appointment
+            </button>
+          </div>
+
+          <div class="action-buttons">
+            <a href="{% url 'appointments:my_appointments' %}" class="btn btn-secondary">
+              <span class="btn-icon">📋</span> My Appointments
+            </a>
+            <a href="{% url 'doctor:available_doctors' %}" class="btn btn-secondary">
+              <span class="btn-icon">👨‍⚕️</span> Browse Doctors
+            </a>
+          </div>
+        </div>
+      </form>
+
+      <!-- Info Note -->
+      <div class="appointment-info">
+        <div class="info-card">
+          <div class="info-icon">ℹ️</div>
+          <div class="info-content">
+            <div class="info-title">Appointment Process</div>
+            <div class="info-text">
+              After booking, your request will be <strong>Pending</strong> until approved by the clinic staff.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Progress Indicator -->
+    <div class="progress-indicator">
+      <div class="step completed">
+        <div class="step-number">1</div>
+        <div class="step-label">Select Doctor</div>
+      </div>
+      <div class="step-connector"></div>
+      <div class="step active">
+        <div class="step-number">2</div>
+        <div class="step-label">Choose Time</div>
+      </div>
+      <div class="step-connector"></div>
+      <div class="step">
+        <div class="step-number">3</div>
+        <div class="step-label">Confirmation</div>
       </div>
     </div>
   </div>
@@ -69,15 +192,196 @@
 {% endblock %}
 
 {% block extra_js %}
+{{ block.super }}
 <script>
-(function(){
-  // Set the minimum allowed value for the datetime-local input to "now"
-  const input = document.querySelector('input[type="datetime-local"]');
-  if (!input) return;
-  const d = new Date();
-  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
-  input.min = local.toISOString().slice(0, 16); // YYYY-MM-DDTHH:MM
-  input.step = 900; // 15 minutes
-})();
+document.addEventListener('DOMContentLoaded', function() {
+  const datetimeInput = document.getElementById('{{ form.scheduled_time.id_for_label }}');
+  const form = document.getElementById('appointmentForm');
+  const confirmBtn = document.querySelector('.btn-confirm');
+  if (!datetimeInput || !form) return;
+
+  function pad(n) { return String(n).padStart(2, '0'); }
+
+  function formatForInput(date) {
+    return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  }
+
+  // ✅ Minimum: now + 5 minutes, rounded up to the next 15-minute slot
+  function computeMinDateTime() {
+    const d = new Date();
+    d.setSeconds(0, 0);
+    d.setMinutes(d.getMinutes() + 5);
+
+    const m = d.getMinutes();
+    const rounded = Math.ceil(m / 15) * 15;
+
+    if (rounded >= 60) {
+      d.setHours(d.getHours() + 1);
+      d.setMinutes(0);
+    } else {
+      d.setMinutes(rounded);
+    }
+    return d;
+  }
+
+  // Apply constraints (no max -> always available)
+  datetimeInput.step = 900; // 15 minutes
+  datetimeInput.min = formatForInput(computeMinDateTime());
+
+  // Quick select buttons (optional but useful)
+  const quickWrapper = document.createElement('div');
+  quickWrapper.className = 'quick-times';
+  quickWrapper.innerHTML = `
+    <div class="quick-time-title">Quick Select (Optional):</div>
+    <div class="quick-time-buttons">
+      <button type="button" class="quick-time-btn" data-min="30">In 30 minutes</button>
+      <button type="button" class="quick-time-btn" data-min="60">In 1 hour</button>
+      <button type="button" class="quick-time-btn" data-min="180">In 3 hours</button>
+    </div>
+  `;
+  datetimeInput.parentNode.parentNode.appendChild(quickWrapper);
+
+  function clearError() {
+    datetimeInput.classList.remove('error');
+    const err = datetimeInput.parentNode.parentNode.querySelector('.error-message.inline-js');
+    if (err) err.remove();
+  }
+
+  function showError(msg) {
+    clearError();
+    datetimeInput.classList.add('error');
+    const errDiv = document.createElement('div');
+    errDiv.className = 'error-message inline-js';
+    errDiv.innerHTML = `<div class="error-icon">⚠️</div><div>${msg}</div>`;
+    datetimeInput.parentNode.parentNode.insertBefore(errDiv, datetimeInput.parentNode.nextSibling);
+    errDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  // ✅ hide any global loader so it won't "stick"
+  function hideGlobalLoader() {
+    const selectors = [
+      "#preloader", "#loader", "#pageLoader",
+      ".preloader", ".page-loader", ".loader-overlay", ".loading-overlay"
+    ];
+    selectors.forEach(sel => {
+      document.querySelectorAll(sel).forEach(el => {
+        el.style.display = "none";
+        el.classList.remove("active", "show", "visible", "is-active");
+      });
+    });
+    document.body.classList.remove("loading");
+  }
+
+  datetimeInput.addEventListener('change', () => {
+    clearError();
+    // Update min each time (user might stay on page for long)
+    datetimeInput.min = formatForInput(computeMinDateTime());
+
+    if (confirmBtn) {
+      confirmBtn.disabled = false;
+      confirmBtn.innerHTML = '<span class="btn-icon">✓</span> Confirm Appointment';
+    }
+  });
+
+  document.querySelectorAll('.quick-time-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const addMin = parseInt(btn.dataset.min || "30", 10);
+
+      const d = new Date();
+      d.setSeconds(0, 0);
+      d.setMinutes(d.getMinutes() + addMin);
+
+      // round up to next 15-min slot
+      const m = d.getMinutes();
+      const rounded = Math.ceil(m / 15) * 15;
+      if (rounded >= 60) {
+        d.setHours(d.getHours() + 1);
+        d.setMinutes(0);
+      } else {
+        d.setMinutes(rounded);
+      }
+
+      const minNow = computeMinDateTime();
+      if (d < minNow) d.setTime(minNow.getTime());
+
+      datetimeInput.value = formatForInput(d);
+      clearError();
+
+      if (confirmBtn) {
+        confirmBtn.disabled = false;
+        confirmBtn.innerHTML = '<span class="btn-icon">✓</span> Confirm Appointment';
+      }
+    });
+  });
+
+  {% if form.notes %}
+  const notesField = document.getElementById('{{ form.notes.id_for_label }}');
+  if (notesField) {
+    const counter = document.createElement('div');
+    counter.className = 'char-count';
+    counter.innerHTML = '<span class="current">0</span>/500 characters';
+    notesField.parentNode.appendChild(counter);
+
+    notesField.addEventListener('input', () => {
+      const len = notesField.value.length;
+      counter.querySelector('.current').textContent = len;
+      counter.classList.toggle('near-limit', len > 450);
+      counter.classList.toggle('over-limit', len > 500);
+    });
+
+    notesField.dispatchEvent(new Event('input'));
+  }
+  {% endif %}
+
+  // Required asterisk
+  document.querySelectorAll('input[required], textarea[required], select[required]').forEach(field => {
+    const label = field.closest('.form-group')?.querySelector('.form-label');
+    if (label && !label.innerHTML.includes('<span class="required-star">')) {
+      label.innerHTML += ' <span class="required-star">*</span>';
+    }
+  });
+
+  // ✅ Capture submit: prevent stuck loader + validate only "future time" + 15-min interval
+  form.addEventListener('submit', function(e) {
+    clearError();
+
+    if (!datetimeInput.value) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      hideGlobalLoader();
+      showError('Please select a date and time for your appointment');
+      datetimeInput.focus();
+      return;
+    }
+
+    const chosen = new Date(datetimeInput.value);
+    const minNow = computeMinDateTime();
+
+    if (chosen < minNow) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      hideGlobalLoader();
+      showError('Please choose a future time (at least a few minutes from now).');
+      datetimeInput.focus();
+      return;
+    }
+
+    const minutes = chosen.getMinutes();
+    if (minutes % 15 !== 0) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      hideGlobalLoader();
+      showError('Please select a time in 15-minute intervals (e.g., 10:00, 10:15, 10:30).');
+      datetimeInput.focus();
+      return;
+    }
+
+    // ✅ valid -> show loading state on button
+    if (confirmBtn) {
+      confirmBtn.disabled = true;
+      confirmBtn.innerHTML = '<span class="btn-icon">⏳</span> Processing...';
+    }
+  }, true);
+});
 </script>
 {% endblock %}

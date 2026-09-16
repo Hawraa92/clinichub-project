@@ -1,0 +1,1265 @@
+{% extends "base.html" %}
+
+{% block title %}
+تفاصيل {{ branch.name }} | ClinicHub
+{% endblock %}
+
+{% block extra_head %}
+<style>
+    .branch-detail-page {
+        --analytics-navy: #12345b;
+        --analytics-teal: #0d9488;
+        --analytics-teal-dark: #0f766e;
+        --analytics-blue: #2563eb;
+        --analytics-cyan: #0891b2;
+        --analytics-green: #059669;
+        --analytics-amber: #d97706;
+        --analytics-red: #dc2626;
+        --analytics-violet: #7c3aed;
+        --analytics-text: #0f172a;
+        --analytics-muted: #64748b;
+        --analytics-line: #dce5ef;
+        --analytics-surface: #ffffff;
+        --analytics-background: #f2f6fb;
+
+        min-height: calc(100vh - 60px);
+        padding: 28px 18px 48px;
+        background:
+            radial-gradient(
+                circle at top right,
+                rgba(13, 148, 136, 0.08),
+                transparent 28%
+            ),
+            var(--analytics-background);
+        color: var(--analytics-text);
+        direction: rtl;
+    }
+
+    .branch-detail-container {
+        width: min(1380px, 100%);
+        margin-inline: auto;
+    }
+
+    .branch-detail-header {
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+        padding: 26px 28px;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 22px;
+        background:
+            linear-gradient(
+                115deg,
+                #0f766e 0%,
+                #155e75 48%,
+                #172554 100%
+            );
+        box-shadow: 0 18px 45px rgba(15, 23, 42, 0.16);
+        color: #ffffff;
+    }
+
+    .branch-detail-header::after {
+        content: "";
+        position: absolute;
+        left: -85px;
+        bottom: -120px;
+        width: 290px;
+        height: 290px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.07);
+        pointer-events: none;
+    }
+
+    .branch-heading {
+        position: relative;
+        z-index: 1;
+        min-width: 0;
+    }
+
+    .branch-breadcrumb {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 12px;
+        color: rgba(255, 255, 255, 0.76);
+        font-size: 0.82rem;
+    }
+
+    .branch-breadcrumb a {
+        color: #ffffff;
+        text-decoration: none;
+        font-weight: 700;
+    }
+
+    .branch-breadcrumb a:hover {
+        text-decoration: underline;
+    }
+
+    .branch-heading h1 {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        margin: 0;
+        font-size: clamp(1.45rem, 2.5vw, 2.15rem);
+        font-weight: 900;
+        letter-spacing: -0.03em;
+    }
+
+    .branch-heading p {
+        max-width: 760px;
+        margin: 9px 0 0;
+        color: rgba(255, 255, 255, 0.82);
+        font-size: 0.92rem;
+        line-height: 1.8;
+    }
+
+    .branch-header-meta {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(125px, 1fr));
+        gap: 10px;
+        flex: 0 0 auto;
+    }
+
+    .branch-meta-box {
+        min-width: 135px;
+        padding: 12px 14px;
+        border: 1px solid rgba(255, 255, 255, 0.22);
+        border-radius: 13px;
+        background: rgba(255, 255, 255, 0.09);
+        backdrop-filter: blur(7px);
+    }
+
+    .branch-meta-box span,
+    .branch-meta-box strong {
+        display: block;
+    }
+
+    .branch-meta-box span {
+        margin-bottom: 5px;
+        color: rgba(255, 255, 255, 0.68);
+        font-size: 0.72rem;
+    }
+
+    .branch-meta-box strong {
+        color: #ffffff;
+        font-size: 0.86rem;
+        white-space: nowrap;
+    }
+
+    .branch-toolbar {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 16px;
+        margin-top: 16px;
+        padding: 16px 18px;
+        border: 1px solid var(--analytics-line);
+        border-radius: 17px;
+        background: var(--analytics-surface);
+        box-shadow: 0 8px 25px rgba(15, 23, 42, 0.05);
+    }
+
+    .branch-period-form {
+        display: flex;
+        align-items: end;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .branch-field {
+        display: grid;
+        gap: 6px;
+    }
+
+    .branch-field label {
+        color: var(--analytics-muted);
+        font-size: 0.75rem;
+        font-weight: 800;
+    }
+
+    .branch-field select {
+        min-width: 185px;
+        height: 42px;
+        padding: 0 12px;
+        border: 1px solid #cfd9e6;
+        border-radius: 10px;
+        outline: none;
+        background: #ffffff;
+        color: var(--analytics-text);
+        font-size: 0.84rem;
+        font-weight: 700;
+    }
+
+    .branch-field select:focus {
+        border-color: var(--analytics-teal);
+        box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.12);
+    }
+
+    .branch-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        min-height: 42px;
+        padding: 0 16px;
+        border: 0;
+        border-radius: 10px;
+        background: var(--analytics-teal);
+        color: #ffffff;
+        font-size: 0.82rem;
+        font-weight: 800;
+        text-decoration: none;
+        cursor: pointer;
+        transition:
+            transform 0.18s ease,
+            background 0.18s ease,
+            box-shadow 0.18s ease;
+    }
+
+    .branch-button:hover {
+        transform: translateY(-1px);
+        background: var(--analytics-teal-dark);
+        box-shadow: 0 8px 18px rgba(13, 148, 136, 0.18);
+        color: #ffffff;
+    }
+
+    .branch-button-secondary {
+        border: 1px solid #d3deea;
+        background: #f8fafc;
+        color: #334155;
+    }
+
+    .branch-button-secondary:hover {
+        background: #eef3f8;
+        color: #0f172a;
+        box-shadow: none;
+    }
+
+    .branch-kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 16px;
+    }
+
+    .branch-kpi {
+        position: relative;
+        overflow: hidden;
+        min-height: 145px;
+        padding: 17px;
+        border: 1px solid var(--analytics-line);
+        border-radius: 17px;
+        background: var(--analytics-surface);
+        box-shadow: 0 8px 25px rgba(15, 23, 42, 0.05);
+    }
+
+    .branch-kpi::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 4px;
+        height: 100%;
+        background: var(--kpi-color, var(--analytics-blue));
+    }
+
+    .branch-kpi-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 39px;
+        height: 39px;
+        margin-bottom: 12px;
+        border-radius: 11px;
+        background: color-mix(
+            in srgb,
+            var(--kpi-color, var(--analytics-blue)) 12%,
+            white
+        );
+        color: var(--kpi-color, var(--analytics-blue));
+        font-size: 1rem;
+    }
+
+    .branch-kpi-label,
+    .branch-kpi-note {
+        display: block;
+    }
+
+    .branch-kpi-label {
+        color: var(--analytics-muted);
+        font-size: 0.74rem;
+        font-weight: 750;
+    }
+
+    .branch-kpi-value {
+        display: block;
+        margin-top: 5px;
+        color: var(--analytics-text);
+        font-size: 1.65rem;
+        font-weight: 900;
+        line-height: 1.25;
+    }
+
+    .branch-kpi-note {
+        margin-top: 7px;
+        color: #94a3b8;
+        font-size: 0.68rem;
+        line-height: 1.55;
+    }
+
+    .kpi-total {
+        --kpi-color: var(--analytics-blue);
+    }
+
+    .kpi-completed {
+        --kpi-color: var(--analytics-green);
+    }
+
+    .kpi-overdue {
+        --kpi-color: var(--analytics-red);
+    }
+
+    .kpi-patients {
+        --kpi-color: var(--analytics-cyan);
+    }
+
+    .kpi-oldest {
+        --kpi-color: var(--analytics-amber);
+    }
+
+    .kpi-today {
+        --kpi-color: var(--analytics-violet);
+    }
+
+    .branch-action-card {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 16px;
+        margin-top: 16px;
+        padding: 20px 22px;
+        border: 1px solid var(--action-border, #cbd5e1);
+        border-radius: 18px;
+        background: var(--action-bg, #ffffff);
+        box-shadow: 0 8px 25px rgba(15, 23, 42, 0.05);
+    }
+
+    .branch-action-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 50px;
+        height: 50px;
+        border-radius: 15px;
+        background: var(--action-icon-bg, #e2e8f0);
+        color: var(--action-color, #475569);
+        font-size: 1.25rem;
+    }
+
+    .branch-action-content h2 {
+        margin: 0;
+        color: var(--analytics-text);
+        font-size: 1rem;
+        font-weight: 900;
+    }
+
+    .branch-action-content p {
+        margin: 6px 0 0;
+        color: #475569;
+        font-size: 0.82rem;
+        line-height: 1.75;
+    }
+
+    .branch-action-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: var(--action-icon-bg, #e2e8f0);
+        color: var(--action-color, #475569);
+        font-size: 0.76rem;
+        font-weight: 900;
+        white-space: nowrap;
+    }
+
+    .action-plan--healthy {
+        --action-bg: #f0fdf8;
+        --action-border: #a7f3d0;
+        --action-icon-bg: #d1fae5;
+        --action-color: #047857;
+    }
+
+    .action-plan--attention {
+        --action-bg: #fffbeb;
+        --action-border: #fde68a;
+        --action-icon-bg: #fef3c7;
+        --action-color: #b45309;
+    }
+
+    .action-plan--warning {
+        --action-bg: #fff7ed;
+        --action-border: #fed7aa;
+        --action-icon-bg: #ffedd5;
+        --action-color: #c2410c;
+    }
+
+    .action-plan--critical {
+        --action-bg: #fff1f2;
+        --action-border: #fecdd3;
+        --action-icon-bg: #ffe4e6;
+        --action-color: #be123c;
+    }
+
+    .branch-table-card {
+        margin-top: 16px;
+        border: 1px solid var(--analytics-line);
+        border-radius: 20px;
+        background: var(--analytics-surface);
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.055);
+        overflow: hidden;
+    }
+
+    .branch-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 15px;
+        padding: 19px 22px;
+        border-bottom: 1px solid var(--analytics-line);
+    }
+
+    .branch-card-title {
+        min-width: 0;
+    }
+
+    .branch-card-title h2 {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        margin: 0;
+        color: var(--analytics-text);
+        font-size: 1rem;
+        font-weight: 900;
+    }
+
+    .branch-card-title p {
+        margin: 6px 0 0;
+        color: var(--analytics-muted);
+        font-size: 0.75rem;
+    }
+
+    .branch-result-count {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 7px 11px;
+        border-radius: 999px;
+        background: #fff1f2;
+        color: #be123c;
+        font-size: 0.74rem;
+        font-weight: 900;
+        white-space: nowrap;
+    }
+
+    .branch-table-scroll {
+        width: 100%;
+        overflow-x: auto;
+    }
+
+    .branch-table {
+        width: 100%;
+        min-width: 1000px;
+        border-collapse: collapse;
+    }
+
+    .branch-table th,
+    .branch-table td {
+        padding: 14px 16px;
+        border-bottom: 1px solid #e8eef5;
+        text-align: right;
+        vertical-align: middle;
+    }
+
+    .branch-table th {
+        background: #f8fafc;
+        color: #64748b;
+        font-size: 0.72rem;
+        font-weight: 850;
+        white-space: nowrap;
+    }
+
+    .branch-table td {
+        color: #334155;
+        font-size: 0.78rem;
+    }
+
+    .branch-table tbody tr {
+        transition: background 0.16s ease;
+    }
+
+    .branch-table tbody tr:hover {
+        background: #f8fbfe;
+    }
+
+    .branch-table tbody tr:last-child td {
+        border-bottom: 0;
+    }
+
+    .appointment-number {
+        color: #64748b;
+        font-weight: 850;
+        direction: ltr;
+        text-align: right;
+    }
+
+    .entity-cell {
+        display: grid;
+        gap: 4px;
+    }
+
+    .entity-cell strong {
+        color: #0f172a;
+        font-size: 0.8rem;
+        font-weight: 850;
+    }
+
+    .entity-cell small {
+        color: #94a3b8;
+        font-size: 0.67rem;
+    }
+
+    .date-cell {
+        display: grid;
+        gap: 4px;
+    }
+
+    .date-cell strong {
+        color: #0f172a;
+        font-size: 0.79rem;
+    }
+
+    .date-cell span {
+        color: #64748b;
+        font-size: 0.69rem;
+        direction: ltr;
+        text-align: right;
+    }
+
+    .delay-badge,
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 9px;
+        border-radius: 999px;
+        font-size: 0.69rem;
+        font-weight: 900;
+        white-space: nowrap;
+    }
+
+    .delay-badge--attention {
+        background: #fef3c7;
+        color: #a16207;
+    }
+
+    .delay-badge--warning {
+        background: #ffedd5;
+        color: #c2410c;
+    }
+
+    .delay-badge--critical {
+        background: #ffe4e6;
+        color: #be123c;
+    }
+
+    .status-badge {
+        background: #fff7ed;
+        color: #c2410c;
+    }
+
+    .currency-value {
+        color: #0f766e;
+        font-weight: 900;
+        white-space: nowrap;
+    }
+
+    .branch-empty-state {
+        display: grid;
+        justify-items: center;
+        padding: 55px 20px 60px;
+        text-align: center;
+    }
+
+    .branch-empty-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 68px;
+        height: 68px;
+        margin-bottom: 15px;
+        border-radius: 20px;
+        background: #d1fae5;
+        color: #047857;
+        font-size: 1.6rem;
+    }
+
+    .branch-empty-state h3 {
+        margin: 0;
+        color: #0f172a;
+        font-size: 1rem;
+        font-weight: 900;
+    }
+
+    .branch-empty-state p {
+        max-width: 510px;
+        margin: 8px 0 0;
+        color: #64748b;
+        font-size: 0.79rem;
+        line-height: 1.75;
+    }
+
+    .branch-pagination {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 16px 20px;
+        border-top: 1px solid var(--analytics-line);
+        background: #fbfdff;
+    }
+
+    .pagination-status {
+        color: #64748b;
+        font-size: 0.74rem;
+        font-weight: 750;
+    }
+
+    .pagination-actions {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+    }
+
+    .pagination-link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 37px;
+        height: 37px;
+        padding: 0 10px;
+        border: 1px solid #d7e1ec;
+        border-radius: 9px;
+        background: #ffffff;
+        color: #334155;
+        font-size: 0.72rem;
+        font-weight: 850;
+        text-decoration: none;
+    }
+
+    .pagination-link:hover {
+        border-color: #99f6e4;
+        background: #f0fdfa;
+        color: #0f766e;
+    }
+
+    .pagination-current {
+        border-color: #0d9488;
+        background: #0d9488;
+        color: #ffffff;
+    }
+
+    .branch-detail-footnote {
+        display: flex;
+        align-items: flex-start;
+        gap: 9px;
+        margin-top: 14px;
+        padding: 13px 15px;
+        border: 1px dashed #cbd5e1;
+        border-radius: 13px;
+        background: rgba(255, 255, 255, 0.68);
+        color: #64748b;
+        font-size: 0.72rem;
+        line-height: 1.7;
+    }
+
+    .branch-detail-footnote i {
+        margin-top: 2px;
+        color: #0d9488;
+    }
+
+    @media (max-width: 1180px) {
+        .branch-kpi-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+    }
+
+    @media (max-width: 850px) {
+        .branch-detail-header,
+        .branch-toolbar {
+            align-items: stretch;
+            flex-direction: column;
+        }
+
+        .branch-header-meta {
+            width: 100%;
+        }
+
+        .branch-period-form {
+            width: 100%;
+        }
+
+        .branch-field {
+            flex: 1 1 190px;
+        }
+
+        .branch-field select {
+            width: 100%;
+            min-width: 0;
+        }
+
+        .branch-action-card {
+            grid-template-columns: auto minmax(0, 1fr);
+        }
+
+        .branch-action-badge {
+            grid-column: 1 / -1;
+            justify-self: start;
+        }
+    }
+
+    @media (max-width: 620px) {
+        .branch-detail-page {
+            padding: 16px 10px 35px;
+        }
+
+        .branch-detail-header {
+            padding: 21px 18px;
+            border-radius: 17px;
+        }
+
+        .branch-header-meta,
+        .branch-kpi-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .branch-meta-box {
+            min-width: 0;
+        }
+
+        .branch-kpi {
+            min-height: 132px;
+            padding: 14px;
+        }
+
+        .branch-kpi-value {
+            font-size: 1.35rem;
+        }
+
+        .branch-action-card {
+            padding: 17px;
+        }
+
+        .branch-card-header,
+        .branch-pagination {
+            align-items: stretch;
+            flex-direction: column;
+        }
+
+        .pagination-actions {
+            justify-content: space-between;
+        }
+    }
+
+    @media (max-width: 410px) {
+        .branch-header-meta,
+        .branch-kpi-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .branch-period-form,
+        .branch-period-form .branch-button {
+            width: 100%;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<main class="branch-detail-page">
+    <div class="branch-detail-container">
+
+        <section class="branch-detail-header">
+            <div class="branch-heading">
+                <nav
+                    class="branch-breadcrumb"
+                    aria-label="مسار الصفحة"
+                >
+                    <a
+                        href="{% url 'analytics:dashboard' %}?{{ dashboard_query }}"
+                    >
+                        لوحة التحليلات
+                    </a>
+
+                    <i class="bi bi-chevron-left"></i>
+                    <span>{{ hospital.name }}</span>
+                    <i class="bi bi-chevron-left"></i>
+                    <span>{{ branch.name }}</span>
+                </nav>
+
+                <h1>
+                    <i class="bi bi-building-check"></i>
+                    مركز متابعة {{ branch.name }}
+                </h1>
+
+                <p>
+                    شاشة تنفيذية لمراجعة صحة الفرع، ومعرفة المواعيد
+                    المتأخرة، وترتيب الحالات التي تحتاج تدخلاً سريعاً.
+                </p>
+            </div>
+
+            <div class="branch-header-meta">
+                <div class="branch-meta-box">
+                    <span>الفترة التحليلية</span>
+                    <strong>
+                        {{ start_date|date:"d/m/Y" }}
+                        -
+                        {{ today|date:"d/m/Y" }}
+                    </strong>
+                </div>
+
+                <div class="branch-meta-box">
+                    <span>آخر تحديث</span>
+                    <strong>{% now "d/m/Y H:i" %}</strong>
+                </div>
+            </div>
+        </section>
+
+        <section class="branch-toolbar">
+            <form method="get" class="branch-period-form">
+                <div class="branch-field">
+                    <label for="days">
+                        الفترة الزمنية
+                    </label>
+
+                    <select id="days" name="days">
+                        <option
+                            value="7"
+                            {% if selected_days == 7 %}selected{% endif %}
+                        >
+                            آخر 7 أيام
+                        </option>
+
+                        <option
+                            value="30"
+                            {% if selected_days == 30 %}selected{% endif %}
+                        >
+                            آخر 30 يومًا
+                        </option>
+
+                        <option
+                            value="90"
+                            {% if selected_days == 90 %}selected{% endif %}
+                        >
+                            آخر 90 يومًا
+                        </option>
+
+                        <option
+                            value="180"
+                            {% if selected_days == 180 %}selected{% endif %}
+                        >
+                            آخر 6 أشهر
+                        </option>
+
+                        <option
+                            value="365"
+                            {% if selected_days == 365 %}selected{% endif %}
+                        >
+                            آخر سنة
+                        </option>
+                    </select>
+                </div>
+
+                <button type="submit" class="branch-button">
+                    <i class="bi bi-funnel"></i>
+                    تطبيق الفترة
+                </button>
+            </form>
+
+            <a
+                href="{% url 'analytics:dashboard' %}?{{ dashboard_query }}"
+                class="branch-button branch-button-secondary"
+            >
+                <i class="bi bi-arrow-right"></i>
+                العودة للوحة المركزية
+            </a>
+        </section>
+
+        <section
+            class="branch-kpi-grid"
+            aria-label="مؤشرات أداء الفرع"
+        >
+            <article class="branch-kpi kpi-total">
+                <span class="branch-kpi-icon">
+                    <i class="bi bi-calendar2-week"></i>
+                </span>
+
+                <span class="branch-kpi-label">
+                    مواعيد الفترة
+                </span>
+
+                <strong class="branch-kpi-value">
+                    {{ period_stats.total }}
+                </strong>
+
+                <span class="branch-kpi-note">
+                    خلال آخر {{ selected_days }} يومًا
+                </span>
+            </article>
+
+            <article class="branch-kpi kpi-completed">
+                <span class="branch-kpi-icon">
+                    <i class="bi bi-check2-circle"></i>
+                </span>
+
+                <span class="branch-kpi-label">
+                    نسبة الإنجاز
+                </span>
+
+                <strong class="branch-kpi-value">
+                    {{ period_stats.completion_rate|floatformat:1 }}%
+                </strong>
+
+                <span class="branch-kpi-note">
+                    {{ period_stats.completed }} موعدًا مكتملاً
+                </span>
+            </article>
+
+            <article class="branch-kpi kpi-overdue">
+                <span class="branch-kpi-icon">
+                    <i class="bi bi-exclamation-octagon"></i>
+                </span>
+
+                <span class="branch-kpi-label">
+                    المواعيد المتأخرة
+                </span>
+
+                <strong class="branch-kpi-value">
+                    {{ overdue_count }}
+                </strong>
+
+                <span class="branch-kpi-note">
+                    معلقة وتجاوز تاريخها
+                </span>
+            </article>
+
+            <article class="branch-kpi kpi-patients">
+                <span class="branch-kpi-icon">
+                    <i class="bi bi-people"></i>
+                </span>
+
+                <span class="branch-kpi-label">
+                    المرضى المتأثرون
+                </span>
+
+                <strong class="branch-kpi-value">
+                    {{ overdue_unique_patients }}
+                </strong>
+
+                <span class="branch-kpi-note">
+                    مرضى لديهم مواعيد متأخرة
+                </span>
+            </article>
+
+            <article class="branch-kpi kpi-oldest">
+                <span class="branch-kpi-icon">
+                    <i class="bi bi-hourglass-split"></i>
+                </span>
+
+                <span class="branch-kpi-label">
+                    أعلى مدة تأخير
+                </span>
+
+                <strong class="branch-kpi-value">
+                    {{ max_days_overdue }}
+                    <small>يوم</small>
+                </strong>
+
+                <span class="branch-kpi-note">
+                    {% if oldest_overdue_date %}
+                        منذ {{ oldest_overdue_date|date:"d/m/Y" }}
+                    {% else %}
+                        لا يوجد تأخير حاليًا
+                    {% endif %}
+                </span>
+            </article>
+
+            <article class="branch-kpi kpi-today">
+                <span class="branch-kpi-icon">
+                    <i class="bi bi-clock-history"></i>
+                </span>
+
+                <span class="branch-kpi-label">
+                    معلقة اليوم
+                </span>
+
+                <strong class="branch-kpi-value">
+                    {{ pending_today }}
+                </strong>
+
+                <span class="branch-kpi-note">
+                    تحتاج متابعة خلال اليوم
+                </span>
+            </article>
+        </section>
+
+        <section
+            class="
+                branch-action-card
+                action-plan--{{ action_plan.level }}
+            "
+        >
+            <span class="branch-action-icon">
+                {% if action_plan.level == "critical" %}
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                {% elif action_plan.level == "warning" %}
+                    <i class="bi bi-bell-fill"></i>
+                {% elif action_plan.level == "attention" %}
+                    <i class="bi bi-info-circle-fill"></i>
+                {% else %}
+                    <i class="bi bi-shield-check"></i>
+                {% endif %}
+            </span>
+
+            <div class="branch-action-content">
+                <h2>{{ action_plan.title }}</h2>
+                <p>{{ action_plan.recommendation }}</p>
+            </div>
+
+            <span class="branch-action-badge">
+                <i class="bi bi-activity"></i>
+                الأولوية: {{ action_plan.label }}
+            </span>
+        </section>
+
+        <section class="branch-table-card">
+            <header class="branch-card-header">
+                <div class="branch-card-title">
+                    <h2>
+                        <i class="bi bi-list-check"></i>
+                        قائمة المواعيد المتأخرة
+                    </h2>
+
+                    <p>
+                        مرتبة من الأقدم إلى الأحدث لتسهيل بدء المعالجة.
+                    </p>
+                </div>
+
+                <span class="branch-result-count">
+                    <i class="bi bi-exclamation-circle"></i>
+                    {{ overdue_count }} حالة
+                </span>
+            </header>
+
+            {% if page_obj.object_list %}
+                <div class="branch-table-scroll">
+                    <table class="branch-table">
+                        <thead>
+                            <tr>
+                                <th>رقم الموعد</th>
+                                <th>المريض</th>
+                                <th>الطبيب</th>
+                                <th>تاريخ ووقت الموعد</th>
+                                <th>مدة التأخير</th>
+                                <th>مستوى الحالة</th>
+                                <th>المبلغ</th>
+                                <th>الحالة الحالية</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            {% for appointment in page_obj.object_list %}
+                                <tr>
+                                    <td>
+                                        <span class="appointment-number">
+                                            #{{ appointment.pk }}
+                                        </span>
+                                    </td>
+
+                                    <td>
+                                        <div class="entity-cell">
+                                            <strong>
+                                                {{ appointment.patient }}
+                                            </strong>
+
+                                            <small>
+                                                رقم المريض:
+                                                {{ appointment.patient_id }}
+                                            </small>
+                                        </div>
+                                    </td>
+
+                                    <td>
+                                        <div class="entity-cell">
+                                            <strong>
+                                                {% if appointment.doctor.full_name %}
+                                                    {{ appointment.doctor.full_name }}
+                                                {% else %}
+                                                    {{ appointment.doctor }}
+                                                {% endif %}
+                                            </strong>
+
+                                            <small>
+                                                رقم الطبيب:
+                                                {{ appointment.doctor_id }}
+                                            </small>
+                                        </div>
+                                    </td>
+
+                                    <td>
+                                        <div class="date-cell">
+                                            <strong>
+                                                {{ appointment.scheduled_day|date:"d/m/Y" }}
+                                            </strong>
+
+                                            <span>
+                                                {% if appointment.scheduled_time %}
+                                                    {{ appointment.scheduled_time|date:"h:i A" }}
+                                                {% else %}
+                                                    الوقت غير محدد
+                                                {% endif %}
+                                            </span>
+                                        </div>
+                                    </td>
+
+                                    <td>
+                                        <strong>
+                                            {{ appointment.days_overdue }}
+                                            يوم
+                                        </strong>
+                                    </td>
+
+                                    <td>
+                                        <span
+                                            class="
+                                                delay-badge
+                                                delay-badge--{{ appointment.delay_level }}
+                                            "
+                                        >
+                                            <i class="bi bi-circle-fill"></i>
+                                            {{ appointment.delay_label }}
+                                        </span>
+                                    </td>
+
+                                    <td>
+                                        <span class="currency-value">
+                                            {{ appointment.iqd_amount|floatformat:0 }}
+                                            د.ع
+                                        </span>
+                                    </td>
+
+                                    <td>
+                                        <span class="status-badge">
+                                            <i class="bi bi-hourglass-split"></i>
+                                            قيد الانتظار
+                                        </span>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                {% if page_obj.paginator.num_pages > 1 %}
+                    <nav
+                        class="branch-pagination"
+                        aria-label="التنقل بين صفحات المواعيد"
+                    >
+                        <span class="pagination-status">
+                            الصفحة {{ page_obj.number }}
+                            من {{ page_obj.paginator.num_pages }}
+                            —
+                            إجمالي {{ page_obj.paginator.count }} موعد
+                        </span>
+
+                        <div class="pagination-actions">
+                            {% if page_obj.has_previous %}
+                                <a
+                                    class="pagination-link"
+                                    href="?{{ pagination_query }}&page=1"
+                                >
+                                    الأولى
+                                </a>
+
+                                <a
+                                    class="pagination-link"
+                                    href="?{{ pagination_query }}&page={{ page_obj.previous_page_number }}"
+                                    aria-label="الصفحة السابقة"
+                                >
+                                    <i class="bi bi-chevron-right"></i>
+                                </a>
+                            {% endif %}
+
+                            <span
+                                class="
+                                    pagination-link
+                                    pagination-current
+                                "
+                            >
+                                {{ page_obj.number }}
+                            </span>
+
+                            {% if page_obj.has_next %}
+                                <a
+                                    class="pagination-link"
+                                    href="?{{ pagination_query }}&page={{ page_obj.next_page_number }}"
+                                    aria-label="الصفحة التالية"
+                                >
+                                    <i class="bi bi-chevron-left"></i>
+                                </a>
+
+                                <a
+                                    class="pagination-link"
+                                    href="?{{ pagination_query }}&page={{ page_obj.paginator.num_pages }}"
+                                >
+                                    الأخيرة
+                                </a>
+                            {% endif %}
+                        </div>
+                    </nav>
+                {% endif %}
+            {% else %}
+                <div class="branch-empty-state">
+                    <span class="branch-empty-icon">
+                        <i class="bi bi-check2-all"></i>
+                    </span>
+
+                    <h3>الفرع لا يحتوي مواعيد متأخرة</h3>
+
+                    <p>
+                        جميع المواعيد ضمن الفترة المختارة تمت متابعتها،
+                        ولا توجد حالات معلقة تجاوزت تاريخها.
+                    </p>
+                </div>
+            {% endif %}
+        </section>
+
+        <div class="branch-detail-footnote">
+            <i class="bi bi-info-circle"></i>
+
+            <span>
+                تُعد الحالة متأخرة عندما تبقى
+                <strong>قيد الانتظار</strong>
+                بعد تجاوز تاريخ الموعد. تغيير حالة الموعد أو إعادة
+                جدولته سيحدّث هذه النتائج تلقائياً.
+            </span>
+        </div>
+    </div>
+</main>
+{% endblock %}

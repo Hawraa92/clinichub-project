@@ -1,0 +1,9 @@
+# Keep disabled until a valid license is installed.
+LICENSE_ENFORCEMENT_ENABLED=0
+LICENSE_INSTALLATION_NAME=Customer ClinicHub
+
+# Leave blank for fully offline signed licenses.
+LICENSE_SERVER_URL=
+LICENSE_SERVER_API_KEY=
+LICENSE_ONLINE_TIMEOUT=5
+LICENSE_ONLINE_CHECK_HOURS=24

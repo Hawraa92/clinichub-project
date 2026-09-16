@@ -1,11 +1,15 @@
+ة
+/
+prescription_list.html
+
+
+
+
 {% extends "base.html" %}
 {% load static %}
 
 {% block head %}
-  <!-- CSS -->
   <link rel="stylesheet" href="{% static 'css/prescription/prescription_list.css' %}">
-  
-  <!-- jQuery & DataTables CSS (إذا كنت تريد تضمينها هنا بدلًا من footer) -->
   <link rel="stylesheet" href="https://cdn.datatables.net/1.13.5/css/dataTables.bootstrap5.min.css">
 {% endblock head %}
 
@@ -17,11 +21,14 @@
       <h1 class="display-6 fw-bold text-primary">Prescription Management</h1>
       <p class="text-muted">Manage patient prescriptions efficiently</p>
     </div>
-    <div>
-      <a href="{% url 'prescription:new_prescription' %}" class="btn btn-primary">
-        <i class="bi bi-plus-circle me-2"></i>New Prescription
-      </a>
-    </div>
+
+    {% if perms.prescription.add_prescription %}
+      <div>
+        <a href="{% url 'prescription:new_prescription' %}" class="btn btn-primary">
+          <i class="bi bi-plus-circle me-2"></i>New Prescription
+        </a>
+      </div>
+    {% endif %}
   </div>
 
   <!-- Control Panel -->
@@ -39,6 +46,7 @@
               id="customSearch"
               class="form-control border-start-0"
               placeholder="Search prescriptions..."
+              autocomplete="off"
             >
           </div>
         </div>
@@ -49,7 +57,7 @@
             <select class="form-select me-2" id="doctorFilter">
               <option value="">All Doctors</option>
               {% for doctor in doctors %}
-              <option value="{{ doctor.id }}">Dr. {{ doctor.full_name }}</option>
+                <option value="{{ doctor.id }}">Dr. {{ doctor.full_name }}</option>
               {% endfor %}
             </select>
 
@@ -65,10 +73,22 @@
         <!-- View Options -->
         <div class="col-md-3 text-end">
           <div class="btn-group">
-            <button type="button" class="btn btn-outline-secondary active view-option" data-view="table">
+            <button
+              type="button"
+              class="btn btn-outline-secondary active view-option"
+              data-view="table"
+              aria-label="Table view"
+              title="Table view"
+            >
               <i class="bi bi-list"></i>
             </button>
-            <button type="button" class="btn btn-outline-secondary view-option" data-view="grid">
+            <button
+              type="button"
+              class="btn btn-outline-secondary view-option"
+              data-view="grid"
+              aria-label="Grid view"
+              title="Grid view"
+            >
               <i class="bi bi-grid"></i>
             </button>
           </div>
@@ -95,56 +115,86 @@
             </thead>
             <tbody>
               {% for pres in prescriptions %}
-              <tr 
-                data-doctor-id="{{ pres.doctor.id }}"
-                data-date="{{ pres.date_issued|date:'Y-m-d' }}"
-              >
-                <td>{{ pres.pk }}</td>
-                <td>
-                  <div class="d-flex align-items-center">
-                    <div class="avatar-sm bg-light-primary rounded-circle me-2 d-flex align-items-center justify-content-center">
-                      <i class="bi bi-person-fill fs-5"></i>
+                <tr
+                  data-doctor-id="{{ pres.doctor.id }}"
+                  data-date="{{ pres.date_issued|date:'Y-m-d' }}"
+                >
+                  <td>{{ pres.pk }}</td>
+                  <td>
+                    <div class="d-flex align-items-center">
+                      <div class="avatar-sm bg-light-primary rounded-circle me-2 d-flex align-items-center justify-content-center">
+                        <i class="bi bi-person-fill fs-5"></i>
+                      </div>
+                      <div>
+                        <div class="fw-medium">{{ pres.patient_full_name|default:"—" }}</div>
+                        <div class="text-muted small">{{ pres.appointment.patient.phone|default:"—" }}</div>
+                      </div>
                     </div>
-                    <div>
-                      <div class="fw-medium">{{ pres.patient_full_name }}</div>
-                      <div class="text-muted small">{{ pres.appointment.patient.phone }}</div>
+                  </td>
+                  <td>
+                    <div class="d-flex align-items-center">
+                      <div class="avatar-sm bg-light-info rounded-circle me-2 d-flex align-items-center justify-content-center">
+                        <i class="bi bi-heart-pulse-fill fs-5"></i>
+                      </div>
+                      <div>
+                        <div>Dr. {{ pres.doctor.full_name|default:"—" }}</div>
+                        <div class="text-muted small">{{ pres.doctor.specialization|default:"—" }}</div>
+                      </div>
                     </div>
-                  </div>
-                </td>
-                <td>
-                  <div class="d-flex align-items-center">
-                    <div class="avatar-sm bg-light-info rounded-circle me-2 d-flex align-items-center justify-content-center">
-                      <i class="bi bi-heart-pulse-fill fs-5"></i>
+                  </td>
+                  <td>
+                    <div class="fw-medium">{{ pres.date_issued|date:"Y-m-d" }}</div>
+                    <div class="text-muted small">{{ pres.date_issued|date:"h:i A" }}</div>
+                  </td>
+                  <td>
+                    <span class="badge bg-success-subtle text-success">
+                      <i class="bi bi-check-circle-fill me-1"></i>Active
+                    </span>
+                  </td>
+                  <td class="text-end">
+                    <div class="d-flex justify-content-end">
+                      {% if perms.prescription.view_prescription %}
+                        <a
+                          href="{% url 'prescription:prescription_detail' pres.pk %}"
+                          class="btn btn-sm btn-outline-primary ms-2"
+                          title="View"
+                          aria-label="View prescription {{ pres.pk }}"
+                        >
+                          <i class="bi bi-eye-fill"></i>
+                        </a>
+                      {% endif %}
+
+                      {% if perms.prescription.change_prescription %}
+                        <a
+                          href="{% url 'prescription:edit' pres.pk %}"
+                          class="btn btn-sm btn-outline-warning ms-2"
+                          title="Edit"
+                          aria-label="Edit prescription {{ pres.pk }}"
+                        >
+                          <i class="bi bi-pencil-fill"></i>
+                        </a>
+                      {% endif %}
+
+                      {% if perms.prescription.delete_prescription %}
+                        <a
+                          href="{% url 'prescription:delete' pres.pk %}"
+                          class="btn btn-sm btn-outline-danger ms-2"
+                          title="Delete"
+                          aria-label="Delete prescription {{ pres.pk }}"
+                          onclick="return confirm('Are you sure you want to delete this prescription?');"
+                        >
+                          <i class="bi bi-trash-fill"></i>
+                        </a>
+                      {% endif %}
                     </div>
-                    <div>
-                      <div>Dr. {{ pres.doctor.full_name }}</div>
-                      <div class="text-muted small">{{ pres.doctor.specialization }}</div>
-                    </div>
-                  </div>
-                </td>
-                <td>
-                  <div class="fw-medium">{{ pres.date_issued|date:"Y-m-d" }}</div>
-                  <div class="text-muted small">{{ pres.date_issued|date:"h:i A" }}</div>
-                </td>
-                <td>
-                  <span class="badge bg-success-subtle text-success">
-                    <i class="bi bi-check-circle-fill me-1"></i>Active
-                  </span>
-                </td>
-                <td class="text-end">
-                  <div class="d-flex justify-content-end">
-                    <a href="{% url 'prescription:prescription_detail' pres.pk %}" class="btn btn-sm btn-outline-primary ms-2" title="View">
-                      <i class="bi bi-eye-fill"></i>
-                    </a>
-                    <a href="{% url 'prescription:edit' pres.pk %}" class="btn btn-sm btn-outline-warning ms-2" title="Edit">
-                      <i class="bi bi-pencil-fill"></i>
-                    </a>
-                    <a href="{% url 'prescription:delete' pres.pk %}" class="btn btn-sm btn-outline-danger ms-2" title="Delete" onclick="return confirm('Are you sure you want to delete this prescription?');">
-                      <i class="bi bi-trash-fill"></i>
-                    </a>
-                  </div>
-                </td>
-              </tr>
+                  </td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="6" class="text-center text-muted py-5">
+                    No prescriptions found.
+                  </td>
+                </tr>
               {% endfor %}
             </tbody>
           </table>
@@ -153,70 +203,111 @@
     </div>
   </div>
 
-  <!-- Grid View (hidden by default) -->
+  <!-- Grid View -->
   <div id="gridView" class="d-none">
     <div class="row g-4">
       {% for pres in prescriptions %}
-      <div class="col-md-6 col-xl-4">
-        <div class="card border-0 shadow-sm h-100">
-          <div class="card-header bg-light">
-            <div class="d-flex justify-content-between">
-              <div class="fw-medium">#{{ pres.pk }}</div>
-              <span class="badge bg-success-subtle text-success">
-                <i class="bi bi-check-circle-fill me-1"></i>Active
-              </span>
-            </div>
-          </div>
-          <div class="card-body">
-            <div class="d-flex align-items-center mb-3">
-              <div class="avatar-lg bg-light-primary rounded-circle me-3 d-flex align-items-center justify-content-center">
-                <i class="bi bi-person-fill fs-4"></i>
-              </div>
-              <div>
-                <h6 class="mb-0">{{ pres.patient_full_name }}</h6>
-                <div class="text-muted small">{{ pres.appointment.patient.phone }}</div>
+        <div
+          class="col-md-6 col-xl-4"
+          data-doctor-id="{{ pres.doctor.id }}"
+          data-date="{{ pres.date_issued|date:'Y-m-d' }}"
+        >
+          <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-light">
+              <div class="d-flex justify-content-between">
+                <div class="fw-medium">#{{ pres.pk }}</div>
+                <span class="badge bg-success-subtle text-success">
+                  <i class="bi bi-check-circle-fill me-1"></i>Active
+                </span>
               </div>
             </div>
-            <div class="d-flex align-items-center mb-3">
-              <div class="avatar-lg bg-light-info rounded-circle me-3 d-flex align-items-center justify-content-center">
-                <i class="bi bi-heart-pulse-fill fs-4"></i>
+
+            <div class="card-body">
+              <div class="d-flex align-items-center mb-3">
+                <div class="avatar-lg bg-light-primary rounded-circle me-3 d-flex align-items-center justify-content-center">
+                  <i class="bi bi-person-fill fs-4"></i>
+                </div>
+                <div>
+                  <h6 class="mb-0">{{ pres.patient_full_name|default:"—" }}</h6>
+                  <div class="text-muted small">{{ pres.appointment.patient.phone|default:"—" }}</div>
+                </div>
               </div>
-              <div>
-                <h6 class="mb-0">Dr. {{ pres.doctor.full_name }}</h6>
-                <div class="text-muted small">{{ pres.doctor.specialization }}</div>
+
+              <div class="d-flex align-items-center mb-3">
+                <div class="avatar-lg bg-light-info rounded-circle me-3 d-flex align-items-center justify-content-center">
+                  <i class="bi bi-heart-pulse-fill fs-4"></i>
+                </div>
+                <div>
+                  <h6 class="mb-0">Dr. {{ pres.doctor.full_name|default:"—" }}</h6>
+                  <div class="text-muted small">{{ pres.doctor.specialization|default:"—" }}</div>
+                </div>
+              </div>
+
+              <hr class="my-3">
+
+              <div class="d-flex justify-content-between text-center">
+                <div>
+                  <div class="text-muted small">Date</div>
+                  <div class="fw-medium">{{ pres.date_issued|date:"Y-m-d" }}</div>
+                </div>
+                <div>
+                  <div class="text-muted small">Time</div>
+                  <div class="fw-medium">{{ pres.date_issued|date:"h:i A" }}</div>
+                </div>
+                <div>
+                  <div class="text-muted small">Medicines</div>
+                  <div class="fw-medium">{{ pres.medication_set.count }}</div>
+                </div>
               </div>
             </div>
-            <hr class="my-3">
-            <div class="d-flex justify-content-between text-center">
+
+            <div class="card-footer bg-transparent border-0 d-flex justify-content-between">
               <div>
-                <div class="text-muted small">Date</div>
-                <div class="fw-medium">{{ pres.date_issued|date:"Y-m-d" }}</div>
+                {% if perms.prescription.view_prescription %}
+                  <a
+                    href="{% url 'prescription:prescription_detail' pres.pk %}"
+                    class="btn btn-sm btn-outline-primary"
+                  >
+                    <i class="bi bi-eye me-1"></i>View
+                  </a>
+                {% endif %}
               </div>
+
               <div>
-                <div class="text-muted small">Time</div>
-                <div class="fw-medium">{{ pres.date_issued|date:"h:i A" }}</div>
+                {% if perms.prescription.change_prescription %}
+                  <a
+                    href="{% url 'prescription:edit' pres.pk %}"
+                    class="btn btn-sm btn-outline-warning ms-1"
+                    title="Edit"
+                    aria-label="Edit prescription {{ pres.pk }}"
+                  >
+                    <i class="bi bi-pencil"></i>
+                  </a>
+                {% endif %}
+
+                {% if perms.prescription.delete_prescription %}
+                  <a
+                    href="{% url 'prescription:delete' pres.pk %}"
+                    class="btn btn-sm btn-outline-danger ms-1"
+                    title="Delete"
+                    aria-label="Delete prescription {{ pres.pk }}"
+                    onclick="return confirm('Are you sure you want to delete this prescription?');"
+                  >
+                    <i class="bi bi-trash"></i>
+                  </a>
+                {% endif %}
               </div>
-              <div>
-                <div class="text-muted small">Medicines</div>
-                <div class="fw-medium">{{ pres.medication_set.count }}</div>
-              </div>
-            </div>
-          </div>
-          <div class="card-footer bg-transparent border-0 d-flex justify-content-between">
-            <a href="{% url 'prescription:prescription_detail' pres.pk %}" class="btn btn-sm btn-outline-primary">
-              <i class="bi bi-eye me-1"></i>View
-            </a>
-            <div>
-              <a href="{% url 'prescription:edit' pres.pk %}" class="btn btn-sm btn-outline-warning ms-1" title="Edit">
-                <i class="bi bi-pencil"></i>
-              </a>
-              <a href="{% url 'prescription:delete' pres.pk %}" class="btn btn-sm btn-outline-danger ms-1" title="Delete" onclick="return confirm('Are you sure you want to delete this prescription?');">
-                <i class="bi bi-trash"></i>
-              </a>
             </div>
           </div>
         </div>
-      </div>
+      {% empty %}
+        <div class="col-12">
+          <div class="card border-0 shadow-sm">
+            <div class="card-body text-center text-muted py-5">
+              No prescriptions found.
+            </div>
+          </div>
+        </div>
       {% endfor %}
     </div>
   </div>
@@ -224,11 +315,9 @@
 {% endblock content %}
 
 {% block scripts %}
-  <!-- تحمل المكتبات أولاً -->
   <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
   <script src="https://cdn.datatables.net/1.13.5/js/jquery.dataTables.min.js"></script>
   <script src="https://cdn.datatables.net/1.13.5/js/dataTables.bootstrap5.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-  <!-- ثم ملف السكربت الخاص -->
   <script src="{% static 'js/prescription/prescription_list.js' %}"></script>
 {% endblock scripts %}

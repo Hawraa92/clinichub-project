@@ -1,0 +1,536 @@
+{# templates/doctor/doctor_visit.html #}
+{% extends "base.html" %}
+{% load static i18n %}
+
+{% block title %}{% trans "Consultation" %}{% endblock %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{% static 'css/doctor/doctor_visit.css' %}?v=13">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+{% endblock %}
+
+{% block content %}
+
+{# Safe URL resolving using "as var" (won't crash if route missing) #}
+{% url 'doctor:visit_ai_assist' appointment.id as ai_url %}
+{% url 'doctor:dashboard' as doctor_dashboard_url %}
+{% url 'doctor:lab_orders' as lab_orders_url %}
+{% url 'medical_archive:archive_list' as archive_list_url %}
+{% url 'doctor:patient_report' patient.id as patient_report_url %}
+{% url 'prescription:create' appointment.id as prescription_create_url %}
+
+<div class="visit-page">
+  <div class="visit-container">
+
+    <!-- Header -->
+    <header class="visit-header">
+      <div class="header-left">
+        <div class="breadcrumb">
+          {% if doctor_dashboard_url %}
+            <a href="{{ doctor_dashboard_url }}" class="breadcrumb-item">
+              <i class="fas fa-home"></i> {% trans "Dashboard" %}
+            </a>
+          {% else %}
+            <span class="breadcrumb-item">
+              <i class="fas fa-home"></i> {% trans "Dashboard" %}
+            </span>
+          {% endif %}
+
+          <span class="breadcrumb-separator">/</span>
+
+          {% if doctor_dashboard_url %}
+            <a href="{{ doctor_dashboard_url }}#today-appointments" class="breadcrumb-item">
+              <i class="fas fa-calendar-alt"></i> {% trans "Appointments" %}
+            </a>
+          {% else %}
+            <span class="breadcrumb-item">
+              <i class="fas fa-calendar-alt"></i> {% trans "Appointments" %}
+            </span>
+          {% endif %}
+
+          <span class="breadcrumb-separator">/</span>
+          <span class="breadcrumb-item active">{% trans "Consultation" %}</span>
+        </div>
+
+        <h1 class="page-title">
+          <i class="fas fa-stethoscope"></i>
+          {% trans "Patient Consultation" %}
+        </h1>
+
+        <p class="appointment-meta">
+          {% trans "Appointment" %} #{{ appointment.id }}
+          {% if appointment.scheduled_time %}
+            <span class="meta-separator">•</span>
+            {{ appointment.scheduled_time|date:"D, d M Y" }} {{ appointment.scheduled_time|time:"H:i" }}
+          {% endif %}
+          <span class="meta-separator">•</span>
+          <span class="status-badge {{ appointment.status|default:'pending' }}">
+            {{ appointment.get_status_display|default:appointment.status|default:_("Pending") }}
+          </span>
+        </p>
+      </div>
+
+      <div class="header-actions">
+
+        {# Diabetes AI #}
+        <button class="action-btn ghost"
+                type="submit"
+                form="consultationForm"
+                name="action"
+                value="diabetes_ai"
+                title="{% trans 'Run Diabetes AI and save result to the patient profile' %}">
+          <i class="fas fa-tint"></i> {% trans "Diabetes AI" %}
+        </button>
+
+        <button class="action-btn save-draft"
+                type="submit"
+                form="consultationForm"
+                name="action"
+                value="save_only">
+          <i class="fas fa-save"></i> {% trans "Save Draft" %}
+        </button>
+
+        <button class="action-btn complete-visit"
+                type="submit"
+                form="consultationForm"
+                name="action"
+                value="save_and_prescribe">
+          <i class="fas fa-prescription"></i> {% trans "Save & Prescribe" %}
+        </button>
+
+        {% if patient_report_url %}
+          <a class="action-btn ghost" href="{{ patient_report_url }}">
+            <i class="fas fa-file-medical"></i> {% trans "Open Patient Report" %}
+          </a>
+        {% else %}
+          <span class="action-btn ghost disabled" aria-disabled="true" style="pointer-events:none; opacity:.6;">
+            <i class="fas fa-file-medical"></i> {% trans "Open Patient Report" %}
+          </span>
+        {% endif %}
+      </div>
+    </header>
+
+    {# ✅ Diabetes flash banner (after redirect) #}
+    {% if diabetes_flash %}
+      <div class="form-alert" style="margin: 12px 0;">
+        {% if diabetes_flash.ok %}
+          <i class="bi bi-check-circle"></i>
+          <strong>{% trans "Diabetes AI Saved" %}:</strong>
+          <span dir="auto">{{ diabetes_flash.label_text|default:diabetes_flash.label }}</span>
+          {% if diabetes_flash.risk_band %}
+            <span class="meta-separator">•</span>
+            <span dir="auto">{% trans "Risk" %}: <strong>{{ diabetes_flash.risk_band }}</strong></span>
+          {% endif %}
+        {% else %}
+          <i class="bi bi-exclamation-triangle"></i>
+          <strong>{% trans "Diabetes AI Failed" %}:</strong>
+          <span dir="auto">{{ diabetes_flash.error|default:"Unknown error" }}</span>
+        {% endif %}
+      </div>
+
+      {% if diabetes_flash.ok and diabetes_flash.proba %}
+        <div class="muted-mini" style="margin-top:-6px; margin-bottom:10px;">
+          <i class="bi bi-graph-up"></i>
+          {% trans "Probabilities" %}:
+          {% for k,v in diabetes_flash.proba.items %}
+            <span style="margin-inline:6px;">
+              <strong>{{ k }}</strong>= {{ v|floatformat:3 }}
+            </span>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endif %}
+
+    <div class="main-grid">
+      <!-- Sidebar -->
+      <aside class="patient-sidebar">
+
+        <!-- Doctor card -->
+        <div class="patient-card">
+          <div class="patient-avatar">
+            <i class="fas fa-user-md"></i>
+          </div>
+          <div class="patient-info">
+            <h3 class="patient-name" dir="auto">
+              Dr. {{ doctor.user.get_full_name|default:request.user.username }}
+            </h3>
+            <p class="patient-meta" dir="auto">
+              {% if doctor.specialty_name %}
+                {{ doctor.specialty_name }}
+              {% elif doctor.specialty %}
+                {{ doctor.specialty }}
+              {% else %}
+                {% trans "General" %}
+              {% endif %}
+            </p>
+          </div>
+        </div>
+
+        <!-- Patient card -->
+        <div class="patient-card main-patient">
+          <div class="patient-avatar primary">
+            <i class="fas fa-user"></i>
+          </div>
+
+          <div class="patient-info">
+            <h3 class="patient-name" dir="auto">{{ patient.full_name|default:patient }}</h3>
+
+            <div class="patient-details">
+              <div class="detail-item">
+                <i class="fas fa-id-card"></i>
+                <span>#{{ patient.id }}</span>
+              </div>
+
+              <div class="detail-item">
+                <i class="fas fa-list-ol"></i>
+                <span>{% trans "Queue" %}: {{ appointment.queue_number|default:"—" }}</span>
+              </div>
+
+              {% if patient.age %}
+              <div class="detail-item">
+                <i class="fas fa-birthday-cake"></i>
+                <span>{{ patient.age }} {% trans "Years" %}</span>
+              </div>
+              {% endif %}
+
+              {% if patient.gender %}
+              <div class="detail-item">
+                <i class="fas fa-venus-mars"></i>
+                <span dir="auto">{{ patient.gender }}</span>
+              </div>
+              {% endif %}
+
+              {# ✅ Diabetes result (human readable) #}
+              {% if patient and patient.diabetes_prediction is not None %}
+                <div class="detail-item">
+                  <i class="fas fa-tint"></i>
+                  <span>
+                    {% trans "Diabetes AI" %}:
+                    <strong>
+                      {% if patient.diabetes_prediction == 0 or patient.diabetes_prediction == "0" %}
+                        {% trans "Healthy" %}
+                      {% elif patient.diabetes_prediction == 1 or patient.diabetes_prediction == "1" %}
+                        {% trans "Prediabetes" %}
+                      {% elif patient.diabetes_prediction == 2 or patient.diabetes_prediction == "2" %}
+                        {% trans "Diabetes" %}
+                      {% else %}
+                        {{ patient.diabetes_prediction }}
+                      {% endif %}
+                    </strong>
+                  </span>
+                </div>
+              {% endif %}
+
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="quick-actions">
+          <h4 class="section-title">
+            <i class="fas fa-bolt"></i> {% trans "Quick Actions" %}
+          </h4>
+
+          <div class="action-grid">
+            {% if prescription_create_url %}
+              <a class="quick-btn" href="{{ prescription_create_url }}" data-tooltip="{% trans 'Create prescription' %}">
+                <i class="fas fa-file-prescription"></i>
+                <span>{% trans "Prescribe" %}</span>
+              </a>
+            {% else %}
+              <span class="quick-btn disabled" aria-disabled="true" style="pointer-events:none; opacity:.6;">
+                <i class="fas fa-file-prescription"></i>
+                <span>{% trans "Prescribe" %}</span>
+              </span>
+            {% endif %}
+
+            {% if lab_orders_url %}
+              <a class="quick-btn" href="{{ lab_orders_url }}" data-tooltip="{% trans 'Open lab module' %}">
+                <i class="fas fa-vial"></i>
+                <span>{% trans "Lab" %}</span>
+              </a>
+            {% else %}
+              <span class="quick-btn disabled" aria-disabled="true" style="pointer-events:none; opacity:.6;">
+                <i class="fas fa-vial"></i>
+                <span>{% trans "Lab" %}</span>
+              </span>
+            {% endif %}
+
+            {% if archive_list_url %}
+              <a class="quick-btn" href="{{ archive_list_url }}" data-tooltip="{% trans 'Open archives' %}">
+                <i class="fas fa-archive"></i>
+                <span>{% trans "Archive" %}</span>
+              </a>
+            {% else %}
+              <span class="quick-btn disabled" aria-disabled="true" style="pointer-events:none; opacity:.6;">
+                <i class="fas fa-archive"></i>
+                <span>{% trans "Archive" %}</span>
+              </span>
+            {% endif %}
+
+            {% if patient_report_url %}
+              <a class="quick-btn" href="{{ patient_report_url }}" data-tooltip="{% trans 'Open patient report' %}">
+                <i class="fas fa-file-medical"></i>
+                <span>{% trans "Report" %}</span>
+              </a>
+            {% else %}
+              <span class="quick-btn disabled" aria-disabled="true" style="pointer-events:none; opacity:.6;">
+                <i class="fas fa-file-medical"></i>
+                <span>{% trans "Report" %}</span>
+              </span>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Recent Archives -->
+        <div class="recent-box">
+          <h4 class="section-title">
+            <i class="fas fa-folder-open"></i> {% trans "Recent Archives" %}
+          </h4>
+
+          {% if recent_archives %}
+            <ul class="mini-list">
+              {% for a in recent_archives %}
+                <li>
+                  <div class="li-title" dir="auto">
+                    {% if a.title %}
+                      {{ a.title }}
+                    {% else %}
+                      {% trans "Archive" %}
+                    {% endif %}
+                  </div>
+                  <div class="muted-mini">
+                    {% if a.created_at %}{{ a.created_at|date:"Y-m-d H:i" }}{% endif %}
+                  </div>
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="muted-mini">{% trans "No archives found." %}</p>
+          {% endif %}
+        </div>
+
+        <!-- Recent Prescriptions -->
+        <div class="recent-box">
+          <h4 class="section-title">
+            <i class="fas fa-prescription-bottle-medical"></i> {% trans "Recent Prescriptions" %}
+          </h4>
+
+          {% if recent_prescriptions %}
+            <ul class="mini-list">
+              {% for p in recent_prescriptions %}
+                {% url 'doctor:prescription_detail' p.id as presc_detail_url %}
+                {% url 'prescription:detail' p.id as presc_detail_url2 %}
+                <li>
+                  <div class="li-title">{% trans "Prescription" %} #{{ p.id }}</div>
+                  <div class="muted-mini">
+                    {% if presc_detail_url %}
+                      <a class="mini-link" href="{{ presc_detail_url }}">{% trans "Open" %}</a>
+                    {% elif presc_detail_url2 %}
+                      <a class="mini-link" href="{{ presc_detail_url2 }}">{% trans "Open" %}</a>
+                    {% else %}
+                      <span class="muted-mini">{% trans "Open" %}</span>
+                    {% endif %}
+                  </div>
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="muted-mini">{% trans "No prescriptions found." %}</p>
+          {% endif %}
+        </div>
+
+      </aside>
+
+      <!-- Main Content -->
+      <main class="consultation-content">
+        <div class="form-section">
+          <div class="section-header">
+            <h2><i class="fas fa-notes-medical"></i> {% trans "Clinical Assessment" %}</h2>
+          </div>
+
+          <form id="consultationForm"
+                method="post"
+                class="consultation-form"
+                novalidate
+                data-ai-url="{{ ai_url|default:'' }}">
+            {% csrf_token %}
+
+            {% if form.non_field_errors %}
+              <div class="form-alert">{{ form.non_field_errors }}</div>
+            {% endif %}
+
+            <!-- Chief Complaint -->
+            <div class="form-group primary">
+              <label class="form-label" for="{{ form.chief_complaint.id_for_label }}">
+                <i class="fas fa-comment-medical"></i>
+                {% trans "Chief Complaint" %} <span class="required">*</span>
+              </label>
+              {{ form.chief_complaint }}
+              {% if form.chief_complaint.errors %}<div class="field-error">{{ form.chief_complaint.errors }}</div>{% endif %}
+            </div>
+
+            <!-- Symptoms -->
+            <div class="form-group">
+              <label class="form-label" for="{{ form.symptoms.id_for_label }}">
+                <i class="fas fa-heartbeat"></i>
+                {% trans "Symptoms" %} <span class="required">*</span>
+              </label>
+              {{ form.symptoms }}
+              {% if form.symptoms.errors %}<div class="field-error">{{ form.symptoms.errors }}</div>{% endif %}
+            </div>
+
+            <!-- History & Examination -->
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label" for="{{ form.history.id_for_label }}">
+                  <i class="fas fa-book-medical"></i>
+                  {% trans "History" %} ({% trans "optional" %})
+                </label>
+                {{ form.history }}
+                {% if form.history.errors %}<div class="field-error">{{ form.history.errors }}</div>{% endif %}
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="{{ form.examination.id_for_label }}">
+                  <i class="fas fa-search"></i>
+                  {% trans "Examination" %} ({% trans "optional" %})
+                </label>
+                {{ form.examination }}
+                {% if form.examination.errors %}<div class="field-error">{{ form.examination.errors }}</div>{% endif %}
+              </div>
+            </div>
+
+            <!-- Diagnosis -->
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label" for="{{ form.preliminary_diagnosis.id_for_label }}">
+                  <i class="fas fa-diagnoses"></i>
+                  {% trans "Preliminary Diagnosis" %} ({% trans "optional" %})
+                </label>
+
+                <div class="diagnosis-input">
+                  {{ form.preliminary_diagnosis }}
+
+                  <button class="ai-suggest-btn"
+                          id="aiAssistBtn"
+                          type="submit"
+                          name="action"
+                          value="suggest"
+                          {% if not ai_url %}disabled aria-disabled="true"{% endif %}
+                          aria-label="{% trans 'AI Assist (supportive only)' %}"
+                          data-tooltip="{% trans 'AI Assist: supportive suggestions only — not a diagnosis. Doctor confirms the final decision.' %}">
+                    <i class="bi bi-robot"></i>
+                    {% trans "AI Assist" %}
+                  </button>
+                </div>
+
+                {% if not ai_url %}
+                  <div class="form-alert" style="margin-top:10px;">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    {% trans "AI Assist endpoint is not configured." %}
+                  </div>
+                {% endif %}
+
+                <div class="ai-disclaimer" role="note">
+                  <i class="bi bi-info-circle"></i>
+                  <span>{% trans "AI suggestions are supportive only — final diagnosis is confirmed by the doctor." %}</span>
+                </div>
+
+                <div id="aiStatus" class="muted-mini" style="display:none; margin-top:8px;"></div>
+
+                <!-- AJAX boxes -->
+                <div id="aiSuggestedBox" class="suggested-box" style="display:none;">
+                  <strong>{% trans "Suggested" %}:</strong> <span id="aiSuggestedText"></span>
+                </div>
+
+                <div id="aiItemsBox" class="ai-items-box" style="display:none;">
+                  <div class="ai-items-head">
+                    <strong>{% trans "AI Findings" %}</strong>
+                    <span id="aiItemsCount" class="ai-count"></span>
+                  </div>
+
+                  <div id="aiDisclaimerLine" class="muted-mini" style="margin-top:6px;"></div>
+                  <ul id="aiItemsList" class="ai-items-list"></ul>
+                </div>
+
+                <!-- Server-rendered fallback (non-AJAX) -->
+                {% if suggested %}
+                  <div class="suggested-box">
+                    <strong>{% trans "Suggested" %}:</strong> <span>{{ suggested }}</span>
+                  </div>
+                {% endif %}
+
+                {% if ai_items %}
+                  <div class="ai-items-box" style="margin-top:10px;">
+                    <div class="ai-items-head">
+                      <strong>{% trans "AI Findings" %}</strong>
+                      <span class="ai-count">{{ ai_items|length }}</span>
+                    </div>
+
+                    {% if ai_note %}
+                      <div class="muted-mini" style="margin-top:6px;">
+                        <i class="bi bi-info-circle"></i> {{ ai_note }}
+                      </div>
+                    {% endif %}
+
+                    <ul class="ai-items-list">
+                      {% for it in ai_items %}
+                        <li class="ai-item ai-{{ it.severity|default:'info' }}">
+
+                          <span class="ai-bullet"></span>
+                          <span class="ai-msg" dir="auto">{{ it.message }}</span>
+                        </li>
+                      {% endfor %}
+                    </ul>
+                  </div>
+                {% endif %}
+
+                {% if form.preliminary_diagnosis.errors %}<div class="field-error">{{ form.preliminary_diagnosis.errors }}</div>{% endif %}
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="{{ form.final_diagnosis.id_for_label }}">
+                  <i class="fas fa-file-medical-alt"></i>
+                  {% trans "Final Diagnosis" %} ({% trans "optional" %})
+                </label>
+                {{ form.final_diagnosis }}
+                {% if form.final_diagnosis.errors %}<div class="field-error">{{ form.final_diagnosis.errors }}</div>{% endif %}
+              </div>
+            </div>
+
+            <!-- Plan -->
+            <div class="form-group">
+              <label class="form-label" for="{{ form.plan.id_for_label }}">
+                <i class="fas fa-clipboard-list"></i>
+                {% trans "Plan / Notes" %} ({% trans "optional" %})
+              </label>
+              {{ form.plan }}
+              {% if form.plan.errors %}<div class="field-error">{{ form.plan.errors }}</div>{% endif %}
+            </div>
+
+            <div class="form-actions">
+              {% if doctor_dashboard_url %}
+                <a href="{{ doctor_dashboard_url }}" class="btn-secondary">
+                  <i class="fas fa-arrow-left"></i> {% trans "Back" %}
+                </a>
+              {% else %}
+                <a href="/" class="btn-secondary">
+                  <i class="fas fa-arrow-left"></i> {% trans "Back" %}
+                </a>
+              {% endif %}
+            </div>
+
+          </form>
+        </div>
+      </main>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+  <script src="{% static 'js/doctor/doctor_visit.js' %}?v=13"></script>
+{% endblock %}

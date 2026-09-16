@@ -1,0 +1,222 @@
+{% extends "pharmacy/base.html" %}
+{% load static %}
+
+{% block title %}
+    Dispense Order #{{ order.pk }} | ClinicHub
+{% endblock %}
+
+{% block extra_head %}
+    <link
+        rel="stylesheet"
+        href="{% static 'css/pharmacy/dispense_order.css' %}"
+    >
+{% endblock %}
+
+{% block content %}
+<div class="dispense-order-page">
+
+    <!-- =========================
+         Page header
+    ========================== -->
+    <section class="dispense-order-header">
+        <div class="dispense-order-header__content">
+
+            <a
+                href="{% url 'pharmacy:order_detail' order.pk %}"
+                class="dispense-order-back"
+            >
+                <i class="bi bi-arrow-left"></i>
+                Back to order #{{ order.pk }}
+            </a>
+
+            <div class="dispense-order-header__row">
+                <div>
+                    <span class="dispense-order-eyebrow">
+                        <i class="bi bi-capsule-pill"></i>
+                        Medication dispensing
+                    </span>
+
+                    <h1>
+                        {{ page_title|default:"Dispense order" }}
+                    </h1>
+
+                    <p>
+                        Select the stock batch, quantity and payment information
+                        to complete this dispensing transaction.
+                    </p>
+                </div>
+
+                <div class="dispense-order-status">
+                    <span>Order status</span>
+
+                    <strong class="status status-{{ order.status }}">
+                        {{ order.get_status_display }}
+                    </strong>
+                </div>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- =========================
+         Order information
+    ========================== -->
+    <section class="dispense-order-summary">
+
+        <article class="dispense-order-summary__item">
+            <span class="dispense-order-summary__icon">
+                <i class="bi bi-person"></i>
+            </span>
+
+            <div>
+                <small>Patient</small>
+                <strong>
+                    {{ order.prescription.patient_full_name|default:"—" }}
+                </strong>
+            </div>
+        </article>
+
+        <article class="dispense-order-summary__item">
+            <span class="dispense-order-summary__icon">
+                <i class="bi bi-file-medical"></i>
+            </span>
+
+            <div>
+                <small>Prescription</small>
+                <strong>
+                    #{{ order.prescription_id }}
+                </strong>
+            </div>
+        </article>
+
+        <article class="dispense-order-summary__item">
+            <span class="dispense-order-summary__icon">
+                <i class="bi bi-shop"></i>
+            </span>
+
+            <div>
+                <small>Pharmacy</small>
+                <strong>
+                    {{ order.pharmacy.name|default:"—" }}
+                </strong>
+            </div>
+        </article>
+
+    </section>
+
+    <!-- =========================
+         Main workspace
+    ========================== -->
+    <div class="dispense-order-layout">
+
+        <!-- Main form -->
+        <main class="dispense-order-main">
+
+            <div class="dispense-guidance">
+                <span class="dispense-guidance__icon">
+                    <i class="bi bi-info-circle"></i>
+                </span>
+
+                <div>
+                    <strong>Before completing the transaction</strong>
+
+                    <p>
+                        Use available, active and non-expired stock batches.
+                        Set the quantity to zero for any medication you do not
+                        want to dispense now.
+                    </p>
+                </div>
+            </div>
+
+            <section class="dispense-form-card">
+                <div class="dispense-form-card__header">
+                    <span class="dispense-form-card__icon">
+                        <i class="bi bi-clipboard2-check"></i>
+                    </span>
+
+                    <div>
+                        <h2>Dispensing information</h2>
+                        <p>
+                            Complete the payment, recipient and medicine quantities.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="dispense-form-card__body">
+                    {% include "pharmacy/_form_fields.html" %}
+                </div>
+            </section>
+
+        </main>
+
+        <!-- Side instructions -->
+        <aside class="dispense-order-sidebar">
+
+            <section class="dispense-help-card">
+                <div class="dispense-help-card__header">
+                    <span>
+                        <i class="bi bi-shield-check"></i>
+                    </span>
+
+                    <div>
+                        <h2>Safe dispensing</h2>
+                        <p>Quick checklist</p>
+                    </div>
+                </div>
+
+                <ul class="dispense-checklist">
+                    <li>
+                        <i class="bi bi-check-circle-fill"></i>
+                        Confirm the correct patient.
+                    </li>
+
+                    <li>
+                        <i class="bi bi-check-circle-fill"></i>
+                        Match every prescribed medicine.
+                    </li>
+
+                    <li>
+                        <i class="bi bi-check-circle-fill"></i>
+                        Check batch availability and expiry.
+                    </li>
+
+                    <li>
+                        <i class="bi bi-check-circle-fill"></i>
+                        Verify the quantity before saving.
+                    </li>
+
+                    <li>
+                        <i class="bi bi-check-circle-fill"></i>
+                        Confirm payment details.
+                    </li>
+                </ul>
+            </section>
+
+            <section class="dispense-warning-card">
+                <span>
+                    <i class="bi bi-exclamation-triangle"></i>
+                </span>
+
+                <div>
+                    <strong>Stock will be updated</strong>
+
+                    <p>
+                        Completing this transaction deducts the selected quantities
+                        from pharmacy inventory.
+                    </p>
+                </div>
+            </section>
+
+            <a
+                href="{% url 'pharmacy:order_detail' order.pk %}"
+                class="dispense-cancel-link"
+            >
+                <i class="bi bi-x-circle"></i>
+                Cancel and return to order
+            </a>
+
+        </aside>
+
+    </div>
+</div>
+{% endblock %}

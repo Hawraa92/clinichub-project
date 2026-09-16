@@ -1,54 +1,82 @@
+# appointments/tests/test_queue_api.py
 from datetime import timedelta
-from django.test import TestCase, Client
+
+from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
-from django.contrib.auth import get_user_model
 
-from doctor.models import Doctor
-from patient.models import Patient
-from appointments.models import Appointment, AppointmentStatus
+from accounts.tests.permission_utils import apply_role_permissions
+from appointments.models import AppointmentStatus
 
-User = get_user_model()
+from .factories import (
+    AppointmentFactory,
+    DoctorFactory,
+    PatientFactory,
+    UserFactory,
+)
 
 
 class QueueAPITests(TestCase):
     def setUp(self):
         self.client = Client()
-        # سكرتيرة
-        self.sec_user = User.objects.create_user(
-            email='secq@example.com', password='pass123', username='secq', role='secretary'
+        self.secretary = UserFactory(
+            role="secretary",
+            username="queue_secretary",
         )
-        # دكتور + مريض
-        doc_user = User.objects.create_user(
-            email='qdoc@example.com', password='pass123', username='qdoc', role='doctor'
-        )
-        self.doctor = Doctor.objects.create(user=doc_user)
-        self.patient = Patient.objects.create(full_name='Queue Patient')
-
-    def login_sec(self):
-        self.client.login(email='secq@example.com', password='pass123')
-
-    def today_dt(self, hour=9):
-        base = timezone.localtime(timezone.now())
-        return base.replace(hour=hour, minute=0, second=0, microsecond=0)
+        apply_role_permissions(self.secretary)
+        self.doctor = DoctorFactory()
+        self.patient = PatientFactory()
+        self.client.force_login(self.secretary)
+        self.url = reverse("appointments:queue_number_api")
 
     def test_queue_number_api_empty(self):
-        self.login_sec()
-        url = reverse('appointments:queue_number_api')
-        resp = self.client.get(url)
-        self.assertEqual(resp.status_code, 200)
-        self.assertIn('queues', resp.json())
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data.get("success"))
+        self.assertIn("queues", data)
+        self.assertIsInstance(data["queues"], list)
 
     def test_queue_number_api_with_appointment(self):
-        self.login_sec()
-        Appointment.objects.create(
+        appointment = AppointmentFactory(
             doctor=self.doctor,
             patient=self.patient,
-            scheduled_time=self.today_dt(),
-            status=AppointmentStatus.PENDING
+            scheduled_time=timezone.now() + timedelta(minutes=5),
+            status=AppointmentStatus.PENDING,
         )
-        url = reverse('appointments:queue_number_api')
-        resp = self.client.get(url)
-        self.assertEqual(resp.status_code, 200)
-        data = resp.json()
-        self.assertTrue(data['queues'])
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data.get("success"))
+        self.assertTrue(data["queues"])
+
+        queue = next(
+            (
+                item
+                for item in data["queues"]
+                if item["doctor_id"] == self.doctor.pk
+            ),
+            None,
+        )
+
+        self.assertIsNotNone(queue)
+        visible_ids = []
+
+        current = queue.get("current")
+        if current:
+            visible_ids.append(current["id"])
+
+        visible_ids.extend(
+            item["id"]
+            for item in queue.get("waiting", [])
+        )
+
+        self.assertIn(appointment.pk, visible_ids)
+
+        self.assertEqual(
+            current["patient_name"] if current else None,
+            self.patient.full_name,
+        )

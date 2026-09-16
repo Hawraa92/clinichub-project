@@ -1,261 +1,699 @@
-/* static/css/doctor/report_patient.css  – 28‑Jul‑2025
-   تصميم تقرير المريض المُوحَّد  (Hero + Vitals + Labs + Rx‑table)
+/* ============================================================================
+   static/css/doctor/report_patient.css
+   ClinicHub — Patient Report (Simple & Doctor-Friendly)
+   ✅ Fully scoped to .rp2 (won't break Bootstrap / other pages)
 ============================================================================ */
 
-:root{
-  /* Pastel palette */
-  --p-blue:#A2D2FF; --p-green:#BDE0C0; --p-lav:#CDB4DB; --p-peach:#FFC8DD; --p-yellow:#FFD6A5;
+/* Scope box-sizing without affecting whole site */
+.rp2, .rp2 * , .rp2 *::before, .rp2 *::after{ box-sizing: border-box; }
 
-  /* Neutral & layout */
-  --bg:#F5F7FA; --paper:#FAF9FB; --white:#FFF; --text:#2D3748; --text-light:#4A5568; --border:#E2E8F0;
+/* keep images safe inside report */
+.rp2 img{ max-width: 100%; height: auto; display: inline-block; }
 
-  /* Rounding & shadow */
-  --radius:18px; --radius-sm:12px; --shadow:0 6px 26px rgba(0,0,0,.08);
+/* =====================  Page Scope + Tokens + Paper  ===================== */
+.rp2{
+  /* Colors (calm, clinical) */
+  --rp-bg: #f6f8fc;          /* (kept as token) */
+  --rp-paper: #ffffff;
+  --rp-ink: #0f172a;
+  --rp-muted: #64748b;
+  --rp-border: rgba(15, 23, 42, .10);
+
+  --rp-primary: #2563eb;      /* blue */
+  --rp-accent: #10b981;       /* green */
+  --rp-warn: #f59e0b;         /* amber */
+  --rp-soft: rgba(37, 99, 235, .08);
+
+  /* Radius & Shadow */
+  --rp-radius: 18px;
+  --rp-radius-sm: 12px;
+  --rp-shadow: 0 14px 40px rgba(2, 6, 23, .10);
+  --rp-shadow-sm: 0 6px 18px rgba(2, 6, 23, .08);
 
   /* Typography */
-  --fz-13:13px; --fz-14:14px; --fz-15:15px; --fz-16:16px; --fz-18:18px; --fz-24:24px; --fz-30:30px;
+  --rp-fz-12: 12px;
+  --rp-fz-13: 13px;
+  --rp-fz-14: 14px;
+  --rp-fz-16: 16px;
+  --rp-fz-18: 18px;
+  --rp-fz-24: 24px;
+  --rp-fz-28: 28px;
+
+  color: var(--rp-ink);
+  font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+
+  /* Paper */
+  max-width: 1100px;
+  margin: 28px auto;
+  padding: 28px 28px 42px;
+  border-radius: var(--rp-radius);
+  background: var(--rp-paper);
+  box-shadow: var(--rp-shadow);
+  position: relative;
+  overflow: hidden;
 }
 
-*{box-sizing:border-box;}
-body{
-  background:var(--bg);
-  color:var(--text);
-  font-family:'Segoe UI',Tahoma,Verdana,sans-serif;
-}
-
-/* =====================  Wrapper  ===================== */
-.rp2{
-  max-width:1080px;
-  margin:32px auto;
-  padding:46px 52px 70px;
-  background:var(--paper);
-  border-radius:var(--radius);
-  box-shadow:var(--shadow);
-  position:relative;
-  overflow:hidden;
-}
+/* subtle corner glow */
 .rp2::before{
   content:"";
   position:absolute;
-  top:-140px;left:-140px;
-  width:320px;height:320px;
-  background:var(--p-lav);
-  opacity:.12;border-radius:50%;
+  top:-140px; left:-140px;
+  width:320px; height:320px;
+  border-radius:50%;
+  background: radial-gradient(circle at 30% 30%, rgba(37,99,235,.25), transparent 60%);
+  opacity: .35;
+  pointer-events:none;
+}
+
+/* Small text inside tables (rxnorm/loinc) */
+.rp2 small{
+  font-size: 11px;
+  color: var(--rp-muted);
+  font-weight: 700;
+  margin-left: 6px;
+  letter-spacing: .1px;
 }
 
 /* =====================  Toolbar  ===================== */
 .rp2-toolbar{
-  position:sticky;top:12px;
-  display:flex;gap:10px;
+  position: sticky;
+  top: 12px;
+  z-index: 60;
+
+  display:flex;
   justify-content:flex-end;
-  margin-bottom:18px;
-  z-index:20;
+  gap:10px;
+
+  margin-bottom: 14px;
+  padding: 10px;
+  border-radius: 14px;
+  background: rgba(255,255,255,.70);
+  border: 1px solid rgba(15,23,42,.08);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
-.btn{
-  padding:10px 18px;
-  border:none;border-radius:26px;
-  font-size:var(--fz-14);font-weight:500;
+
+/* IMPORTANT: don't override Bootstrap .btn globally */
+.rp2-toolbar .btn{
+  appearance:none;
+  border: 1px solid rgba(15,23,42,.10);
+  border-radius: 999px;
+  padding: 10px 14px;
+  font-size: var(--rp-fz-14);
+  font-weight: 700;
+  text-decoration: none;
+
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+
   cursor:pointer;
-  display:inline-flex;align-items:center;gap:6px;
-  text-decoration:none;
-  transition:.22s;
+  transition: transform .12s ease, filter .15s ease, box-shadow .15s ease;
+  box-shadow: 0 6px 16px rgba(2,6,23,.08);
+  background: #fff;
+  color: var(--rp-ink);
+  line-height: 1;
 }
-.btn-print{background:#2C5282;color:#FFF;}
-.btn-pdf  {background:var(--p-lav);color:#553C9A;}
-.btn-csv  {background:var(--p-green);color:#22543D;}
-.btn:hover{filter:brightness(.95);}
 
-/* =====================  Hero section  ===================== */
+.rp2-toolbar .btn i{ font-size: 16px; line-height: 1; }
+
+.rp2-toolbar .btn:hover{
+  transform: translateY(-1px);
+  filter: brightness(.99);
+  box-shadow: 0 10px 24px rgba(2,6,23,.12);
+}
+
+.rp2-toolbar .btn:active{ transform: translateY(0); }
+
+.rp2-toolbar .btn:focus,
+.rp2-toolbar .btn:focus-visible{
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(37,99,235,.18), 0 10px 24px rgba(2,6,23,.12);
+}
+
+.rp2-toolbar .btn-print{
+  background: rgba(37,99,235,.10);
+  border-color: rgba(37,99,235,.20);
+  color: #1e40af;
+}
+.rp2-toolbar .btn-pdf{
+  background: rgba(245, 158, 11, .12);
+  border-color: rgba(245, 158, 11, .25);
+  color: #92400e;
+}
+.rp2-toolbar .btn-csv{
+  background: rgba(16,185,129,.12);
+  border-color: rgba(16,185,129,.25);
+  color: #065f46;
+}
+
+/* =====================  Hero Header  ===================== */
 .rp2-hero{
-  position:relative;
-  display:flex;justify-content:space-between;gap:32px;
-  padding-bottom:32px;margin-bottom:34px;
-  border-bottom:2px solid var(--p-blue);
-}
-.hero-left{display:flex;flex-direction:column;gap:6px;}
-.hero-logo{
-  width:86px;height:86px;object-fit:contain;
-  background:var(--white);border-radius:14px;padding:10px;
-  box-shadow:0 3px 12px rgba(0,0,0,.06);margin-bottom:8px;
-}
-.rp2-hero h1{font-size:var(--fz-30);color:#2C5282;margin:0;font-weight:600;}
-.clinic{margin:0;color:var(--text-light);font-size:var(--fz-14);}
-.hero-right{text-align:right;font-size:var(--fz-14);color:var(--text-light);}
-.meta-line{margin:3px 0;}
-.meta-line span{color:#2B6CB0;font-weight:600;}
-.hero-shape{
-  position:absolute;right:-90px;bottom:-90px;
-  width:220px;height:220px;
-  background:var(--p-blue);opacity:.12;border-radius:50%;
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap: 18px;
+
+  padding: 16px 16px 18px;
+  border: 1px solid rgba(15,23,42,.08);
+  border-radius: 16px;
+
+  background: linear-gradient(180deg, rgba(37,99,235,.06), rgba(255,255,255,.92));
+  margin-bottom: 14px;
+
+  position: relative;
+  overflow: hidden;
 }
 
-/* =====================  Mini navigation  ===================== */
+.rp2-hero .hero-left{
+  display:flex;
+  gap: 12px;
+  align-items:center;
+}
+
+.rp2-hero .hero-logo{
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  padding: 10px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid rgba(15,23,42,.08);
+  box-shadow: var(--rp-shadow-sm);
+}
+
+.rp2-hero h1{
+  margin: 0;
+  font-size: var(--rp-fz-28);
+  letter-spacing: .2px;
+  color: #0b2a6f;
+  line-height: 1.15;
+}
+
+.rp2-hero .clinic{
+  margin: 4px 0 0;
+  color: var(--rp-muted);
+  font-size: var(--rp-fz-13);
+}
+
+.rp2-hero .hero-right{
+  text-align:right;
+  font-size: var(--rp-fz-13);
+  color: var(--rp-muted);
+  line-height: 1.7;
+}
+
+.rp2-hero .meta-line span{
+  font-weight: 800;
+  color: #1d4ed8;
+}
+
+.rp2-hero .hero-shape{
+  position:absolute;
+  right:-90px;
+  bottom:-90px;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background: rgba(37,99,235,.10);
+  pointer-events:none;
+}
+
+/* =====================  Quick Links (rp2-nav)  ===================== */
 .rp2-nav{
-  position:sticky;top:70px;
-  display:flex;gap:18px;flex-wrap:wrap;
-  margin-bottom:28px;
-  font-size:var(--fz-14);
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+
+  padding:10px 12px;
+  margin: 0 0 16px;
+
+  background:#fff;
+  border:1px solid rgba(15,23,42,.10);
+  border-radius:14px;
+  box-shadow: 0 10px 24px rgba(2,6,23,.06);
+
+  position: sticky;
+  top: 74px; /* below toolbar */
+  z-index: 50;
 }
+
 .rp2-nav a{
-  text-decoration:none;color:#2C5282;
-  padding:6px 10px;border-radius:20px;
-  transition:.2s;
-  background:rgba(162,210,255,.25);
-}
-.rp2-nav a:hover{background:rgba(162,210,255,.45);}
+  text-decoration:none !important;
+  padding:8px 12px;
+  border-radius:999px;
+  font-weight:800;
+  font-size:14px;
+  color:#0b4ea2;
 
-/* =====================  Generic section  ===================== */
-.section{margin-bottom:44px;}
-.sec-title{
-  margin:0 0 18px;
-  font-size:var(--fz-18);font-weight:600;
-  color:#2C5282;
-  display:inline-block;padding-bottom:6px;
-}
-.sec-title.pastel-blue   {border-bottom:3px solid var(--p-blue);}
-.sec-title.pastel-green  {border-bottom:3px solid var(--p-green);}
-.sec-title.pastel-lav    {border-bottom:3px solid var(--p-lav);}
-.sec-title.pastel-peach  {border-bottom:3px solid var(--p-peach);}
-.sec-title.pastel-yellow {border-bottom:3px solid var(--p-yellow);}
+  background: rgba(11,78,162,.08);
+  border: 1px solid rgba(11,78,162,.12);
 
-/* =====================  Stat cards  ===================== */
-.cards-row{
+  transition: transform .12s ease, background .12s ease, box-shadow .12s ease;
+  line-height: 1.1;
+}
+
+.rp2-nav a:hover{
+  background: rgba(11,78,162,.14);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(2,6,23,.08);
+}
+
+.rp2-nav a:focus-visible{
+  outline: 3px solid rgba(11,78,162,.25);
+  outline-offset: 2px;
+}
+
+/* Make anchors not hide under sticky header/nav */
+.rp2 .section{ scroll-margin-top: 120px; }
+
+/* =====================  Sections  ===================== */
+.rp2 .section{ margin-top: 18px; margin-bottom: 22px; }
+
+.rp2 .sec-title{
+  margin: 0 0 12px;
+  font-size: var(--rp-fz-18);
+  font-weight: 900;
+  color: #0b2a6f;
+  display:flex;
+  align-items:center;
+  gap: 10px;
+}
+
+.rp2 .sec-title::before{
+  content:"";
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--rp-primary);
+  box-shadow: 0 0 0 4px rgba(37,99,235,.12);
+}
+
+/* keep old color classes if موجودة بالـ HTML */
+.rp2 .sec-title.pastel-blue::before{ background: rgba(37,99,235,.95); box-shadow: 0 0 0 4px rgba(37,99,235,.12); }
+.rp2 .sec-title.pastel-green::before{ background: rgba(16,185,129,.95); box-shadow: 0 0 0 4px rgba(16,185,129,.14); }
+.rp2 .sec-title.pastel-lav::before{ background: rgba(124,58,237,.90); box-shadow: 0 0 0 4px rgba(124,58,237,.12); }
+.rp2 .sec-title.pastel-peach::before{ background: rgba(245,158,11,.95); box-shadow: 0 0 0 4px rgba(245,158,11,.14); }
+.rp2 .sec-title.pastel-yellow::before{ background: rgba(245,158,11,.95); box-shadow: 0 0 0 4px rgba(245,158,11,.14); }
+
+/* =====================  Summary Cards  ===================== */
+.rp2 .cards-row{
   display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(180px,1fr));
-  gap:18px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
 }
-.stat-card{
-  background:var(--white);
-  border-radius:var(--radius-sm);
-  padding:18px 20px;
-  box-shadow:0 3px 12px rgba(0,0,0,.05);
-  text-align:center;
+
+.rp2 .stat-card{
+  background: #fff;
+  border: 1px solid rgba(15,23,42,.08);
+  border-radius: var(--rp-radius-sm);
+  padding: 14px 14px;
+  box-shadow: 0 8px 22px rgba(2,6,23,.06);
+  text-align:left;
 }
-.stat-card .stat-label{display:block;color:var(--text-light);font-size:var(--fz-13);margin-bottom:4px;}
-.stat-card .stat-value{font-size:var(--fz-24);font-weight:600;color:var(--text);}
-.stat-card.pastel-blue {border-top:5px solid var(--p-blue);}
-.stat-card.pastel-green{border-top:5px solid var(--p-green);}
-.stat-card.pastel-lav  {border-top:5px solid var(--p-lav);}
-.stat-card.pastel-peach{border-top:5px solid var(--p-peach);}
+
+.rp2 .stat-card .stat-label{
+  display:block;
+  font-size: var(--rp-fz-12);
+  color: var(--rp-muted);
+  margin-bottom: 6px;
+  font-weight: 800;
+  letter-spacing: .2px;
+  text-transform: uppercase;
+}
+
+.rp2 .stat-card .stat-value{
+  font-size: var(--rp-fz-24);
+  font-weight: 950;
+  color: var(--rp-ink);
+  line-height: 1.1;
+}
+
+.rp2 .stat-card.pastel-blue{ border-left: 5px solid rgba(37,99,235,.55); }
+.rp2 .stat-card.pastel-green{ border-left: 5px solid rgba(16,185,129,.55); }
+.rp2 .stat-card.pastel-lav{ border-left: 5px solid rgba(124,58,237,.45); }
+.rp2 .stat-card.pastel-peach{ border-left: 5px solid rgba(245,158,11,.55); }
 
 /* =====================  Demographics  ===================== */
-.sec-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
-.badge{
-  background:var(--p-yellow);padding:6px 14px;
-  border-radius:20px;font-size:var(--fz-14);font-weight:600;
+.rp2 .sec-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 10px;
+  margin-bottom: 10px;
 }
-.info-grid{
-  display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
-  gap:22px;
-  background:var(--white);
-  padding:24px 28px;
-  border-radius:var(--radius-sm);
-  box-shadow:0 3px 14px rgba(0,0,0,.04);
-}
-.info-grid label{font-size:var(--fz-13);color:var(--text-light);margin-bottom:2px;font-weight:500;}
-.info-grid p{margin:0;font-size:var(--fz-15);}
 
-/* =====================  Clinical cards  ===================== */
-.three-grid{
-  display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(290px,1fr));
-  gap:22px;
+.rp2 .badge{
+  background: rgba(245,158,11,.14);
+  border: 1px solid rgba(245,158,11,.25);
+  color: #92400e;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: var(--rp-fz-13);
+  font-weight: 900;
 }
-.clip-card{
-  background:var(--white);border-radius:var(--radius-sm);
-  padding:22px 24px;box-shadow:0 3px 14px rgba(0,0,0,.04);
-}
-.clip-card h3{
-  margin:0 0 12px;
-  font-size:var(--fz-16);color:#553C9A;
-  border-bottom:1px dashed #E2E8F0;padding-bottom:8px;
-}
-.border-lav  {border-top:4px solid var(--p-lav);}
-.border-blue {border-top:4px solid var(--p-blue);}
-.border-green{border-top:4px solid var(--p-green);}
-.clip-card ul{margin:0;padding-left:18px;font-size:var(--fz-14);}
 
-/* =====================  Vitals & Labs  ===================== */
-.vitals-grid{
+.rp2 .info-grid{
   display:grid;
-  grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
-  gap:16px;
-  margin-bottom:22px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+
+  background:#fff;
+  border: 1px solid rgba(15,23,42,.08);
+  border-radius: var(--rp-radius-sm);
+  padding: 14px;
+  box-shadow: 0 8px 22px rgba(2,6,23,.06);
 }
-.vital-card{
-  background:var(--white);border-radius:var(--radius-sm);
-  padding:12px 14px;
-  box-shadow:0 2px 8px rgba(0,0,0,.06);
+
+.rp2 .info-grid > div{
+  padding: 10px 10px;
+  border-radius: 12px;
+  background: rgba(2,6,23,.02);
+  border: 1px solid rgba(15,23,42,.06);
+}
+
+.rp2 .info-grid label{
+  display:block;
+  font-size: var(--rp-fz-12);
+  color: var(--rp-muted);
+  font-weight: 900;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: .2px;
+}
+
+.rp2 .info-grid p{
+  margin:0;
+  font-size: var(--rp-fz-14);
+  color: var(--rp-ink);
+  font-weight: 700;
+}
+
+/* =====================  Clinical Cards  ===================== */
+.rp2 .three-grid{
+  display:grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.rp2 .clip-card{
+  background:#fff;
+  border: 1px solid rgba(15,23,42,.08);
+  border-radius: var(--rp-radius-sm);
+  padding: 14px;
+  box-shadow: 0 8px 22px rgba(2,6,23,.06);
+}
+
+.rp2 .clip-card h3{
+  margin:0 0 10px;
+  font-size: var(--rp-fz-16);
+  font-weight: 950;
+  color: #0b2a6f;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed rgba(15,23,42,.14);
+}
+
+.rp2 .clip-card p,
+.rp2 .clip-card li{
+  font-size: var(--rp-fz-14);
+  color: var(--rp-ink);
+  margin: 0;
+}
+
+.rp2 .clip-card ul{
+  margin: 0;
+  padding-left: 18px;
+  display:grid;
+  gap: 6px;
+}
+
+.rp2 .border-lav{ border-top: 4px solid rgba(124,58,237,.45); }
+.rp2 .border-blue{ border-top: 4px solid rgba(37,99,235,.55); }
+.rp2 .border-green{ border-top: 4px solid rgba(16,185,129,.55); }
+
+/* =====================  Vitals  ===================== */
+.rp2 .vitals-grid{
+  display:grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.rp2 .vital-card{
+  background:#fff;
+  border: 1px solid rgba(15,23,42,.08);
+  border-radius: var(--rp-radius-sm);
+  padding: 12px;
+  box-shadow: 0 8px 22px rgba(2,6,23,.06);
   text-align:center;
 }
-.vital-label{display:block;font-size:13px;color:var(--text-light);}
-.vital-val{font-size:18px;font-weight:600;color:var(--text);}
 
-.table-responsive{overflow-x:auto;border-radius:var(--radius-sm);}
-
-.labs-table{
-  width:100%;border-collapse:collapse;font-size:14px;
-}
-.labs-table thead{background:var(--p-peach);}
-.labs-table th,.labs-table td{
-  padding:10px 14px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap;
+.rp2 .vital-label{
+  display:block;
+  font-size: var(--rp-fz-12);
+  color: var(--rp-muted);
+  font-weight: 900;
+  letter-spacing: .2px;
+  text-transform: uppercase;
 }
 
-/* =====================  Timeline  ===================== */
-.timeline{position:relative;margin-left:22px;padding-left:32px;border-left:2px solid var(--p-blue);}
-.tl-row{position:relative;margin-bottom:26px;}
-.tl-time{
-  position:absolute;left:-110px;top:0;
-  font-size:var(--fz-14);color:#2B6CB0;font-weight:600;
-  width:90px;text-align:right;
+.rp2 .vital-val{
+  display:block;
+  margin-top: 6px;
+  font-size: 18px;
+  font-weight: 950;
+  color: var(--rp-ink);
 }
-.tl-dot{
-  position:absolute;left:-42px;top:6px;
-  width:14px;height:14px;border-radius:50%;
-  background:var(--p-blue);box-shadow:0 0 0 3px rgba(162,210,255,.35);
-}
-.tl-card{
-  background:var(--white);
-  padding:18px 22px;border-radius:var(--radius-sm);
-  box-shadow:0 3px 12px rgba(0,0,0,.05);
-}
-.tl-card p{margin:0 0 6px;font-size:var(--fz-14);}
-.tl-doc{font-style:italic;color:var(--text-light);margin-top:8px;}
 
-/* =====================  Prescriptions (table)  ===================== */
-.rx-table{
-  width:100%;border-collapse:collapse;font-size:14px;
+/* =====================  Tables (Labs & Rx)  ===================== */
+.rp2 .table{ margin: 0; } /* avoid Bootstrap extra spacing inside report */
+
+.rp2 .table-responsive{
+  width:100%;
+  overflow-x:auto;
+  border-radius: var(--rp-radius-sm);
 }
-.rx-table thead{background:var(--p-green);color:#22543D;}
-.rx-table th,.rx-table td{
-  padding:10px 14px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap;
+
+/* nicer scrollbar (optional) */
+.rp2 .table-responsive::-webkit-scrollbar{ height: 10px; }
+.rp2 .table-responsive::-webkit-scrollbar-thumb{
+  background: rgba(15,23,42,.15);
+  border-radius: 999px;
+}
+.rp2 .table-responsive::-webkit-scrollbar-track{ background: rgba(2,6,23,.04); }
+
+.rp2 table{
+  width:100%;
+  border-collapse: collapse;
+}
+
+.rp2 .labs-table,
+.rp2 .rx-table{
+  background:#fff;
+  border: 1px solid rgba(15,23,42,.08);
+  border-radius: var(--rp-radius-sm);
+  overflow:hidden;
+  box-shadow: 0 8px 22px rgba(2,6,23,.06);
+}
+
+.rp2 .labs-table thead{ background: rgba(245,158,11,.10); }
+.rp2 .rx-table thead{ background: rgba(16,185,129,.10); }
+
+.rp2 .labs-table th,
+.rp2 .rx-table th{
+  white-space: nowrap;
+  font-weight: 950;
+  color: var(--rp-ink);
+}
+
+.rp2 .labs-table th,
+.rp2 .labs-table td,
+.rp2 .rx-table th,
+.rp2 .rx-table td{
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(15,23,42,.08);
+  text-align: left;
+  font-size: var(--rp-fz-13);
+  vertical-align: top;
+}
+
+.rp2 .labs-table td,
+.rp2 .rx-table td{
+  white-space: normal;
+  word-break: break-word;
+}
+
+.rp2 .labs-table tbody tr:nth-child(even),
+.rp2 .rx-table tbody tr:nth-child(even){
+  background: rgba(2,6,23,.015);
+}
+
+.rp2 .labs-table tbody tr:hover,
+.rp2 .rx-table tbody tr:hover{
+  background: rgba(37,99,235,.04);
+}
+
+.rp2 .no-data{
+  text-align:center;
+  padding: 14px !important;
+  color: var(--rp-muted);
+  font-weight: 800;
+  font-size: var(--rp-fz-14);
+}
+
+/* =====================  Timeline (optional legacy)  ===================== */
+.rp2 .timeline{
+  border-left: 3px solid rgba(37,99,235,.20);
+  padding-left: 14px;
+  margin-top: 6px;
+}
+
+.rp2 .tl-row{
+  position: relative;
+  padding: 12px 12px 12px 14px;
+  margin-bottom: 10px;
+  border: 1px solid rgba(15,23,42,.08);
+  border-radius: var(--rp-radius-sm);
+  background: #fff;
+  box-shadow: 0 8px 22px rgba(2,6,23,.06);
+}
+
+.rp2 .tl-time{
+  font-size: var(--rp-fz-12);
+  color: var(--rp-muted);
+  font-weight: 950;
+  margin-bottom: 8px;
+  display:block;
+}
+
+.rp2 .tl-dot{ display:none; }
+
+.rp2 .tl-card p{
+  margin: 0 0 6px;
+  font-size: var(--rp-fz-14);
+}
+
+.rp2 .tl-doc{
+  margin-top: 8px;
+  font-size: var(--rp-fz-13);
+  color: var(--rp-muted);
+  font-style: italic;
 }
 
 /* =====================  Signature  ===================== */
-.rep-signature{
-  display:flex;justify-content:space-between;gap:32px;
-  margin-top:54px;padding-top:34px;border-top:2px solid var(--p-blue);
-}
-.sign-box{width:50%;font-size:var(--fz-14);}
-.sign-line{width:260px;height:1px;background:#CBD5E0;margin:14px 0;}
-.disclaimer{
-  width:45%;font-size:12px;color:var(--text-light);font-style:italic;
+.rp2 .rep-signature{
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(15,23,42,.10);
+
+  display:flex;
+  justify-content:space-between;
+  gap: 14px;
+  flex-wrap: wrap;
 }
 
-.no-data{
-  text-align:center;padding:18px;
-  background:var(--white);
-  border-radius:var(--radius-sm);
-  color:var(--text-light);
-  box-shadow:0 3px 12px rgba(0,0,0,.05);
+.rp2 .sign-box{
+  flex: 1 1 320px;
+  padding: 14px;
+  border: 1px solid rgba(15,23,42,.08);
+  border-radius: var(--rp-radius-sm);
+  background: rgba(2,6,23,.02);
 }
 
-/* =====================  Print rules  ===================== */
+.rp2 .sign-box p{
+  margin: 0 0 8px;
+  font-size: var(--rp-fz-14);
+  color: var(--rp-ink);
+  font-weight: 700;
+}
+
+.rp2 .sign-line{
+  width: 260px;
+  height: 1px;
+  background: rgba(15,23,42,.18);
+  margin: 12px 0;
+}
+
+.rp2 .disclaimer{
+  flex: 1 1 320px;
+  padding: 14px;
+  border-radius: var(--rp-radius-sm);
+  border: 1px dashed rgba(15,23,42,.14);
+  color: var(--rp-muted);
+  background: rgba(37,99,235,.04);
+  font-size: var(--rp-fz-13);
+  line-height: 1.7;
+}
+
+/* =====================  Utilities  ===================== */
+.rp2 .no-print{}
+
+/* =====================  Export mode (FIX PDF shows only logo)  ===================== */
+/* when html2pdf starts, we add .is-exporting to #rp2-report */
+.rp2.is-exporting{
+  overflow: visible !important;       /* لا تقص المحتوى */
+  box-shadow: none !important;        /* أسرع و أنظف */
+}
+
+/* sticky + blur sometimes breaks html2canvas capture */
+.rp2.is-exporting .rp2-toolbar,
+.rp2.is-exporting .rp2-nav{
+  position: static !important;
+  top: auto !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* عادة ما نريد نخفي الأزرار والروابط من الـPDF */
+.rp2.is-exporting .no-print{ display:none !important; }
+.rp2.is-exporting::before,
+.rp2.is-exporting .hero-shape{ display:none !important; }
+
+/* Motion safety */
+@media (prefers-reduced-motion: reduce){
+  .rp2 *{ transition: none !important; animation: none !important; }
+}
+
+/* =====================  Responsive  ===================== */
+@media (max-width: 768px){
+  .rp2{ padding: 18px 14px 26px; margin: 14px auto; }
+  .rp2-hero{ padding: 14px; }
+  .rp2-hero .hero-left{ align-items:flex-start; }
+  .rp2-hero .hero-right{ text-align:left; }
+  .rp2-toolbar{ justify-content: center; flex-wrap: wrap; }
+  .rp2-nav{ position: static; }
+  .rp2 .sign-line{ width: 100%; max-width: 260px; }
+}
+
+/* =====================  Print  ===================== */
 @media print{
-  .no-print{display:none!important;}
-  body{background:#fff;padding:0;}
-  .rp2{margin:0;padding:0 20px 20px;box-shadow:none;border-radius:0;}
-  .rp2::before,.hero-shape{display:none;}
-  .section{page-break-inside:avoid;}
+  .rp2 .no-print{ display:none !important; }
+  .rp2-nav{ display:none !important; }
+
+  *{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  .rp2{
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    box-shadow: none;
+    border-radius: 0;
+    background: #fff;
+  }
+
+  .rp2::before,
+  .rp2-hero .hero-shape{ display:none !important; }
+
+  .rp2 .table-responsive{ overflow: visible; }
+
+  .rp2 .section,
+  .rp2 .tl-row,
+  .rp2 .clip-card,
+  .rp2 .stat-card,
+  .rp2 .info-grid,
+  .rp2 .labs-table,
+  .rp2 .rx-table,
+  .rp2 .rep-signature{
+    page-break-inside: avoid;
+  }
 }

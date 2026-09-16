@@ -1,0 +1,191 @@
+{% extends "pharmacy/base.html" %}
+
+{% block title %}Inventory | ClinicHub{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+        <h1 class="h3 mb-1">Pharmacy Inventory</h1>
+        <p class="text-secondary mb-0">
+            Available quantities exclude expired and inactive batches.
+        </p>
+    </div>
+
+    {% if perms.pharmacy.add_stockbatch and pharmacy_assignments %}
+        <a
+            class="btn btn-primary"
+            href="{% url 'pharmacy:receive_stock' %}"
+        >
+            <i class="bi bi-box-arrow-in-down me-1"></i>
+            Receive stock
+        </a>
+    {% endif %}
+</div>
+
+<form method="get" class="card pharmacy-card p-3 mb-4">
+    <div class="row g-3 align-items-end">
+        <div class="col-lg-5">
+            <label for="inventory-search" class="form-label">
+                Search
+            </label>
+
+            <input
+                type="text"
+                id="inventory-search"
+                class="form-control"
+                name="q"
+                value="{{ filters.q }}"
+                placeholder="Medicine, code or barcode"
+            >
+        </div>
+
+        <div class="col-md-4 col-lg-3">
+            <label for="stock-status" class="form-label">
+                Stock status
+            </label>
+
+            <select
+                id="stock-status"
+                class="form-select"
+                name="stock"
+            >
+                <option value="">All</option>
+
+                <option
+                    value="available"
+                    {% if filters.stock == "available" %}selected{% endif %}
+                >
+                    Available
+                </option>
+
+                <option
+                    value="low"
+                    {% if filters.stock == "low" %}selected{% endif %}
+                >
+                    Low stock
+                </option>
+
+                <option
+                    value="out"
+                    {% if filters.stock == "out" %}selected{% endif %}
+                >
+                    Out of stock
+                </option>
+            </select>
+        </div>
+
+        <div class="col-md-5 col-lg-2">
+            <label for="pharmacy-filter" class="form-label">
+                Pharmacy
+            </label>
+
+            <select
+                id="pharmacy-filter"
+                class="form-select"
+                name="pharmacy"
+            >
+                <option value="">All</option>
+
+                {% for pharmacy in pharmacies %}
+                    <option
+                        value="{{ pharmacy.pk }}"
+                        {% if filters.pharmacy == pharmacy.pk|stringformat:"s" %}
+                            selected
+                        {% endif %}
+                    >
+                        {{ pharmacy.name }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="col-md-3 col-lg-2 d-grid">
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-funnel me-1"></i>
+                Filter
+            </button>
+        </div>
+    </div>
+</form>
+
+<div class="card pharmacy-card">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Medicine</th>
+                    <th>Code</th>
+                    <th>Pharmacy</th>
+                    <th>Available</th>
+                    <th>Reorder level</th>
+                    <th>Target</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for item in page_obj %}
+                    <tr>
+                        <td>
+                            <strong>
+                                {{ item.medicine.display_name }}
+                            </strong>
+
+                            <div class="small text-secondary">
+                                {{ item.medicine.generic_name }}
+                            </div>
+                        </td>
+
+                        <td>
+                            {{ item.medicine.code|default:"—" }}
+                        </td>
+
+                        <td>
+                            {{ item.pharmacy.name }}
+                        </td>
+
+                        <td class="fs-5 fw-bold">
+                            {{ item.available_quantity }}
+                        </td>
+
+                        <td>
+                            {{ item.reorder_level }}
+                        </td>
+
+                        <td>
+                            {{ item.target_stock }}
+                        </td>
+
+                        <td>
+                            {% if item.available_quantity == 0 %}
+                                <span class="badge text-bg-danger">
+                                    Out
+                                </span>
+                            {% elif item.available_quantity <= item.reorder_level %}
+                                <span class="badge text-bg-warning">
+                                    Low
+                                </span>
+                            {% else %}
+                                <span class="badge text-bg-success">
+                                    Available
+                                </span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td
+                            colspan="7"
+                            class="text-center text-secondary py-5"
+                        >
+                            No inventory items.
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% include "pharmacy/_pagination.html" %}
+{% endblock %}

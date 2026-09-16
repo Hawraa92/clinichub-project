@@ -2,6 +2,10 @@
 # Edit at https://www.toptal.com/developers/gitignore?templates=django
 
 ### Django ###
+/.env
+/.env.*
+!/.env.example
+!/.env.production.example
 *.log
 *.pot
 *.pyc
@@ -172,3 +176,40 @@ cython_debug/
 #.idea/
 
 # End of https://www.toptal.com/developers/gitignore/api/django
+# =========================
+# ClinicHub local/private runtime data
+# =========================
+/private_media/
+/staticfiles/
+/security_backups/
+/backups/
+/db_backups/
+
+# =========================
+# ClinicHub development/audit artifacts
+# =========================
+/_licensing_backups/
+/before_*/
+*.before_*
+*.corrupted_*
+
+/doctor_debug_files.zip
+
+/analytics_*.txt
+/appointments_*_audit.txt
+/archive_*.txt
+/doctor_*_audit.txt
+/full_regression_*.txt
+/permissions_baseline.txt
+/pharmacy_*_audit.txt
+/pharmacy_full_after_tenant_scope.txt
+
+# ML model binaries are versioned outside Git
+/ml/**/*.joblib
+
+# ML datasets and generated training reports
+/ml/data/diabetes_smote_sample.csv
+/ml/reports/*.json
+/ml/legacy_multiclass/*.json
+
+/ml/data/*.csv

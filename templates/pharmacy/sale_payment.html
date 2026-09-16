@@ -1,0 +1,120 @@
+{% extends "pharmacy/base.html" %}
+
+{% block title %}Record Payment | ClinicHub{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-12 col-xl-10">
+        <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+            <div>
+                <h1 class="h2 mb-2">{{ page_title }}</h1>
+                <p class="text-muted mb-0">
+                    Record a full or partial payment for this direct sale.
+                </p>
+            </div>
+            <span class="badge rounded-pill text-bg-info fs-6">
+                <i class="bi bi-receipt me-1"></i>
+                {{ sale.sale_number }}
+            </span>
+        </div>
+
+        <div class="row g-3 mb-4">
+            <div class="col-12 col-md-4">
+                <div class="card border-0 shadow-sm rounded-4 h-100">
+                    <div class="card-body">
+                        <div class="text-uppercase small text-muted fw-semibold">Total amount</div>
+                        <div class="h3 fw-bold mb-0">{{ sale.total_amount|floatformat:2 }} IQD</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-md-4">
+                <div class="card border-0 shadow-sm rounded-4 h-100">
+                    <div class="card-body">
+                        <div class="text-uppercase small text-muted fw-semibold">Already paid</div>
+                        <div class="h3 fw-bold mb-0">{{ sale.amount_paid|floatformat:2 }} IQD</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-md-4">
+                <div class="card border-0 shadow-sm rounded-4 h-100 text-bg-primary">
+                    <div class="card-body">
+                        <div class="text-uppercase small fw-semibold">Balance due</div>
+                        <div class="h3 fw-bold mb-0">{{ sale.balance_due|floatformat:2 }} IQD</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4">
+            <div class="col-12 col-lg-8">
+                <div class="card border-0 shadow-sm rounded-4">
+                    <div class="card-header bg-white py-3">
+                        <h2 class="h5 mb-0">
+                            <i class="bi bi-cash-coin me-2 text-primary"></i>
+                            Payment information
+                        </h2>
+                    </div>
+                    <div class="card-body p-4">
+                        <form method="post" novalidate>
+                            {% csrf_token %}
+
+                            {% if form.non_field_errors %}
+                                <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+                            {% endif %}
+
+                            {% for field in form %}
+                                <div class="mb-3">
+                                    <label class="form-label fw-semibold" for="{{ field.id_for_label }}">
+                                        {{ field.label }}
+                                        {% if field.field.required %}<span class="text-danger">*</span>{% endif %}
+                                    </label>
+                                    {{ field }}
+                                    {% if field.help_text %}
+                                        <div class="form-text">{{ field.help_text }}</div>
+                                    {% endif %}
+                                    {% for error in field.errors %}
+                                        <div class="invalid-feedback d-block">{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                            {% endfor %}
+
+                            <div class="d-flex flex-wrap gap-2 border-top pt-3">
+                                <button class="btn btn-success" type="submit">
+                                    <i class="bi bi-check2-circle me-1"></i>
+                                    {{ submit_label }}
+                                </button>
+                                <a class="btn btn-outline-secondary" href="{{ cancel_url }}">
+                                    Cancel
+                                </a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-lg-4">
+                <div class="card border-0 shadow-sm rounded-4">
+                    <div class="card-header bg-white py-3">
+                        <h2 class="h5 mb-0">Sale details</h2>
+                    </div>
+                    <div class="card-body p-4">
+                        <dl class="mb-0">
+                            <dt class="text-muted small">Sale</dt>
+                            <dd>{{ sale.sale_number }}</dd>
+
+                            <dt class="text-muted small">Customer</dt>
+                            <dd>{{ sale.customer_name|default:"Walk-in customer" }}</dd>
+
+                            <dt class="text-muted small">Pharmacy</dt>
+                            <dd>{{ sale.pharmacy.name }}</dd>
+
+                            <dt class="text-muted small">Current payment status</dt>
+                            <dd class="mb-0">{{ sale.get_payment_status_display }}</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,261 @@
+{# templates/lab/doctor_create_order.html #}
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Create Lab Order | ClinicHub{% endblock %}
+
+{% block extra_head %}
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  {# ✅ endpoint for badge polling (no hardcode) #}
+  <meta name="lab-ready-endpoint" content="{% url 'lab:doctor_ready_count_api' %}">
+
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  {# ✅ Base shared lab styles (sidebar/layout/buttons) #}
+  <link rel="stylesheet" href="{% static 'css/lab/lab_base.css' %}">
+
+  {# ✅ Page-specific styles (form polish) #}
+  <link rel="stylesheet" href="{% static 'css/lab/doctor_create_order.css' %}">
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+{% endblock %}
+
+{% block content %}
+<div class="labp">
+  <div class="page-bg">
+    <div class="dashboard-container">
+
+      <!-- Sidebar (Doctor) -->
+      <aside class="sidebar" aria-label="Lab Sidebar Navigation">
+        <div class="brand-container">
+          <div class="lab-avatar" aria-hidden="true">
+            <i class="bi bi-droplet-half"></i>
+          </div>
+          <div class="brand-text">
+            <h3>Clinic Panel</h3>
+            <p>Lab Orders</p>
+          </div>
+        </div>
+
+        <nav class="nav-menu">
+          <a class="nav-item" href="{% url 'doctor:dashboard' %}">
+            <i class="bi bi-speedometer2" aria-hidden="true"></i> Doctor Dashboard
+          </a>
+
+          {# ✅ Lab Inbox + live badge (JS updates) #}
+          <a class="nav-item" href="{% url 'lab:doctor_orders_inbox' %}">
+            <i class="bi bi-inbox" aria-hidden="true"></i> Lab Inbox
+            <span class="nav-badge"
+                  id="labReadyBadge"
+                  data-init="{{ ready_count|default:0 }}"
+                  {% if not ready_count %}style="display:none"{% endif %}>
+              {% if ready_count %}{{ ready_count }}{% endif %}
+            </span>
+          </a>
+
+          <a class="nav-item active" href="{% url 'lab:doctor_create_order' %}" aria-current="page">
+            <i class="bi bi-plus-circle" aria-hidden="true"></i> Create Lab Order
+          </a>
+        </nav>
+
+        <div class="logout-container">
+          <form method="post" action="{% url 'accounts:logout' %}">
+            {% csrf_token %}
+            <button type="submit" class="nav-item" style="width:100%; background:transparent; border:0; text-align:left;">
+              <i class="bi bi-box-arrow-right" aria-hidden="true"></i> Logout
+            </button>
+          </form>
+        </div>
+      </aside>
+
+      <!-- Main -->
+      <main class="main-content">
+
+        <div class="dashboard-header">
+          <div class="welcome-section">
+            <h1>Create Lab Order</h1>
+
+            {% if patient %}
+              <p class="inspiration">
+                Patient: <strong>{{ patient.full_name }}</strong>
+              </p>
+            {% else %}
+              <p class="inspiration">
+                Patient: <strong>—</strong>
+                <span style="opacity:.8;">(Select patient via Appointment)</span>
+              </p>
+            {% endif %}
+          </div>
+
+          <div class="datetime-card" aria-label="Info">
+            <div class="clock-icon" aria-hidden="true">
+              <i class="bi bi-clipboard2-pulse"></i>
+            </div>
+            <div>
+              <div class="clock" style="font-size:16px;font-weight:700;">Order Form</div>
+              <div class="date" style="margin-top:4px;">Send request to lab in seconds</div>
+            </div>
+          </div>
+        </div>
+
+        <section class="archives-section create-order-wrap">
+          <div class="section-header">
+            <i class="bi bi-file-earmark-plus" aria-hidden="true"></i>
+            <h2>Request Details</h2>
+          </div>
+
+          <form method="post" class="labd-form" enctype="multipart/form-data" novalidate>
+            {% csrf_token %}
+
+            <div class="labd-form-body">
+
+              {% if form.non_field_errors %}
+                <div class="labd-alert labd-alert-danger">
+                  {{ form.non_field_errors }}
+                </div>
+              {% endif %}
+
+              <div class="labd-hint" style="margin-bottom:14px; opacity:.9;">
+                <i class="bi bi-info-circle" aria-hidden="true"></i>
+                Choose an <strong>Appointment</strong> first (the patient will be inferred automatically).
+                You may also attach a <strong>PDF</strong> (referral / old report) to help the lab.
+              </div>
+
+              {% for field in form %}
+                <div class="labd-field {% if field.errors %}has-error{% endif %}">
+                  <label class="labd-label" for="{{ field.id_for_label }}">
+                    {{ field.label }}
+                    {% if field.field.required %}
+                      <span class="labd-required">*</span>
+                    {% endif %}
+                  </label>
+
+                  <div class="labd-control">
+                    {{ field }}
+                  </div>
+
+                  {% if field.help_text %}
+                    <div class="labd-help">{{ field.help_text|safe }}</div>
+                  {% endif %}
+
+                  {% if field.errors %}
+                    <div class="labd-errors">
+                      {% for err in field.errors %}
+                        <div class="labd-error">{{ err }}</div>
+                      {% endfor %}
+                    </div>
+                  {% endif %}
+
+                  {% if field.name == "doctor_attachment" %}
+                    <div class="labd-help" style="opacity:.85;">
+                      Accepted: PDF only. Keep it small for faster upload.
+                    </div>
+                  {% endif %}
+                </div>
+              {% endfor %}
+            </div>
+
+            <div class="labd-actions create-order-actions">
+              <button class="labd-btn primary" type="submit">
+                <i class="bi bi-send" aria-hidden="true"></i> Send to Lab
+              </button>
+
+              <a class="labd-btn" href="{% url 'lab:doctor_orders_inbox' %}">
+                <i class="bi bi-inbox" aria-hidden="true"></i> Back to Inbox
+              </a>
+
+              <a class="labd-btn" href="{% url 'doctor:dashboard' %}">
+                <i class="bi bi-arrow-left" aria-hidden="true"></i> Doctor Dashboard
+              </a>
+            </div>
+          </form>
+        </section>
+
+      </main>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const badge = document.getElementById("labReadyBadge");
+  const endpoint = document.querySelector('meta[name="lab-ready-endpoint"]')?.content;
+
+  function setBadge(n){
+    if(!badge) return;
+    if(n > 0){
+      badge.textContent = n;
+      badge.style.display = "inline-flex";
+    } else {
+      badge.textContent = "";
+      badge.style.display = "none";
+    }
+  }
+
+  function toast(msg){
+    let t = document.getElementById("labToast");
+    if(!t){
+      t = document.createElement("div");
+      t.id = "labToast";
+      t.style.position = "fixed";
+      t.style.top = "18px";
+      t.style.right = "18px";
+      t.style.zIndex = "9999";
+      t.style.maxWidth = "360px";
+      t.style.padding = "12px 14px";
+      t.style.borderRadius = "14px";
+      t.style.background = "#ef4444";
+      t.style.color = "#fff";
+      t.style.fontWeight = "800";
+      t.style.boxShadow = "0 12px 28px rgba(239,68,68,.25)";
+      t.style.opacity = "0";
+      t.style.transition = "opacity .25s ease";
+      document.body.appendChild(t);
+    }
+    t.textContent = msg;
+    t.style.opacity = "1";
+    clearTimeout(window.__labToastTimer);
+    window.__labToastTimer = setTimeout(()=>{ t.style.opacity = "0"; }, 3500);
+  }
+
+  const init = Number(badge?.dataset?.init || 0);
+  let prev = Number(localStorage.getItem("labReadyCount") || init);
+  setBadge(prev);
+
+  async function poll(){
+    if(!endpoint) return;
+
+    try{
+      const r = await fetch(endpoint, {
+        headers: { "X-Requested-With": "XMLHttpRequest" },
+        cache: "no-store"
+      });
+
+      // If role/session is wrong, do not leave stale numbers
+      if(!r.ok){
+        setBadge(0);
+        localStorage.setItem("labReadyCount", "0");
+        prev = 0;
+        return;
+      }
+
+      const data = await r.json();
+      const n = Number(data.count || 0);
+
+      if(n > prev){
+        toast("🔴 New lab result ready (" + n + ")");
+      }
+
+      prev = n;
+      localStorage.setItem("labReadyCount", String(n));
+      setBadge(n);
+    }catch(e){}
+  }
+
+  poll();
+  setInterval(poll, 20000);
+})();
+</script>
+{% endblock %}

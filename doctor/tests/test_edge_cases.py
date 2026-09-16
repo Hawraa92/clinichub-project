@@ -5,6 +5,7 @@ from django.urls import reverse
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 
+from accounts.tests.permission_utils import apply_role_permissions
 from doctor.models import Doctor
 from patient.models import Patient
 from appointments.models import Appointment
@@ -24,6 +25,7 @@ class DoctorEdgeCaseTest(TestCase):
             full_name="Dr. Edge",
             specialty="General",        # ← مضاف
         )
+        apply_role_permissions(self.doctor_user)
         self.client.login(email="edge@clinic.com", password=PASSWORD)
 
         # ----- Patients with غريب أسماء -----

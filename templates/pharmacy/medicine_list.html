@@ -1,0 +1,225 @@
+{% extends "pharmacy/base.html" %}
+
+{% block title %}Medicines | ClinicHub{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+    <div>
+        <h1 class="h2 mb-2">Medicine Catalogue</h1>
+        <p class="text-secondary mb-0">
+            Manage medicine master data for your hospital or standalone pharmacy.
+        </p>
+    </div>
+
+    {% if perms.pharmacy.add_medicine and can_manage_medicines %}
+        <a
+            class="btn btn-primary"
+            href="{% url 'pharmacy:medicine_create' %}"
+        >
+            <i class="bi bi-plus-circle me-1"></i>
+            Add medicine
+        </a>
+    {% endif %}
+</div>
+
+{% if not can_manage_medicines %}
+    <div class="alert alert-info d-flex align-items-start gap-2" role="alert">
+        <i class="bi bi-info-circle mt-1"></i>
+
+        <div>
+            You can view the medicine catalogue. An active pharmacy manager
+            assignment is required to manage medicines.
+        </div>
+    </div>
+{% elif not perms.pharmacy.add_medicine and not perms.pharmacy.change_medicine %}
+    <div class="alert alert-info d-flex align-items-start gap-2" role="alert">
+        <i class="bi bi-shield-lock mt-1"></i>
+
+        <div>
+            You currently have read-only access to the medicine catalogue.
+        </div>
+    </div>
+{% endif %}
+
+<form method="get" class="card pharmacy-card p-3 mb-4">
+    <div class="input-group">
+        <input
+            class="form-control"
+            type="search"
+            name="q"
+            value="{{ query|default:'' }}"
+            placeholder="Generic name, brand, code, barcode or manufacturer"
+            aria-label="Search medicines"
+        >
+
+        <button class="btn btn-primary" type="submit">
+            <i class="bi bi-search me-1"></i>
+            Search
+        </button>
+
+        {% if query %}
+            <a
+                class="btn btn-outline-secondary"
+                href="{% url 'pharmacy:medicines' %}"
+            >
+                Clear
+            </a>
+        {% endif %}
+    </div>
+</form>
+
+<div class="card pharmacy-card">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Medicine</th>
+                    <th>Generic name</th>
+                    <th>Code</th>
+                    <th>Barcode</th>
+                    <th>Form</th>
+                    <th>Manufacturer</th>
+                    <th>Flags</th>
+
+                    {% if perms.pharmacy.change_medicine and can_manage_medicines %}
+                        <th class="text-end">Actions</th>
+                    {% endif %}
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for medicine in page_obj %}
+                    <tr>
+                        <td>
+                            <strong>{{ medicine.display_name }}</strong>
+
+                            <div class="small text-secondary">
+                                {{ medicine.hospital.name|default:"—" }}
+                            </div>
+                        </td>
+
+                        <td>
+                            {{ medicine.generic_name|default:"—" }}
+                        </td>
+
+                        <td>
+                            <code>{{ medicine.code }}</code>
+                        </td>
+
+                        <td>
+                            {{ medicine.barcode|default:"—" }}
+                        </td>
+
+                        <td>
+                            {{ medicine.get_dosage_form_display|default:"—" }}
+                        </td>
+
+                        <td>
+                            {{ medicine.manufacturer|default:"—" }}
+                        </td>
+
+                        <td class="text-nowrap">
+                            {% if medicine.requires_prescription %}
+                                <span class="badge text-bg-primary">
+                                    Rx
+                                </span>
+                            {% endif %}
+
+                            {% if medicine.is_controlled %}
+                                <span class="badge text-bg-danger">
+                                    Controlled
+                                </span>
+                            {% endif %}
+
+                            {% if medicine.is_active %}
+                                <span class="badge text-bg-success">
+                                    Active
+                                </span>
+                            {% else %}
+                                <span class="badge text-bg-secondary">
+                                    Inactive
+                                </span>
+                            {% endif %}
+                        </td>
+
+                        {% if perms.pharmacy.change_medicine and can_manage_medicines %}
+                            <td class="text-end text-nowrap">
+                                {% if medicine.hospital_id in manageable_hospital_ids %}
+                                    <a
+                                        class="btn btn-sm btn-outline-primary"
+                                        href="{% url 'pharmacy:medicine_edit' medicine.pk %}"
+                                        title="Edit medicine"
+                                        aria-label="Edit {{ medicine.display_name }}"
+                                    >
+                                        <i class="bi bi-pencil-square"></i>
+                                        <span class="visually-hidden">
+                                            Edit
+                                        </span>
+                                    </a>
+
+                                    <form
+                                        method="post"
+                                        action="{% url 'pharmacy:medicine_toggle_active' medicine.pk %}"
+                                        class="d-inline"
+                                        onsubmit="return confirm(
+                                            '{% if medicine.is_active %}Deactivate{% else %}Activate{% endif %} this medicine?'
+                                        );"
+                                    >
+                                        {% csrf_token %}
+
+                                        <button
+                                            class="btn btn-sm {% if medicine.is_active %}btn-outline-danger{% else %}btn-outline-success{% endif %}"
+                                            type="submit"
+                                            title="{% if medicine.is_active %}Deactivate{% else %}Activate{% endif %} medicine"
+                                            aria-label="{% if medicine.is_active %}Deactivate{% else %}Activate{% endif %} {{ medicine.display_name }}"
+                                        >
+                                            <i class="bi {% if medicine.is_active %}bi-pause-circle{% else %}bi-play-circle{% endif %}"></i>
+
+                                            <span class="visually-hidden">
+                                                {% if medicine.is_active %}
+                                                    Deactivate
+                                                {% else %}
+                                                    Activate
+                                                {% endif %}
+                                            </span>
+                                        </button>
+                                    </form>
+                                {% else %}
+                                    <span class="text-secondary small">
+                                        Read only
+                                    </span>
+                                {% endif %}
+                            </td>
+                        {% endif %}
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td
+                            colspan="{% if perms.pharmacy.change_medicine and can_manage_medicines %}8{% else %}7{% endif %}"
+                            class="text-center text-secondary py-5"
+                        >
+                            <i class="bi bi-capsule fs-1 d-block mb-2"></i>
+
+                            <div class="mb-3">
+                                No medicines found.
+                            </div>
+
+                            {% if perms.pharmacy.add_medicine and can_manage_medicines and not query %}
+                                <a
+                                    class="btn btn-primary btn-sm"
+                                    href="{% url 'pharmacy:medicine_create' %}"
+                                >
+                                    <i class="bi bi-plus-circle me-1"></i>
+                                    Add the first medicine
+                                </a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% include "pharmacy/_pagination.html" %}
+{% endblock %}

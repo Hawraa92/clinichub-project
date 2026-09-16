@@ -1,0 +1,272 @@
+{% extends "pharmacy/base.html" %}
+
+{% block title %}Direct Sales | ClinicHub{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+    <div>
+        <h1 class="h2 mb-2">Direct Sales</h1>
+
+        <p class="text-muted mb-0">
+            Walk-in point-of-sale transactions, payments and receipts.
+        </p>
+    </div>
+
+    {% if perms.pharmacy.add_pharmacysale and pharmacy_assignments %}
+        <a
+            class="btn btn-primary"
+            href="{% url 'pharmacy:sale_create' %}"
+        >
+            <i class="bi bi-cart-plus me-1"></i>
+            New direct sale
+        </a>
+    {% endif %}
+</div>
+
+{% if not perms.pharmacy.add_pharmacysale %}
+    <div class="alert alert-info d-flex align-items-start gap-2" role="alert">
+        <i class="bi bi-info-circle mt-1"></i>
+
+        <div>
+            You currently have read-only access to direct sales.
+        </div>
+    </div>
+{% elif not pharmacy_assignments %}
+    <div class="alert alert-warning d-flex align-items-start gap-2" role="alert">
+        <i class="bi bi-exclamation-triangle mt-1"></i>
+
+        <div>
+            An active pharmacy staff assignment is required to create direct sales.
+        </div>
+    </div>
+{% endif %}
+
+<div class="card border-0 shadow-sm rounded-4 mb-4">
+    <div class="card-body p-3 p-lg-4">
+        <form method="get">
+            <div class="row g-3 align-items-end">
+                <div class="col-12 col-xl-4">
+                    <label class="form-label" for="sale-search">
+                        Search
+                    </label>
+
+                    <input
+                        class="form-control"
+                        id="sale-search"
+                        type="search"
+                        name="q"
+                        value="{{ filters.q|default:'' }}"
+                        placeholder="Sale, customer, phone or reference"
+                    >
+                </div>
+
+                <div class="col-12 col-md-4 col-xl-2">
+                    <label class="form-label" for="sale-status">
+                        Sale status
+                    </label>
+
+                    <select
+                        class="form-select"
+                        id="sale-status"
+                        name="status"
+                    >
+                        <option value="">All statuses</option>
+
+                        {% for value, label in status_choices %}
+                            <option
+                                value="{{ value }}"
+                                {% if filters.status == value %}selected{% endif %}
+                            >
+                                {{ label }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-12 col-md-4 col-xl-2">
+                    <label class="form-label" for="payment-status">
+                        Payment
+                    </label>
+
+                    <select
+                        class="form-select"
+                        id="payment-status"
+                        name="payment_status"
+                    >
+                        <option value="">All payments</option>
+
+                        {% for value, label in payment_status_choices %}
+                            <option
+                                value="{{ value }}"
+                                {% if filters.payment_status == value %}selected{% endif %}
+                            >
+                                {{ label }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-12 col-md-4 col-xl-2">
+                    <label class="form-label" for="sale-pharmacy">
+                        Pharmacy
+                    </label>
+
+                    <select
+                        class="form-select"
+                        id="sale-pharmacy"
+                        name="pharmacy"
+                    >
+                        <option value="">All pharmacies</option>
+
+                        {% for pharmacy in pharmacies %}
+                            <option
+                                value="{{ pharmacy.pk }}"
+                                {% if filters.pharmacy == pharmacy.pk|stringformat:"s" %}selected{% endif %}
+                            >
+                                {{ pharmacy.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-12 col-xl-2">
+                    <button
+                        class="btn btn-primary w-100"
+                        type="submit"
+                    >
+                        <i class="bi bi-funnel me-1"></i>
+                        Filter
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Sale</th>
+                    <th>Customer</th>
+                    <th>Pharmacy</th>
+                    <th>Total</th>
+                    <th>Paid</th>
+                    <th>Balance</th>
+                    <th>Status</th>
+                    <th>Payment</th>
+                    <th>Date</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for sale in page_obj %}
+                    <tr>
+                        <td>
+                            <a
+                                class="fw-semibold"
+                                href="{% url 'pharmacy:sale_detail' sale.pk %}"
+                            >
+                                {{ sale.sale_number }}
+                            </a>
+                        </td>
+
+                        <td>
+                            <div>
+                                {{ sale.customer_name|default:"Walk-in customer" }}
+                            </div>
+
+                            {% if sale.customer_phone %}
+                                <small class="text-muted">
+                                    {{ sale.customer_phone }}
+                                </small>
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            <div>
+                                {{ sale.pharmacy.name }}
+                            </div>
+
+                            <small class="text-muted">
+                                {{ sale.pharmacy.get_operating_mode_display }}
+                            </small>
+                        </td>
+
+                        <td class="fw-semibold">
+                            {{ sale.total_amount|floatformat:2 }} IQD
+                        </td>
+
+                        <td>
+                            {{ sale.amount_paid|floatformat:2 }} IQD
+                        </td>
+
+                        <td>
+                            {{ sale.balance_due|floatformat:2 }} IQD
+                        </td>
+
+                        <td>
+                            {% if sale.status == "completed" %}
+                                <span class="badge text-bg-success">
+                                    Completed
+                                </span>
+                            {% elif sale.status == "voided" %}
+                                <span class="badge text-bg-danger">
+                                    Voided
+                                </span>
+                            {% else %}
+                                <span class="badge text-bg-secondary">
+                                    {{ sale.get_status_display }}
+                                </span>
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            {% if sale.payment_status == "paid" %}
+                                <span class="badge text-bg-success">
+                                    Paid
+                                </span>
+                            {% elif sale.payment_status == "partially_paid" %}
+                                <span class="badge text-bg-warning">
+                                    Partially paid
+                                </span>
+                            {% else %}
+                                <span class="badge text-bg-danger">
+                                    Unpaid
+                                </span>
+                            {% endif %}
+                        </td>
+
+                        <td class="text-nowrap">
+                            {{ sale.created_at|date:"Y-m-d H:i" }}
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="9" class="text-center py-5">
+                            <i class="bi bi-cart-x display-6 text-muted d-block mb-2"></i>
+
+                            <div class="text-muted mb-3">
+                                No matching direct sales.
+                            </div>
+
+                            {% if perms.pharmacy.add_pharmacysale and pharmacy_assignments %}
+                                <a
+                                    class="btn btn-primary btn-sm"
+                                    href="{% url 'pharmacy:sale_create' %}"
+                                >
+                                    <i class="bi bi-cart-plus me-1"></i>
+                                    Create the first sale
+                                </a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% include "pharmacy/_pagination.html" %}
+{% endblock %}

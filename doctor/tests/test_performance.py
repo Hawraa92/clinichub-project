@@ -1,6 +1,7 @@
 from django.test import TestCase
 from django.urls import reverse
 from accounts.models import User
+from accounts.tests.permission_utils import apply_role_permissions
 from doctor.models import Doctor
 from patient.models import Patient
 from appointments.models import Appointment
@@ -15,6 +16,7 @@ class DoctorPerformanceTest(TestCase):
             role='doctor'
         )
         self.doctor = Doctor.objects.create(user=self.user, full_name='Perf Dr')
+        apply_role_permissions(self.user)
 
         logged_in = self.client.login(email='docperf@test.com', password='123456')
         assert logged_in, "❌ لم يتم تسجيل الدخول!"

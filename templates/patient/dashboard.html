@@ -5,7 +5,7 @@
 {% block title %}Patient Dashboard{% endblock %}
 
 {% block extra_head %}
-  <link rel="stylesheet" href="{% static 'css/patient/dashboard.css' %}">
+  <link rel="stylesheet" href="{% static 'css/patient/dashboard.css' %}?v=2">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 {% endblock %}
@@ -14,38 +14,52 @@
 <div class="dashboard-container" data-view="patient-dashboard">
   <!-- Sidebar -->
   <aside class="sidebar" id="sidebar" aria-label="Main Navigation">
-    <div class="brand-container">
-      <div class="clinic-logo" aria-hidden="true">
-        <i class="bi bi-heart-pulse"></i>
+    <div class="sidebar-top">
+      <div class="brand-container">
+        <div class="clinic-logo" aria-hidden="true">
+          <i class="bi bi-heart-pulse"></i>
+        </div>
+        <div class="brand-text">
+          <h3 class="brand-title">MediCare Portal</h3>
+          <p class="brand-subtitle">Patient Dashboard</p>
+        </div>
       </div>
-      <div class="brand-text">
-        <h3 class="brand-title">MediCare Portal</h3>
-        <p class="brand-subtitle">Patient Dashboard</p>
+
+      <div class="profile-card" aria-label="Patient profile">
+        <div class="profile-avatar" aria-hidden="true">
+          <i class="bi bi-person-circle"></i>
+        </div>
+        <div class="profile-meta">
+          <div class="profile-name">
+            {{ request.user.get_full_name|default:request.user.username }}
+          </div>
+          <div class="profile-role">Patient</div>
+        </div>
       </div>
+
+      <nav class="nav-menu" role="navigation">
+        <a href="{% url 'patient:dashboard' %}"
+           class="nav-item{% if request.resolver_match.view_name == 'patient:dashboard' %} active{% endif %}"
+           aria-current="{% if request.resolver_match.view_name == 'patient:dashboard' %}page{% endif %}">
+          <i class="bi bi-house-door" aria-hidden="true"></i>
+          <span>Dashboard</span>
+        </a>
+
+        <a href="{% url 'appointments:my_appointments' %}" class="nav-item">
+          <i class="bi bi-calendar-event" aria-hidden="true"></i>
+          <span>My Appointments</span>
+        </a>
+
+        <a href="{% url 'doctor:available_doctors' %}"
+           class="nav-item{% if request.resolver_match.view_name == 'doctor:available_doctors' %} active{% endif %}">
+          <i class="bi bi-people" aria-hidden="true"></i>
+          <span>Available Doctors</span>
+        </a>
+      </nav>
     </div>
 
-    <nav class="nav-menu" role="navigation">
-      <a href="{% url 'patient:dashboard' %}"
-         class="nav-item{% if request.resolver_match.view_name == 'patient:dashboard' %} active{% endif %}"
-         aria-current="{% if request.resolver_match.view_name == 'patient:dashboard' %}page{% endif %}">
-        <i class="bi bi-house-door" aria-hidden="true"></i>
-        <span>Dashboard</span>
-      </a>
-
-      <a href="{% url 'appointments:my_appointments' %}" class="nav-item">
-        <i class="bi bi-calendar-event" aria-hidden="true"></i>
-        <span>My Appointments</span>
-      </a>
-
-      <a href="{% url 'doctor:available_doctors' %}"
-         class="nav-item{% if request.resolver_match.view_name == 'doctor:available_doctors' %} active{% endif %}">
-        <i class="bi bi-people" aria-hidden="true"></i>
-        <span>Available Doctors</span>
-      </a>
-    </nav>
-
     <div class="logout-container">
-      <a href="{% url 'accounts:logout' %}" class="nav-item">
+      <a href="{% url 'accounts:logout' %}" class="nav-item logout">
         <i class="bi bi-box-arrow-right" aria-hidden="true"></i>
         <span>Logout</span>
       </a>
@@ -53,52 +67,83 @@
   </aside>
 
   <!-- Mobile backdrop -->
-  <div class="sidebar-backdrop" data-close-sidebar></div>
+  <div class="sidebar-backdrop" data-close-sidebar aria-hidden="true"></div>
 
-  <!-- Main Content -->
-  <main class="main-content" id="main" tabindex="-1">
-    <!-- Top Bar -->
-    <div class="top-bar">
-      <button class="sidebar-toggle" type="button" aria-label="Toggle navigation" aria-controls="sidebar" aria-expanded="false">
-        <i class="bi bi-list"></i>
+  <!-- Main -->
+  <div class="main-content-inner" id="main" tabindex="-1">
+    <!-- Top Bar (like doctor dashboard: clean + chips) -->
+    <header class="top-bar" role="banner">
+      <button class="sidebar-toggle" type="button"
+              aria-label="Toggle navigation"
+              aria-controls="sidebar"
+              aria-expanded="false">
+        <i class="bi bi-list" aria-hidden="true"></i>
       </button>
 
-      <div class="topbar-left">
-        <div class="datetime-display" aria-live="polite">
-          <span id="digital-date"></span>
-          <span id="digital-clock"></span>
+      <div class="topbar-center">
+        <div class="top-pill">
+          <i class="bi bi-grid-1x2" aria-hidden="true"></i>
+          <span>Patient Dashboard</span>
         </div>
       </div>
-      <div class="user-info">
-        <span>Welcome, {{ request.user.first_name|default:request.user.username }}</span>
-        <div class="user-avatar" title="{{ request.user.get_full_name|default:request.user.username }}">
-          <i class="bi bi-person-circle" aria-hidden="true"></i>
-        </div>
-      </div>
-    </div>
 
-    <!-- Dashboard Grid -->
-    <div class="dashboard-grid">
-      <!-- Welcome Card -->
-      <section class="welcome-card card" aria-labelledby="welcomeHeading">
-        <div class="card-header">
-          <h2 id="welcomeHeading">Welcome, {{ request.user.first_name|default:request.user.username }}!</h2>
+      <div class="topbar-right">
+        <div class="user-chip" title="{{ request.user.get_full_name|default:request.user.username }}">
+          <div class="chip-avatar" aria-hidden="true">
+            <i class="bi bi-person"></i>
+          </div>
+          <span class="chip-name">
+            {{ request.user.first_name|default:request.user.username }}
+          </span>
+          <i class="bi bi-chevron-down" aria-hidden="true"></i>
         </div>
-        <div class="card-body">
-          <p class="card-text">Manage your bookings and find available doctors quickly.</p>
-          <div class="quick-actions" aria-label="Quick actions">
-            <a href="{% url 'appointments:my_appointments' %}" class="action-btn">
-              <i class="bi bi-calendar-week" aria-hidden="true"></i>
-              <span>View Appointments</span>
-            </a>
-            <a href="{% url 'doctor:available_doctors' %}" class="action-btn">
-              <i class="bi bi-people" aria-hidden="true"></i>
-              <span>Available Doctors</span>
-            </a>
+      </div>
+    </header>
+
+    <!-- HERO (يشبه الطبيب: ترحيب + ساعة يمين) -->
+    <section class="hero" aria-label="Dashboard overview">
+      <div class="hero-left">
+        <h1 class="hero-title">
+          Welcome back, {{ request.user.first_name|default:request.user.username }}!
+        </h1>
+        <p class="hero-quote">
+          “Manage your bookings and find available doctors quickly.”
+        </p>
+
+        <div class="hero-actions" aria-label="Quick actions">
+          <a href="{% url 'appointments:my_appointments' %}" class="action-card">
+            <div class="action-icon" aria-hidden="true"><i class="bi bi-calendar-week"></i></div>
+            <div class="action-text">
+              <div class="action-title">View Appointments</div>
+              <div class="action-sub">See your upcoming visits</div>
+            </div>
+          </a>
+
+          <a href="{% url 'doctor:available_doctors' %}" class="action-card">
+            <div class="action-icon" aria-hidden="true"><i class="bi bi-people"></i></div>
+            <div class="action-text">
+              <div class="action-title">Available Doctors</div>
+              <div class="action-sub">Find a specialist easily</div>
+            </div>
+          </a>
+        </div>
+      </div>
+
+      <div class="hero-right">
+        <div class="clock-card" aria-label="Current time and date">
+          <div class="clock-icon" aria-hidden="true">
+            <i class="bi bi-clock"></i>
+          </div>
+          <div class="clock-meta">
+            <div id="digital-clock" class="clock-time"></div>
+            <div id="digital-date" class="clock-date"></div>
           </div>
         </div>
-      </section>
+      </div>
+    </section>
 
+    <!-- Content Grid -->
+    <div class="dashboard-grid">
       <!-- Health Summary Card -->
       <section class="health-summary card" aria-labelledby="healthSummaryHeading">
         <div class="card-header">
@@ -130,11 +175,12 @@
 
       <!-- Upcoming Appointments -->
       <section id="my-appointments" class="appointments-card card" aria-labelledby="myApptsHeading">
-        <div class="card-header d-flex align-items-center justify-content-between">
+        <div class="card-header">
           <h2 id="myApptsHeading" class="m-0">
             <i class="bi bi-list-task" aria-hidden="true"></i>
             My Upcoming Appointments
           </h2>
+
           <div class="header-actions">
             <a class="btn btn-outline-secondary me-2" href="{% url 'appointments:my_appointments' %}">
               <i class="bi bi-journal-text me-1" aria-hidden="true"></i> See All
@@ -149,7 +195,7 @@
           <div class="appointments-list">
             {% if upcoming_appointments %}
               {% for appt in upcoming_appointments %}
-                <article class="appointment-item" role="article" aria-label="Appointment">
+                <article class="appointment-item" role="article" aria-label="Appointment" tabindex="0">
                   <div class="appt-time" aria-label="Appointment date and time">
                     <div class="appt-date">
                       {{ appt.scheduled_time|localtime|date:"D, M d" }}
@@ -209,7 +255,6 @@
         </div>
         <div class="card-body">
           <div class="info-grid">
-            <!-- Blood Pressure -->
             <article class="info-tile" aria-labelledby="bpTitle">
               <div class="tile-icon"><i class="bi bi-heart"></i></div>
               <div class="tile-content">
@@ -223,7 +268,6 @@
               </div>
             </article>
 
-            <!-- Blood Glucose -->
             <article class="info-tile" aria-labelledby="bgTitle">
               <div class="tile-icon"><i class="bi bi-droplet-half"></i></div>
               <div class="tile-content">
@@ -237,7 +281,6 @@
               </div>
             </article>
 
-            <!-- Heart Rate -->
             <article class="info-tile" aria-labelledby="hrTitle">
               <div class="tile-icon"><i class="bi bi-activity"></i></div>
               <div class="tile-content">
@@ -247,7 +290,6 @@
               </div>
             </article>
 
-            <!-- Temperature -->
             <article class="info-tile" aria-labelledby="tempTitle">
               <div class="tile-icon"><i class="bi bi-thermometer-half"></i></div>
               <div class="tile-content">
@@ -260,10 +302,10 @@
         </div>
       </section>
     </div>
-  </main>
+  </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
-  <script src="{% static 'js/patient/dashboard.js' %}"></script>
+  <script src="{% static 'js/patient/dashboard.js' %}?v=2"></script>
 {% endblock %}

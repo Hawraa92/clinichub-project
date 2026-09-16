@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}License Status | ClinicHub{% endblock %}
+
+{% block extra_head %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'css/licensing/licensing.css' %}?v=1">
+{% endblock %}
+
+{% block content %}
+<section class="license-page">
+  <div class="container py-5">
+    <div class="license-heading">
+      <div>
+        <span class="license-eyebrow">
+          <i class="bi bi-shield-lock me-1"></i>
+          ClinicHub Protection
+        </span>
+        <h1>License status</h1>
+        <p>Activation, subscription period, modules and installation identity.</p>
+      </div>
+
+      {% if can_manage_license %}
+        <div class="license-actions">
+          <a class="btn btn-outline-primary"
+             href="{% url 'licensing:installation_request' %}">
+            <i class="bi bi-download me-1"></i>
+            Installation request
+          </a>
+          <a class="btn btn-primary" href="{% url 'licensing:activate' %}">
+            <i class="bi bi-key me-1"></i>
+            Activate license
+          </a>
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="license-status-card status-{{ license_status.code }}">
+      <div class="status-icon" aria-hidden="true">
+        {% if license_status.allowed %}
+          <i class="bi bi-shield-check"></i>
+        {% else %}
+          <i class="bi bi-shield-exclamation"></i>
+        {% endif %}
+      </div>
+      <div>
+        <span class="status-label">{{ license_status.code|capfirst }}</span>
+        <h2>{{ license_status.message }}</h2>
+        {% if license_status.in_grace_period %}
+          <p>Contact the vendor before the grace period ends.</p>
+        {% elif license_status.days_remaining != None %}
+          <p>{{ license_status.days_remaining }} day{{ license_status.days_remaining|pluralize }} remaining.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="row g-4 mt-1">
+      <div class="col-lg-5">
+        <article class="license-panel h-100">
+          <div class="panel-title">
+            <i class="bi bi-pc-display-horizontal"></i>
+            Installation
+          </div>
+          <dl class="license-details">
+            <div>
+              <dt>Installation ID</dt>
+              <dd class="font-monospace copy-value">{{ installation.pk }}</dd>
+            </div>
+            <div>
+              <dt>Name</dt>
+              <dd>{{ installation.display_name|default:"Not configured" }}</dd>
+            </div>
+            <div>
+              <dt>Fingerprint</dt>
+              <dd class="font-monospace small copy-value">
+                {{ installation.machine_fingerprint }}
+              </dd>
+            </div>
+          </dl>
+        </article>
+      </div>
+
+      <div class="col-lg-7">
+        <article class="license-panel h-100">
+          <div class="panel-title">
+            <i class="bi bi-file-earmark-lock2"></i>
+            Active license
+          </div>
+
+          {% if license %}
+            <dl class="license-details two-column">
+              <div>
+                <dt>Customer</dt>
+                <dd>{{ license.customer_name }}</dd>
+              </div>
+              <div>
+                <dt>Plan</dt>
+                <dd>{{ license.get_plan_display }}</dd>
+              </div>
+              <div>
+                <dt>License ID</dt>
+                <dd class="font-monospace">{{ license.license_id }}</dd>
+              </div>
+              <div>
+                <dt>Expiry</dt>
+                <dd>{{ license.expires_at|default:"Perpetual" }}</dd>
+              </div>
+              <div>
+                <dt>Activated</dt>
+                <dd>{{ license.activated_at|date:"Y-m-d H:i" }}</dd>
+              </div>
+              <div>
+                <dt>Last online check</dt>
+                <dd>{{ license.last_online_success_at|date:"Y-m-d H:i"|default:"Offline license" }}</dd>
+              </div>
+            </dl>
+
+            <div class="claim-section">
+              <h3>Licensed modules</h3>
+              <div class="claim-chips">
+                {% for module in license.modules %}
+                  <span>{{ module }}</span>
+                {% empty %}
+                  <span class="muted">No modules</span>
+                {% endfor %}
+              </div>
+            </div>
+
+            <div class="claim-section">
+              <h3>Limits</h3>
+              <div class="claim-chips">
+                {% for name, value in license.limits.items %}
+                  <span>{{ name }}: {% if value == 0 %}Unlimited{% else %}{{ value }}{% endif %}</span>
+                {% empty %}
+                  <span class="muted">No limits</span>
+                {% endfor %}
+              </div>
+            </div>
+
+            {% if can_manage_license and license %}
+              <form method="post"
+                    action="{% url 'licensing:sync' %}"
+                    class="mt-4">
+                {% csrf_token %}
+                <button class="btn btn-outline-secondary" type="submit">
+                  <i class="bi bi-arrow-repeat me-1"></i>
+                  Online synchronization
+                </button>
+              </form>
+            {% endif %}
+          {% else %}
+            <div class="empty-license">
+              <i class="bi bi-key"></i>
+              <p>No signed license is installed on this ClinicHub system.</p>
+            </div>
+          {% endif %}
+        </article>
+      </div>
+    </div>
+
+    {% if can_manage_license %}
+      <article class="license-panel mt-4">
+        <div class="panel-title">
+          <i class="bi bi-clock-history"></i>
+          Recent license activity
+        </div>
+        <div class="table-responsive">
+          <table class="table align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Event</th>
+                <th>Result</th>
+                <th>Actor</th>
+                <th>Message</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for event in recent_events %}
+                <tr>
+                  <td>{{ event.created_at|date:"Y-m-d H:i" }}</td>
+                  <td>{{ event.get_event_type_display }}</td>
+                  <td>
+                    {% if event.success %}
+                      <span class="badge text-bg-success">Success</span>
+                    {% else %}
+                      <span class="badge text-bg-danger">Failed</span>
+                    {% endif %}
+                  </td>
+                  <td>{{ event.actor|default:"System" }}</td>
+                  <td>{{ event.message|default:"—" }}</td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="5" class="text-center text-muted py-4">
+                    No license activity yet.
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </article>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

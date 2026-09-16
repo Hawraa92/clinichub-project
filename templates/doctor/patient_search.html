@@ -1,58 +1,150 @@
+{# File: doctor/templates/doctor/patient_search.html #}
 {% extends "base.html" %}
 {% load static i18n %}
 
 {% block extra_head %}
   <link rel="stylesheet" href="{% static 'css/doctor/patient_search.css' %}">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
 {% endblock %}
 
 {% block content %}
-<div class="ps-wrapper" role="main">
-  <h1 class="ps-title">
-    <i class="bi bi-file-earmark-text" aria-hidden="true"></i>
-    {% trans "Generate Patient Report" %}
-  </h1>
-  <p class="ps-subtitle">
-    {% trans "Choose a patient and (optionally) limit the date range." %}
-  </p>
+<section class="ps-page" aria-label="{% trans 'Generate patient report page' %}">
+  <div class="ps-shell">
 
-  <!-- ===== اختيار المريض + النطاق ===== -->
-  <form method="get" class="ps-filter-card" aria-label="{% trans 'Report filter form' %}">
-    <div class="ps-grid">
-      <!-- قائمة المرضى -->
-      <div class="ps-field">
-        <label for="patient">{% trans "Patient" %}</label>
-        <select id="patient" name="patient" required>
-          <option value="" disabled selected>{% trans "Select…" %}</option>
-          {% for p in patients %}
-            <option value="{{ p.id }}">{{ p.full_name }}</option>
-          {% endfor %}
-        </select>
+    <a class="ps-back" href="{% url 'doctor:dashboard' %}">
+      <i class="bi bi-arrow-left" aria-hidden="true"></i>
+      <span>{% trans "Back to Dashboard" %}</span>
+    </a>
+
+    <header class="ps-head">
+      <div class="ps-badge" aria-hidden="true">
+        <i class="bi bi-file-earmark-text"></i>
       </div>
 
-      <!-- تاريخ من -->
-      <div class="ps-field">
-        <label for="date_from">{% trans "From" %}</label>
-        <input type="date" id="date_from" name="date_from" value="{{ request.GET.date_from }}">
+      <div class="ps-head-text">
+        <h1 class="ps-title">{% trans "Generate Patient Report" %}</h1>
+        <p class="ps-subtitle">{% trans "Select a patient and optionally define a date range." %}</p>
+      </div>
+    </header>
+
+    <form method="get" class="ps-card" aria-label="{% trans 'Report filter form' %}">
+      <div class="ps-grid">
+
+        <!-- Patient -->
+        <div class="ps-field ps-field-wide">
+          <label for="patient" class="ps-label">
+            {% trans "Patient" %} <span class="ps-required">*</span>
+          </label>
+
+          <div class="ps-control ps-select">
+            <i class="bi bi-person" aria-hidden="true"></i>
+
+            <select id="patient" name="patient" class="ps-native" required aria-describedby="patientHelp">
+              <option value="" disabled {% if not request.GET.patient %}selected{% endif %}>
+                {% trans "Select a patient..." %}
+              </option>
+
+              {% for p in patients %}
+                <option value="{{ p.id }}"
+                  {% if request.GET.patient == p.id|stringformat:"s" %}selected{% endif %}>
+                  {{ p.full_name }}
+                </option>
+              {% endfor %}
+            </select>
+
+            <i class="bi bi-chevron-down ps-chevron" aria-hidden="true"></i>
+          </div>
+
+          <small id="patientHelp" class="ps-help">
+            {% trans "This will open the patient report based on your selection." %}
+          </small>
+        </div>
+
+        <!-- From -->
+        <div class="ps-field">
+          <label for="date_from" class="ps-label">{% trans "From" %}</label>
+          <div class="ps-control">
+            <i class="bi bi-calendar3" aria-hidden="true"></i>
+            <input type="date" id="date_from" name="date_from" class="ps-native" value="{{ request.GET.date_from }}">
+          </div>
+        </div>
+
+        <!-- To -->
+        <div class="ps-field">
+          <label for="date_to" class="ps-label">{% trans "To" %}</label>
+          <div class="ps-control">
+            <i class="bi bi-calendar3" aria-hidden="true"></i>
+            <input type="date" id="date_to" name="date_to" class="ps-native" value="{{ request.GET.date_to }}">
+          </div>
+        </div>
+
       </div>
 
-      <!-- تاريخ إلى -->
-      <div class="ps-field">
-        <label for="date_to">{% trans "To" %}</label>
-        <input type="date" id="date_to" name="date_to" value="{{ request.GET.date_to }}">
+      {# ✅ Date validation message (hidden by default) #}
+      <div id="dateError" class="ps-error" hidden role="alert" aria-live="polite">
+        <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
+        <div class="ps-error__msg">{% trans 'Invalid date range.' %}</div>
       </div>
 
-      <!-- زر الإنشاء -->
-      <div class="ps-actions">
-        <button type="submit" class="btn btn-primary">
-          <i class="bi bi-file-earmark-text" aria-hidden="true"></i>
-          <span>{% trans "Open Report" %}</span>
-        </button>
+      <div class="ps-footer">
+        <div class="ps-hint">
+          <i class="bi bi-info-circle" aria-hidden="true"></i>
+          <span>{% trans "Tip: Leave dates empty to include all available records." %}</span>
+        </div>
+
+        <div class="ps-actions">
+          <a class="ps-btn ps-btn-ghost" href="{% url 'doctor:report_search' %}">
+            <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>
+            <span>{% trans "Reset" %}</span>
+          </a>
+
+          <button type="submit" class="ps-btn ps-btn-primary">
+            <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i>
+            <span>{% trans "Open Report" %}</span>
+          </button>
+        </div>
       </div>
-    </div>
-  </form>
-</div>
+    </form>
+
+  </div>
+</section>
 {% endblock %}
 
 {% block extra_js %}
-{# الصفحة لا تحتاج JS إضافي هنا #}
+<script>
+(() => {
+  const form = document.querySelector('.ps-page form');
+  if (!form) return;
+
+  const fromEl = document.getElementById('date_from');
+  const toEl   = document.getElementById('date_to');
+  const errEl  = document.getElementById('dateError');
+  const msgEl  = errEl ? errEl.querySelector('.ps-error__msg') : null;
+
+  const hideErr = () => { if (errEl) errEl.hidden = true; };
+  const showErr = (msg) => {
+    if (!errEl || !msgEl) { alert(msg); return; }
+    msgEl.textContent = msg;
+    errEl.hidden = false;
+  };
+
+  form.addEventListener('submit', (e) => {
+    hideErr();
+
+    const from = (fromEl && fromEl.value) ? fromEl.value : "";
+    const to   = (toEl && toEl.value) ? toEl.value : "";
+
+    // ISO format YYYY-MM-DD compares correctly as strings
+    if (from && to && from > to) {
+      e.preventDefault();
+      showErr('"From" date must be earlier than or equal to "To".');
+
+      toEl && toEl.focus();
+    }
+  });
+
+  fromEl && fromEl.addEventListener('input', hideErr);
+  toEl && toEl.addEventListener('input', hideErr);
+})();
+</script>
 {% endblock %}

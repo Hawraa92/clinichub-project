@@ -1,0 +1,526 @@
+{% extends "pharmacy/base.html" %}
+{% load static %}
+
+{% block title %}Order #{{ order.pk }} | ClinicHub{% endblock %}
+
+{% block extra_head %}
+<link
+    rel="stylesheet"
+    href="{% static 'css/pharmacy/order_detail.css' %}"
+>
+{% endblock %}
+
+{% block content %}
+<div class="order-detail-page">
+
+    <!-- Back -->
+    <a href="{% url 'pharmacy:orders' %}" class="order-back-link">
+        <i class="bi bi-arrow-left"></i>
+        Back to orders
+    </a>
+
+    <!-- Order summary -->
+    <section class="order-summary-card">
+        <div class="order-summary-content">
+            <div class="order-title-area">
+                <span class="order-kicker">Pharmacy order</span>
+
+                <div class="order-heading">
+                    <h1>Order #{{ order.pk }}</h1>
+
+                    <div class="order-badges">
+                        <span class="status status-{{ order.status }}">
+                            {{ order.get_status_display }}
+                        </span>
+
+                        <span class="priority priority-{{ order.priority }}">
+                            {{ order.get_priority_display }}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="order-meta">
+                    <span>
+                        <i class="bi bi-file-medical"></i>
+                        Prescription #{{ order.prescription_id }}
+                    </span>
+
+                    <span>
+                        <i class="bi bi-clock"></i>
+                        Sent {{ order.sent_at|date:"Y-m-d H:i" }}
+                    </span>
+
+                    <span>
+                        <i class="bi bi-shop"></i>
+                        {{ order.pharmacy.name }}
+                    </span>
+                </div>
+            </div>
+
+            <!-- Order actions -->
+            {% if can_process or can_cancel %}
+                <div class="order-actions">
+
+                    {% if can_process %}
+
+                        {% if order.status == "sent" %}
+                            <form
+                                method="post"
+                                action="{% url 'pharmacy:accept_order' order.pk %}"
+                            >
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-success">
+                                    <i class="bi bi-check2-circle"></i>
+                                    Accept order
+                                </button>
+                            </form>
+
+                            <a
+                                href="{% url 'pharmacy:reject_order' order.pk %}"
+                                class="btn btn-outline-danger"
+                            >
+                                <i class="bi bi-x-circle"></i>
+                                Reject
+                            </a>
+
+                        {% elif order.status == "accepted" %}
+                            <form
+                                method="post"
+                                action="{% url 'pharmacy:start_order' order.pk %}"
+                            >
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-play-circle"></i>
+                                    Start processing
+                                </button>
+                            </form>
+
+                            <a
+                                href="{% url 'pharmacy:dispense_order' order.pk %}"
+                                class="btn btn-success"
+                            >
+                                <i class="bi bi-bag-check"></i>
+                                Dispense
+                            </a>
+
+                            <a
+                                href="{% url 'pharmacy:reject_order' order.pk %}"
+                                class="btn btn-outline-danger"
+                            >
+                                <i class="bi bi-x-circle"></i>
+                                Reject
+                            </a>
+
+                        {% elif order.status == "in_progress" %}
+                            <a
+                                href="{% url 'pharmacy:dispense_order' order.pk %}"
+                                class="btn btn-success"
+                            >
+                                <i class="bi bi-bag-check"></i>
+                                Dispense
+                            </a>
+
+                            <a
+                                href="{% url 'pharmacy:reject_order' order.pk %}"
+                                class="btn btn-outline-danger"
+                            >
+                                <i class="bi bi-x-circle"></i>
+                                Reject
+                            </a>
+
+                        {% elif order.status == "partial" %}
+                            <a
+                                href="{% url 'pharmacy:dispense_order' order.pk %}"
+                                class="btn btn-success"
+                            >
+                                <i class="bi bi-bag-check"></i>
+                                Continue dispensing
+                            </a>
+                        {% endif %}
+
+                    {% endif %}
+
+                    {% if can_cancel %}
+                        <form
+                            method="post"
+                            action="{% url 'pharmacy:cancel_order' order.pk %}"
+                            onsubmit="return confirm('Cancel this pharmacy order?');"
+                        >
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-outline-secondary">
+                                <i class="bi bi-slash-circle"></i>
+                                Cancel
+                            </button>
+                        </form>
+                    {% endif %}
+
+                </div>
+            {% endif %}
+        </div>
+    </section>
+
+    <!-- Main information -->
+    <div class="row g-4 mb-4">
+
+        <!-- Patient information -->
+        <div class="col-lg-7">
+            <section class="detail-card h-100">
+                <header class="detail-card-header">
+                    <div class="detail-icon">
+                        <i class="bi bi-person"></i>
+                    </div>
+
+                    <div>
+                        <h2>Patient and prescription</h2>
+                        <p>Prescription and patient information.</p>
+                    </div>
+                </header>
+
+                <div class="detail-card-body">
+                    <div class="information-list">
+
+                        <div class="information-row">
+                            <span class="information-label">Patient</span>
+                            <strong class="information-value" dir="auto">
+                                {{ order.prescription.patient_full_name }}
+                            </strong>
+                        </div>
+
+                        <div class="information-row">
+                            <span class="information-label">Age</span>
+                            <span class="information-value">
+                                {{ order.prescription.age|default:"—" }}
+                            </span>
+                        </div>
+
+                        <div class="information-row">
+                            <span class="information-label">Diagnosis</span>
+                            <span class="information-value" dir="auto">
+                                {{ order.prescription.diagnosis|default:"—" }}
+                            </span>
+                        </div>
+
+                        <div class="information-row">
+                            <span class="information-label">Doctor</span>
+
+                            <span class="information-value" dir="auto">
+                                {% with doctor_user=order.prescription.doctor.user %}
+                                    {% with full_name=doctor_user.get_full_name %}
+                                        {% if full_name %}
+                                            Dr. {{ full_name }}
+                                        {% elif doctor_user.email %}
+                                            {{ doctor_user.email }}
+                                        {% else %}
+                                            {{ doctor_user }}
+                                        {% endif %}
+                                    {% endwith %}
+                                {% endwith %}
+                            </span>
+                        </div>
+
+                    </div>
+
+                    <div class="notes-box">
+                        <span class="notes-title">
+                            <i class="bi bi-card-text"></i>
+                            Doctor notes
+                        </span>
+
+                        <div class="notes-content" dir="auto">
+                            {{ order.doctor_notes|default:"No notes provided."|linebreaksbr }}
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Processing information -->
+        <div class="col-lg-5">
+            <section class="detail-card h-100">
+                <header class="detail-card-header">
+                    <div class="detail-icon">
+                        <i class="bi bi-clipboard-check"></i>
+                    </div>
+
+                    <div>
+                        <h2>Processing details</h2>
+                        <p>Location and order progress.</p>
+                    </div>
+                </header>
+
+                <div class="detail-card-body">
+                    <div class="information-list">
+
+                        <div class="information-row">
+                            <span class="information-label">Hospital</span>
+                            <span class="information-value" dir="auto">
+                                {% if order.pharmacy.branch %}
+                                    {{ order.pharmacy.branch.hospital.name }}
+                                {% else %}
+                                    Standalone pharmacy
+                                {% endif %}
+                            </span>
+                        </div>
+
+                        <div class="information-row">
+                            <span class="information-label">Branch</span>
+                            <span class="information-value" dir="auto">
+                                {% if order.pharmacy.branch %}
+                                    {{ order.pharmacy.branch.name }}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </span>
+                        </div>
+
+                        <div class="information-row">
+                            <span class="information-label">Pharmacy</span>
+                            <strong class="information-value" dir="auto">
+                                {{ order.pharmacy.name }}
+                            </strong>
+                        </div>
+
+                        <div class="information-row">
+                            <span class="information-label">Assigned to</span>
+                            <span class="information-value">
+                                {% if order.assigned_to %}
+                                    {{ order.assigned_to.user }}
+                                {% else %}
+                                    Unassigned
+                                {% endif %}
+                            </span>
+                        </div>
+
+                        <div class="information-row">
+                            <span class="information-label">Accepted</span>
+                            <span class="information-value">
+                                {{ order.accepted_at|date:"Y-m-d H:i"|default:"—" }}
+                            </span>
+                        </div>
+
+                        <div class="information-row">
+                            <span class="information-label">Completed</span>
+                            <span class="information-value">
+                                {{ order.completed_at|date:"Y-m-d H:i"|default:"—" }}
+                            </span>
+                        </div>
+
+                    </div>
+
+                    {% if order.rejection_reason %}
+                        <div class="rejection-box">
+                            <strong>
+                                <i class="bi bi-exclamation-circle"></i>
+                                Rejection reason
+                            </strong>
+
+                            <p dir="auto">{{ order.rejection_reason }}</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <!-- Medication items -->
+    <section class="detail-card mb-4">
+        <header class="detail-card-header section-header">
+            <div class="d-flex align-items-center gap-3">
+                <div class="detail-icon">
+                    <i class="bi bi-capsule"></i>
+                </div>
+
+                <div>
+                    <h2>Medication items</h2>
+                    <p>Prescribed, assigned and dispensed quantities.</p>
+                </div>
+            </div>
+
+            <span class="item-count">
+                {{ order_items|length }} item{{ order_items|length|pluralize }}
+            </span>
+        </header>
+
+        <div class="table-responsive">
+            <table class="table detail-table align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Prescribed medication</th>
+                        <th>Matched medicine</th>
+                        <th>Requested</th>
+                        <th>Dispensed</th>
+                        <th>Remaining</th>
+                        <th>Status</th>
+                        <th class="text-end">Action</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for item in order_items %}
+                        <tr>
+                            <td>
+                                <strong dir="auto">{{ item.medication_name }}</strong>
+
+                                {% if item.dosage %}
+                                    <div class="table-secondary-text" dir="auto">
+                                        {{ item.dosage }}
+                                    </div>
+                                {% endif %}
+                            </td>
+
+                            <td>
+                                {% if item.medicine %}
+                                    <span dir="auto">{{ item.medicine.display_name }}</span>
+                                {% else %}
+                                    <span class="unassigned-label">
+                                        <i class="bi bi-exclamation-circle"></i>
+                                        Not assigned
+                                    </span>
+                                {% endif %}
+
+                                {% if item.is_substitution %}
+                                    <div class="substitution-label">
+                                        Substitution
+                                    </div>
+                                {% endif %}
+                            </td>
+
+                            <td>
+                                {{ item.requested_quantity }}
+                                {{ item.requested_unit }}
+                            </td>
+
+                            <td>{{ item.dispensed_quantity }}</td>
+
+                            <td>
+                                <strong>{{ item.remaining_quantity }}</strong>
+                            </td>
+
+                            <td>
+                                <span class="status status-{{ item.status }}">
+                                    {{ item.get_status_display }}
+                                </span>
+                            </td>
+
+                            <td class="text-end">
+                                {% if can_process %}
+                                    {% if order.status == "accepted" or order.status == "in_progress" or order.status == "partial" %}
+                                        <a
+                                            href="{% url 'pharmacy:assign_order_item' item.pk %}"
+                                            class="btn btn-sm btn-outline-primary"
+                                        >
+                                            <i class="bi bi-link-45deg"></i>
+                                            Assign
+                                        </a>
+                                    {% endif %}
+                                {% endif %}
+                            </td>
+                        </tr>
+
+                    {% empty %}
+                        <tr>
+                            <td colspan="7">
+                                <div class="empty-section">
+                                    <i class="bi bi-capsule"></i>
+                                    <strong>No medication items</strong>
+                                    <span>This order has no medication items.</span>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- Dispensing records -->
+    <section class="detail-card">
+        <header class="detail-card-header section-header">
+            <div class="d-flex align-items-center gap-3">
+                <div class="detail-icon">
+                    <i class="bi bi-receipt"></i>
+                </div>
+
+                <div>
+                    <h2>Dispensing records</h2>
+                    <p>Completed and previous dispensing transactions.</p>
+                </div>
+            </div>
+
+            <span class="item-count">
+                {{ dispenses|length }} record{{ dispenses|length|pluralize }}
+            </span>
+        </header>
+
+        <div class="table-responsive">
+            <table class="table detail-table align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Dispense</th>
+                        <th>Status</th>
+                        <th>Pharmacist</th>
+                        <th>Amount</th>
+                        <th>Date</th>
+                        <th class="text-end">Action</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for dispense in dispenses %}
+                        <tr>
+                            <td>
+                                <strong>#{{ dispense.pk }}</strong>
+                            </td>
+
+                            <td>
+                                <span class="status status-{{ dispense.status }}">
+                                    {{ dispense.get_status_display }}
+                                </span>
+                            </td>
+
+                            <td>
+                                {% if dispense.dispensed_by %}
+                                    {{ dispense.dispensed_by.user }}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+
+                            <td>
+                                <strong>{{ dispense.total_amount|floatformat:2 }}</strong>
+                                <span class="currency-label">IQD</span>
+                            </td>
+
+                            <td>
+                                {{ dispense.dispensed_at|date:"Y-m-d H:i"|default:"—" }}
+                            </td>
+
+                            <td class="text-end">
+                                <a
+                                    href="{% url 'pharmacy:dispense_detail' dispense.pk %}"
+                                    class="btn btn-sm btn-outline-primary"
+                                >
+                                    <i class="bi bi-eye"></i>
+                                    Details
+                                </a>
+                            </td>
+                        </tr>
+
+                    {% empty %}
+                        <tr>
+                            <td colspan="6">
+                                <div class="empty-section">
+                                    <i class="bi bi-receipt"></i>
+                                    <strong>No dispensing records</strong>
+                                    <span>This order has not been dispensed yet.</span>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+</div>
+{% endblock %}

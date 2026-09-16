@@ -1,0 +1,288 @@
+{% extends "pharmacy/base.html" %}
+{% load static %}
+
+{% block title %}
+    Dispense #{{ dispense.pk }} | ClinicHub
+{% endblock %}
+
+{% block extra_head %}
+    <link
+        rel="stylesheet"
+        href="{% static 'css/pharmacy/dispense_detail.css' %}"
+    >
+{% endblock %}
+
+{% block content %}
+<div class="dispense-page">
+
+    <!-- =========================
+         Header
+    ========================== -->
+    <section class="dispense-header">
+        <div class="dispense-header__content">
+
+            <a
+                href="{% url 'pharmacy:order_detail' dispense.order_id %}"
+                class="dispense-back-link"
+            >
+                <i class="bi bi-arrow-left"></i>
+                Back to order #{{ dispense.order_id }}
+            </a>
+
+            <div class="dispense-title-row">
+                <div>
+                    <span class="dispense-eyebrow">
+                        <i class="bi bi-receipt"></i>
+                        Dispensing record
+                    </span>
+
+                    <div class="dispense-main-title">
+                        <h1>Dispense #{{ dispense.pk }}</h1>
+
+                        <span class="status status-{{ dispense.status }}">
+                            {{ dispense.get_status_display }}
+                        </span>
+                    </div>
+
+                    <p class="dispense-subtitle">
+                        Medicine dispensing details for
+                        <strong>
+                            {{ dispense.order.prescription.patient_full_name|default:"Patient" }}
+                        </strong>
+                    </p>
+                </div>
+
+                <div class="dispense-header__actions">
+                    <a
+                        href="{% url 'pharmacy:order_detail' dispense.order_id %}"
+                        class="btn btn-light dispense-order-button"
+                    >
+                        <i class="bi bi-box-arrow-up-right"></i>
+                        View order
+                    </a>
+
+                    {% if current_assignment and dispense.status == "completed" %}
+                        <a
+                            href="{% url 'pharmacy:void_dispense' dispense.pk %}"
+                            class="btn dispense-void-button"
+                        >
+                            <i class="bi bi-arrow-counterclockwise"></i>
+                            Void and restore stock
+                        </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- =========================
+         Summary cards
+    ========================== -->
+    <section class="dispense-summary">
+
+        <article class="dispense-summary-card">
+            <div class="dispense-summary-card__icon dispense-icon-money">
+                <i class="bi bi-cash-stack"></i>
+            </div>
+
+            <div>
+                <span class="dispense-summary-card__label">
+                    Total amount
+                </span>
+
+                <strong class="dispense-summary-card__value">
+                    {{ dispense.total_amount|floatformat:2 }}
+                    <small>IQD</small>
+                </strong>
+            </div>
+        </article>
+
+        <article class="dispense-summary-card">
+            <div class="dispense-summary-card__icon dispense-icon-user">
+                <i class="bi bi-person-check"></i>
+            </div>
+
+            <div>
+                <span class="dispense-summary-card__label">
+                    Dispensed by
+                </span>
+
+                <strong class="dispense-summary-card__text">
+                    {% if dispense.dispensed_by %}
+                        {{ dispense.dispensed_by.user }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </strong>
+            </div>
+        </article>
+
+        <article class="dispense-summary-card">
+            <div class="dispense-summary-card__icon dispense-icon-date">
+                <i class="bi bi-calendar-check"></i>
+            </div>
+
+            <div>
+                <span class="dispense-summary-card__label">
+                    Dispensed at
+                </span>
+
+                <strong class="dispense-summary-card__text">
+                    {{ dispense.dispensed_at|date:"Y-m-d H:i"|default:"—" }}
+                </strong>
+            </div>
+        </article>
+
+    </section>
+
+    <!-- =========================
+         Dispensed items
+    ========================== -->
+    <section class="dispense-section">
+        <div class="dispense-section__header">
+            <div class="dispense-section__heading">
+                <span class="dispense-section__icon">
+                    <i class="bi bi-capsule-pill"></i>
+                </span>
+
+                <div>
+                    <h2>Dispensed items</h2>
+                    <p>Medicines and stock batches included in this transaction.</p>
+                </div>
+            </div>
+
+            <span class="dispense-count">
+                {{ dispense_items|length }}
+                item{{ dispense_items|length|pluralize }}
+            </span>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table dispense-table align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Medication</th>
+                        <th>Matched medicine</th>
+                        <th>Batch</th>
+                        <th>Quantity</th>
+                        <th>Unit price</th>
+                        <th>Total</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for item in dispense_items %}
+                        <tr>
+                            <td>
+                                <strong class="dispense-medication-name">
+                                    {{ item.order_item.medication_name|default:"—" }}
+                                </strong>
+                            </td>
+
+                            <td>
+                                {% if item.stock_batch %}
+                                    {{ item.stock_batch.inventory.medicine.display_name }}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+
+                            <td>
+                                {% if item.stock_batch %}
+                                    <span class="dispense-batch">
+                                        <i class="bi bi-box-seam"></i>
+                                        {{ item.stock_batch.batch_number }}
+                                    </span>
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+
+                            <td>
+                                <span class="dispense-quantity">
+                                    {{ item.quantity }}
+                                </span>
+                            </td>
+
+                            <td>
+                                {{ item.unit_price|floatformat:2 }}
+                                <span class="dispense-currency">IQD</span>
+                            </td>
+
+                            <td>
+                                <strong class="dispense-total">
+                                    {{ item.total_price|floatformat:2 }}
+                                </strong>
+                                <span class="dispense-currency">IQD</span>
+                            </td>
+                        </tr>
+
+                    {% empty %}
+                        <tr>
+                            <td colspan="6">
+                                <div class="dispense-empty-state">
+                                    <span>
+                                        <i class="bi bi-capsule"></i>
+                                    </span>
+
+                                    <strong>No dispensed items</strong>
+
+                                    <p>
+                                        This dispensing record does not contain any items.
+                                    </p>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- =========================
+         Notes
+    ========================== -->
+    {% if dispense.notes %}
+        <section class="dispense-section dispense-notes">
+            <div class="dispense-section__header">
+                <div class="dispense-section__heading">
+                    <span class="dispense-section__icon">
+                        <i class="bi bi-card-text"></i>
+                    </span>
+
+                    <div>
+                        <h2>Notes</h2>
+                        <p>Additional information recorded during dispensing.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dispense-notes__content">
+                {{ dispense.notes|linebreaksbr }}
+            </div>
+        </section>
+    {% endif %}
+
+    <!-- =========================
+         Bottom actions
+    ========================== -->
+    <div class="dispense-footer-actions">
+        <a
+            href="{% url 'pharmacy:order_detail' dispense.order_id %}"
+            class="btn dispense-primary-button"
+        >
+            <i class="bi bi-arrow-left"></i>
+            Return to order
+        </a>
+
+        <a
+            href="{% url 'pharmacy:orders' %}"
+            class="btn dispense-secondary-button"
+        >
+            <i class="bi bi-list-ul"></i>
+            All orders
+        </a>
+    </div>
+
+</div>
+{% endblock %}

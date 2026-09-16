@@ -1,145 +1,271 @@
 # accounts/views.py
+from __future__ import annotations
+
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login, logout
-from django.shortcuts import render, redirect
-from django.urls import reverse, reverse_lazy
-from django.utils.translation import gettext_lazy as _
+from django.db import IntegrityError, transaction
+from django.http import HttpResponseNotAllowed
+from django.shortcuts import redirect, render
+from django.urls import NoReverseMatch, reverse, reverse_lazy
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods
-from django.db import transaction, IntegrityError
-from django.http import HttpResponseNotAllowed  # لرفض GET في الإنتاج على logout
 
-from .forms import PatientSignUpForm, ApprovedAuthenticationForm
 from patient.models import Patient
 
+from .forms import ApprovedAuthenticationForm, PatientSignUpForm
 
-def get_redirect_url_for_user(user):
-    """
-    Return the appropriate dashboard URL based on the user's role/superuser status.
-    """
-    # Platform superusers → Django Admin
-    if user.is_superuser or getattr(user, 'role', None) == 'admin':
-        return reverse('admin:index')
 
-    # Role-based redirects (ensure these names exist in your URLconf)
+def _safe_reverse(name: str, fallback_name: str = "home:index") -> str:
+    """
+    Reverse a URL safely and return the fallback URL if the route is unavailable.
+    """
+    try:
+        return reverse(name)
+    except NoReverseMatch:
+        return reverse(fallback_name)
+
+
+def get_redirect_url_for_user(user) -> str:
+    """
+    Return the appropriate dashboard URL based on the authenticated user's role.
+    """
+    if user.is_superuser or getattr(user, "role", None) == "admin":
+        return _safe_reverse(
+            "admin:index",
+            fallback_name="home:index",
+        )
+
+    role = str(getattr(user, "role", "") or "").strip().lower()
+
     role_redirects = {
-        'patient': reverse('patient:dashboard'),
-        'doctor': reverse('doctor:dashboard'),
-        'secretary': reverse('appointments:secretary_dashboard'),
+        "patient": "patient:dashboard",
+        "doctor": "doctor:dashboard",
+        "secretary": "appointments:secretary_dashboard",
+        "lab": "lab:dashboard",
+        "laboratory": "lab:dashboard",
+        "lab_tech": "lab:dashboard",
+        "lab_staff": "lab:dashboard",
+        "pharmacist": "pharmacy:dashboard",
+        "pharmacy": "pharmacy:dashboard",
+        "pharmacy_staff": "pharmacy:dashboard",
     }
-    return role_redirects.get(getattr(user, 'role', None), reverse('home:index'))
+
+    route_name = role_redirects.get(role)
+
+    if route_name:
+        return _safe_reverse(
+            route_name,
+            fallback_name="home:index",
+        )
+
+    return _safe_reverse("home:index")
 
 
-def _get_safe_next(request, fallback):
+def _get_safe_next(request, fallback: str) -> str:
     """
-    Safely resolve ?next= redirect target (internal URLs only).
-    Accepts relative paths and hosts listed in ALLOWED_HOSTS.
+    Resolve the requested next URL safely.
+
+    Home, login and registration URLs are ignored to prevent redirect loops.
+    Only internal URLs belonging to an allowed host are accepted.
     """
-    next_url = request.POST.get('next') or request.GET.get('next')
+    next_url = (
+        request.POST.get("next")
+        or request.GET.get("next")
+        or ""
+    ).strip()
+
     if not next_url:
         return fallback
 
-    # اجمع كل المضيفين المسموح بهم + المضيف الحالي (يغطي بيئات متعددة مثل Render ودومين مخصص)
-    allowed = set(settings.ALLOWED_HOSTS or [])
-    allowed.add(request.get_host())
+    try:
+        home_path = reverse("home:index")
+    except NoReverseMatch:
+        home_path = "/"
+
+    if next_url in {"/", home_path}:
+        return fallback
+
+    login_path = str(reverse_lazy("accounts:login"))
+    register_path = str(reverse_lazy("accounts:register"))
+
+    if (
+        next_url.startswith(login_path)
+        or next_url.startswith(register_path)
+    ):
+        return fallback
+
+    allowed_hosts = {request.get_host()}
+
+    configured_hosts = getattr(settings, "ALLOWED_HOSTS", []) or []
+
+    if configured_hosts != ["*"]:
+        for host in configured_hosts:
+            host = str(host or "").strip()
+
+            if host and host != "*":
+                allowed_hosts.add(host)
 
     if url_has_allowed_host_and_scheme(
         url=next_url,
-        allowed_hosts=allowed,
+        allowed_hosts=allowed_hosts,
         require_https=request.is_secure(),
     ):
         return next_url
+
     return fallback
 
 
 @require_http_methods(["GET", "POST"])
 def register(request):
     """
-    Public patient self-registration.
-    Authenticated users are redirected to their dashboards.
+    Register a new patient account.
     """
     if request.user.is_authenticated:
         messages.warning(
             request,
-            _("Registration is restricted to new patients. Redirecting to your dashboard.")
+            _(
+                "Registration is restricted to new patients. "
+                "Redirecting to your dashboard."
+            ),
         )
-        return redirect(get_redirect_url_for_user(request.user))
+        return redirect(
+            get_redirect_url_for_user(request.user)
+        )
 
-    if request.method == 'POST':
+    if request.method == "POST":
         form = PatientSignUpForm(request.POST)
+
         if form.is_valid():
             try:
                 with transaction.atomic():
-                    # Save user but delay commit inside transaction
                     user = form.save(commit=False)
                     user.save()
 
-                    # Ensure a Patient record exists (avoid duplicates under race)
-                    full_name = user.get_full_name() or user.username or user.email
+                    full_name = (
+                        user.get_full_name()
+                        or user.username
+                        or user.email
+                    )
+
                     Patient.objects.get_or_create(
                         user=user,
-                        defaults={'full_name': full_name, 'email': user.email}
+                        defaults={
+                            "full_name": full_name,
+                            "email": user.email,
+                        },
                     )
+
             except IntegrityError:
                 messages.error(
                     request,
-                    _("We could not create your patient account. Please try again.")
+                    _(
+                        "We could not create your patient account. "
+                        "Please try again."
+                    ),
                 )
+
             else:
                 messages.success(
                     request,
-                    _("Your patient account has been created successfully! You may now log in.")
+                    _(
+                        "Your patient account has been created successfully! "
+                        "You may now log in."
+                    ),
                 )
-                return redirect(reverse_lazy('accounts:login'))
+                return redirect(
+                    reverse_lazy("accounts:login")
+                )
+
         else:
-            messages.error(request, _("Please correct the errors below."))
+            messages.error(
+                request,
+                _("Please correct the errors below."),
+            )
+
     else:
         form = PatientSignUpForm()
 
-    return render(request, 'accounts/register.html', {'form': form})
+    context = {
+        "form": form,
+    }
+
+    return render(
+        request,
+        "accounts/register.html",
+        context,
+    )
 
 
 @require_http_methods(["GET", "POST"])
-def login_view(request, show_signup=True):
+def login_view(request, show_signup: bool = True):
     """
-    Unified email-based login for all roles.
-    Blocks unapproved users via ApprovedAuthenticationForm.
-    Supports ?next= redirect.
+    Authenticate users and redirect them to the correct role dashboard.
     """
     if request.user.is_authenticated:
-        return redirect(get_redirect_url_for_user(request.user))
+        return redirect(
+            get_redirect_url_for_user(request.user)
+        )
 
-    # Always pass request to AuthenticationForm (required for some backends)
-    form = ApprovedAuthenticationForm(request=request, data=request.POST or None)
+    form = ApprovedAuthenticationForm(
+        request=request,
+        data=request.POST or None,
+    )
 
-    if request.method == 'POST':
+    if request.method == "POST":
         if form.is_valid():
             user = form.get_user()
-            login(request, user)
-            messages.success(request, _("You have successfully logged in."))
-            fallback = get_redirect_url_for_user(user)
-            return redirect(_get_safe_next(request, fallback))
-        else:
-            # Let form errors show specifics (invalid creds vs not approved)
-            messages.error(request, _("Please correct the errors below."))
 
-    context = {'form': form, 'show_signup': show_signup}
-    return render(request, 'accounts/login.html', context)
+            login(request, user)
+
+            messages.success(
+                request,
+                _("You have successfully logged in."),
+            )
+
+            fallback = get_redirect_url_for_user(user)
+            destination = _get_safe_next(
+                request,
+                fallback,
+            )
+
+            return redirect(destination)
+
+        messages.error(
+            request,
+            _("Please correct the errors below."),
+        )
+
+    context = {
+        "form": form,
+        "show_signup": show_signup,
+    }
+
+    return render(
+        request,
+        "accounts/login.html",
+        context,
+    )
 
 
 @require_http_methods(["GET", "POST"])
 def logout_view(request):
     """
-    Log out current user and redirect to login page.
-
-    سياسة الأمان:
-    - في التطوير (DEBUG=True): نسمح بـ GET لتسهيل العمل.
-    - في الإنتاج (DEBUG=False): نرفض GET ونشترط POST لحماية من هجمات CSRF على روابط الخروج.
+    Log out the current user and redirect to the login page.
     """
     if request.method != "POST" and not settings.DEBUG:
-        return HttpResponseNotAllowed(permitted_methods=["POST"])
+        return HttpResponseNotAllowed(
+            permitted_methods=["POST"]
+        )
 
     logout(request)
-    messages.info(request, _("You have been logged out."))
-    return redirect(reverse_lazy('accounts:login'))
+
+    messages.info(
+        request,
+        _("You have been logged out."),
+    )
+
+    return redirect(
+        reverse_lazy("accounts:login")
+    )

@@ -1,0 +1,330 @@
+:root {
+  --license-ink: #0f2744;
+  --license-muted: #667892;
+  --license-primary: #087ea4;
+  --license-soft: #eef7fb;
+  --license-border: #d9e4ef;
+  --license-success: #0a8f55;
+  --license-danger: #c73543;
+}
+
+.license-page {
+  min-height: calc(100vh - 80px);
+  color: var(--license-ink);
+  background:
+    radial-gradient(circle at 5% 5%, rgba(14, 165, 233, .08), transparent 28rem),
+    #f5f8fc;
+}
+
+.license-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.license-heading h1,
+.activation-main h1 {
+  margin: .45rem 0 .25rem;
+  font-weight: 750;
+  letter-spacing: -.03em;
+}
+
+.license-heading p,
+.activation-main > p {
+  margin: 0;
+  color: var(--license-muted);
+}
+
+.license-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  color: var(--license-primary);
+  font-size: .78rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.license-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .6rem;
+}
+
+.license-status-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.2rem 1.35rem;
+  border: 1px solid var(--license-border);
+  border-left: 5px solid var(--license-danger);
+  border-radius: 1rem;
+  background: #fff;
+  box-shadow: 0 14px 35px rgba(20, 48, 78, .07);
+}
+
+.license-status-card.status-active,
+.license-status-card.status-grace {
+  border-left-color: var(--license-success);
+}
+
+.status-icon {
+  display: grid;
+  width: 3.4rem;
+  height: 3.4rem;
+  flex: 0 0 3.4rem;
+  place-items: center;
+  border-radius: .9rem;
+  color: var(--license-danger);
+  background: rgba(199, 53, 67, .1);
+  font-size: 1.65rem;
+}
+
+.status-active .status-icon,
+.status-grace .status-icon {
+  color: var(--license-success);
+  background: rgba(10, 143, 85, .1);
+}
+
+.status-label {
+  color: var(--license-muted);
+  font-size: .74rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.license-status-card h2 {
+  margin: .15rem 0 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.license-status-card p {
+  margin: .2rem 0 0;
+  color: var(--license-muted);
+}
+
+.license-panel,
+.activation-main,
+.activation-aside {
+  border: 1px solid var(--license-border);
+  border-radius: 1rem;
+  background: #fff;
+  box-shadow: 0 14px 35px rgba(20, 48, 78, .06);
+}
+
+.license-panel {
+  padding: 1.25rem;
+}
+
+.panel-title {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  margin-bottom: 1rem;
+  color: var(--license-ink);
+  font-size: 1.05rem;
+  font-weight: 750;
+}
+
+.panel-title i {
+  color: var(--license-primary);
+}
+
+.license-details {
+  display: grid;
+  gap: .15rem;
+  margin: 0;
+}
+
+.license-details.two-column {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 1.5rem;
+}
+
+.license-details > div {
+  padding: .65rem 0;
+  border-bottom: 1px dashed var(--license-border);
+}
+
+.license-details dt {
+  margin-bottom: .18rem;
+  color: var(--license-muted);
+  font-size: .76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.license-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-weight: 650;
+}
+
+.claim-section {
+  margin-top: 1rem;
+}
+
+.claim-section h3 {
+  margin-bottom: .55rem;
+  font-size: .82rem;
+  font-weight: 750;
+}
+
+.claim-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+}
+
+.claim-chips span {
+  padding: .3rem .65rem;
+  border: 1px solid #c9e5ef;
+  border-radius: 999px;
+  color: #046585;
+  background: var(--license-soft);
+  font-size: .78rem;
+  font-weight: 650;
+}
+
+.claim-chips span.muted {
+  color: var(--license-muted);
+  border-color: var(--license-border);
+  background: #f7f9fc;
+}
+
+.empty-license {
+  display: grid;
+  min-height: 14rem;
+  place-items: center;
+  align-content: center;
+  color: var(--license-muted);
+  text-align: center;
+}
+
+.empty-license i {
+  margin-bottom: .75rem;
+  color: var(--license-primary);
+  font-size: 2.2rem;
+}
+
+.activation-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(17rem, .65fr);
+  gap: 1.5rem;
+  max-width: 1080px;
+  margin: 0 auto;
+}
+
+.activation-main,
+.activation-aside {
+  padding: 1.6rem;
+}
+
+.license-back {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  margin-bottom: 1.2rem;
+  color: var(--license-muted);
+  text-decoration: none;
+}
+
+.activation-form {
+  margin-top: 1.5rem;
+}
+
+.activation-form textarea {
+  min-height: 13rem;
+  resize: vertical;
+}
+
+.activation-aside {
+  align-self: start;
+}
+
+.activation-aside h2 {
+  font-size: 1.15rem;
+  font-weight: 750;
+}
+
+.activation-aside p {
+  color: var(--license-muted);
+}
+
+.activation-aside code {
+  display: block;
+  padding: .8rem;
+  overflow-wrap: anywhere;
+  border-radius: .65rem;
+  color: var(--license-ink);
+  background: #eef3f8;
+}
+
+.aside-icon {
+  display: grid;
+  width: 3.2rem;
+  height: 3.2rem;
+  margin-bottom: 1rem;
+  place-items: center;
+  border-radius: .85rem;
+  color: #fff;
+  background: var(--license-primary);
+  font-size: 1.4rem;
+}
+
+.security-note {
+  display: flex;
+  gap: .55rem;
+  margin-top: 1.2rem;
+  padding: .8rem;
+  border-radius: .7rem;
+  color: #6f5700;
+  background: #fff5ce;
+  font-size: .82rem;
+}
+
+@media (max-width: 991.98px) {
+  .activation-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .license-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .license-details.two-column {
+    grid-template-columns: 1fr;
+  }
+
+  .license-actions,
+  .license-actions .btn {
+    width: 100%;
+  }
+}
+
+[data-theme="dark"] .license-page {
+  --license-ink: #edf7ff;
+  --license-muted: #9fb0c5;
+  --license-border: #2b435d;
+  --license-soft: #122f42;
+  background: #0b1726;
+}
+
+[data-theme="dark"] .license-panel,
+[data-theme="dark"] .license-status-card,
+[data-theme="dark"] .activation-main,
+[data-theme="dark"] .activation-aside {
+  background: #101f31;
+}
+
+[data-theme="dark"] .activation-aside code {
+  color: #d8edff;
+  background: #162b42;
+}

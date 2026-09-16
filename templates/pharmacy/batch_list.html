@@ -1,0 +1,14 @@
+{% extends "pharmacy/base.html" %}
+{% block title %}Stock Batches | ClinicHub{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div><h1 class="h3 mb-1">Stock Batches</h1><p class="text-secondary mb-0">Expiry, price and current batch balances.</p></div>
+    {% if pharmacy_assignments %}<a class="btn btn-primary" href="{% url 'pharmacy:receive_stock' %}"><i class="bi bi-plus-circle me-1"></i>Receive batch</a>{% endif %}
+</div>
+<form method="get" class="card pharmacy-card p-3 mb-4"><div class="row g-3 align-items-end"><div class="col-md-7"><label class="form-label">Search</label><input class="form-control" name="q" value="{{ filters.q }}" placeholder="Batch, medicine or supplier"></div><div class="col-md-3"><label class="form-label">State</label><select class="form-select" name="state"><option value="">All</option><option value="available" {% if filters.state == 'available' %}selected{% endif %}>Available</option><option value="empty" {% if filters.state == 'empty' %}selected{% endif %}>Empty</option><option value="expired" {% if filters.state == 'expired' %}selected{% endif %}>Expired</option></select></div><div class="col-md-2 d-grid"><button class="btn btn-primary">Filter</button></div></div></form>
+<div class="card pharmacy-card"><div class="table-responsive"><table class="table table-hover align-middle mb-0">
+    <thead><tr><th>Batch</th><th>Medicine</th><th>Pharmacy</th><th>Expiry</th><th>Received</th><th>On hand</th><th>Purchase</th><th>Selling</th><th>Supplier</th></tr></thead>
+    <tbody>{% for batch in page_obj %}<tr class="{% if batch.is_expired %}table-danger{% endif %}"><td class="fw-semibold">{{ batch.batch_number }}</td><td>{{ batch.inventory.medicine.display_name }}</td><td>{{ batch.inventory.pharmacy.name }}</td><td>{{ batch.expiry_date|date:"Y-m-d" }}{% if batch.is_expired %}<div class="small text-danger">Expired</div>{% endif %}</td><td>{{ batch.received_quantity }}</td><td class="fw-bold">{{ batch.quantity_on_hand }}</td><td>{{ batch.purchase_price }}</td><td>{{ batch.selling_price }}</td><td>{{ batch.supplier_name|default:'—' }}</td></tr>{% empty %}<tr><td colspan="9" class="text-center text-secondary py-5">No stock batches.</td></tr>{% endfor %}</tbody>
+</table></div></div>
+{% include "pharmacy/_pagination.html" %}
+{% endblock %}

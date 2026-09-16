@@ -54,8 +54,8 @@ class PatientSignUpFormTest(TestCase):
         self.assertEqual(user.email, 'newpatient@example.com')
         self.assertEqual(user.role, 'patient')
         self.assertTrue(user.is_approved)
-        # Patient NOT auto-created by form (created in the register view).
-        self.assertFalse(Patient.objects.filter(user=user).exists())
+        # Patient is created automatically for patient accounts.
+        self.assertTrue(Patient.objects.filter(user=user).exists())
 
     def test_duplicate_email(self):
         User.objects.create_user(email='dup@example.com', password='test')
@@ -137,5 +137,5 @@ class AccountsViewsTest(TestCase):
         user.is_approved = True
         user.save()
         self.client.login(username='logoutuser@example.com', password='pass123')
-        response = self.client.get(self.logout_url)
+        response = self.client.post(self.logout_url)
         self.assertRedirects(response, self.login_url)

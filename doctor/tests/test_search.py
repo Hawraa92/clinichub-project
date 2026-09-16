@@ -2,6 +2,7 @@
 from django.test import TestCase
 from django.urls import reverse
 from django.contrib.auth import get_user_model
+from accounts.tests.permission_utils import apply_role_permissions
 from doctor.models import Doctor
 from patient.models import Patient
 from appointments.models import Appointment
@@ -15,6 +16,7 @@ class DoctorAdvancedSearchTest(TestCase):
     def setUp(self):
         self.doctor_user = User.objects.create_user(email="dr@clinic.com", password=PASSWORD, role='doctor')
         self.doctor = Doctor.objects.create(user=self.doctor_user, full_name="Dr. Search")
+        apply_role_permissions(self.doctor_user)
         self.client.login(email="dr@clinic.com", password=PASSWORD)
         self.now = timezone.now()
         # أنشئ مرضى بتسميات مختلفة

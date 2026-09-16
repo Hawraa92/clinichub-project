@@ -2,6 +2,7 @@
 from django.test import TestCase
 from django.urls import reverse
 from django.contrib.auth import get_user_model
+from accounts.tests.permission_utils import apply_role_permissions
 from doctor.models import Doctor
 from patient.models import Patient
 from appointments.models import Appointment
@@ -15,6 +16,7 @@ class DoctorEndToEndTest(TestCase):
     def setUp(self):
         self.doctor_user = User.objects.create_user(email="e2e@clinic.com", password=PASSWORD, role='doctor')
         self.doctor = Doctor.objects.create(user=self.doctor_user, full_name="Dr. E2E")
+        apply_role_permissions(self.doctor_user)
         self.client.login(email="e2e@clinic.com", password=PASSWORD)
         # أنشئ عدد كبير من المرضى والمواعيد
         now = timezone.now() + timedelta(days=1)

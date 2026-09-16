@@ -1,0 +1,495 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Access Denied | ClinicHub{% endblock %}
+
+{% block extra_head %}
+<style>
+  .forbidden-page {
+    --forbidden-navy: #102a56;
+    --forbidden-blue: #245bd8;
+    --forbidden-teal: #0f8f83;
+    --forbidden-mint: #e8faf7;
+    --forbidden-sky: #eaf2ff;
+    --forbidden-text: #14213d;
+    --forbidden-muted: #68758f;
+    --forbidden-border: #d8e5f1;
+
+    min-height: calc(100vh - 150px);
+    display: grid;
+    place-items: center;
+    padding: 48px 20px;
+    background:
+      radial-gradient(circle at 10% 18%, rgba(15, 143, 131, 0.11), transparent 30%),
+      radial-gradient(circle at 90% 82%, rgba(36, 91, 216, 0.09), transparent 34%),
+      #f6f9fd;
+  }
+
+  .forbidden-card {
+    position: relative;
+    width: min(940px, 100%);
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: minmax(310px, 0.95fr) minmax(380px, 1.05fr);
+    border: 1px solid var(--forbidden-border);
+    border-radius: 30px;
+    background: #ffffff;
+    box-shadow: 0 28px 70px rgba(25, 55, 105, 0.13);
+  }
+
+  .forbidden-visual {
+    position: relative;
+    min-height: 470px;
+    display: grid;
+    place-items: center;
+    padding: 38px 34px 34px;
+    color: var(--forbidden-navy);
+    background: linear-gradient(150deg, var(--forbidden-mint), var(--forbidden-sky));
+  }
+
+  .forbidden-visual::before,
+  .forbidden-visual::after {
+    content: "";
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+  }
+
+  .forbidden-visual::before {
+    width: 230px;
+    height: 230px;
+    top: -112px;
+    left: -90px;
+    background: rgba(15, 143, 131, 0.12);
+  }
+
+  .forbidden-visual::after {
+    width: 200px;
+    height: 200px;
+    right: -95px;
+    bottom: -92px;
+    background: rgba(36, 91, 216, 0.1);
+  }
+
+  .medical-scene {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    text-align: center;
+  }
+
+  .medical-scene-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+    padding: 8px 12px;
+    border: 1px solid #bfe7e2;
+    border-radius: 999px;
+    color: #08796f;
+    background: rgba(255, 255, 255, 0.78);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    box-shadow: 0 8px 24px rgba(15, 143, 131, 0.08);
+  }
+
+  .medical-scene-badge::before {
+    content: "";
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--forbidden-teal);
+    box-shadow: 0 0 0 4px rgba(15, 143, 131, 0.12);
+  }
+
+  .medical-illustration {
+    width: min(340px, 100%);
+    height: auto;
+    display: block;
+    margin: 4px auto 0;
+    overflow: visible;
+    border: 0;
+    background: transparent;
+    object-fit: contain;
+    filter: drop-shadow(0 18px 22px rgba(24, 70, 126, 0.16));
+  }
+
+  .medical-inline-fallback {
+    display: none;
+  }
+
+  .medical-float {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: medicalFloat 3.4s ease-in-out infinite;
+  }
+
+  .medical-float-delayed {
+    animation-delay: -1.5s;
+  }
+
+  .medical-pulse-line {
+    stroke-dasharray: 160;
+    stroke-dashoffset: 160;
+    animation: medicalPulse 3s ease-in-out infinite;
+  }
+
+  .medical-scene-copy {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 10px;
+    margin-top: -12px;
+  }
+
+  .medical-scene-code {
+    color: var(--forbidden-navy);
+    font-size: 46px;
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: -2px;
+  }
+
+  .medical-scene-label {
+    color: var(--forbidden-teal);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  @keyframes medicalFloat {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-7px);
+    }
+  }
+
+  @keyframes medicalPulse {
+    0%,
+    22% {
+      stroke-dashoffset: 160;
+    }
+    68%,
+    100% {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .medical-float,
+    .medical-pulse-line {
+      animation: none;
+    }
+  }
+
+  .forbidden-content {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 58px 54px;
+  }
+
+  .forbidden-kicker {
+    margin: 0 0 12px;
+    color: #08796f;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+  }
+
+  .forbidden-kicker::before {
+    content: "●";
+    margin-right: 8px;
+    color: var(--forbidden-teal);
+    font-size: 10px;
+  }
+
+  .forbidden-title {
+    margin: 0;
+    color: var(--forbidden-text);
+    font-size: clamp(30px, 4vw, 44px);
+    font-weight: 900;
+    line-height: 1.15;
+    letter-spacing: -0.03em;
+  }
+
+  .forbidden-message {
+    max-width: 520px;
+    margin: 18px 0 0;
+    color: var(--forbidden-muted);
+    font-size: 16px;
+    line-height: 1.8;
+  }
+
+  .forbidden-message-ar {
+    display: block;
+    margin-top: 8px;
+    direction: rtl;
+    text-align: left;
+  }
+
+  .forbidden-path {
+    margin: 22px 0 0;
+    padding: 12px 14px;
+    overflow-wrap: anywhere;
+    border: 1px solid var(--forbidden-border);
+    border-left: 4px solid var(--forbidden-blue);
+    border-radius: 12px;
+    color: #53617a;
+    background: #f7faff;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 12px;
+  }
+
+  .forbidden-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 28px;
+  }
+
+  .forbidden-btn {
+    min-height: 46px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    padding: 0 19px;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 800;
+    text-decoration: none;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+  }
+
+  .forbidden-btn:hover {
+    transform: translateY(-2px);
+  }
+
+  .forbidden-btn-primary {
+    color: #ffffff;
+    background: linear-gradient(135deg, var(--forbidden-teal), #0b756d);
+    box-shadow: 0 10px 22px rgba(15, 143, 131, 0.22);
+  }
+
+  .forbidden-btn-primary:hover {
+    color: #ffffff;
+    box-shadow: 0 14px 28px rgba(15, 143, 131, 0.28);
+  }
+
+  .forbidden-btn-secondary {
+    border-color: var(--forbidden-border);
+    color: var(--forbidden-navy);
+    background: #ffffff;
+  }
+
+  .forbidden-btn-secondary:hover {
+    color: var(--forbidden-navy);
+    background: #f4f7fc;
+  }
+
+  .forbidden-help {
+    margin: 24px 0 0;
+    color: #8994a8;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+
+  @media (max-width: 760px) {
+    .forbidden-page {
+      padding: 24px 14px;
+    }
+
+    .forbidden-card {
+      grid-template-columns: 1fr;
+      border-radius: 22px;
+    }
+
+    .forbidden-visual {
+      min-height: 290px;
+      padding: 30px 24px 28px;
+    }
+
+    .medical-illustration {
+      width: min(300px, 100%);
+    }
+
+    .medical-scene-code {
+      font-size: 36px;
+    }
+
+    .forbidden-content {
+      padding: 38px 26px 42px;
+    }
+
+    .forbidden-actions {
+      flex-direction: column;
+    }
+
+    .forbidden-btn {
+      width: 100%;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<main class="forbidden-page" aria-labelledby="forbidden-title">
+  <section class="forbidden-card">
+    <div class="forbidden-visual" aria-hidden="true">
+      <div class="medical-scene">
+        <span class="medical-scene-badge">Protected medical area</span>
+
+        <img
+          class="medical-illustration"
+          src="{% static 'images/errors/403-doctor-clean.png' %}"
+          alt=""
+          width="900"
+          height="712"
+        >
+
+        <svg class="medical-inline-fallback" viewBox="0 0 360 285" xmlns="http://www.w3.org/2000/svg">
+          <rect x="13" y="7" width="334" height="267" rx="30" fill="#fff9e9"/>
+
+          <!-- Hand-drawn protected-care bubble -->
+          <g class="medical-float">
+            <path d="M84 26c45-25 143-21 183 4 31 19 44 55 31 83-16 34-66 44-118 42-54-1-111-13-121-51-8-30 2-60 25-78z"
+                  fill="#ff8e7e" stroke="#15213b" stroke-width="3.4" stroke-linejoin="round"/>
+            <path d="M158 153v-33c0-15 9-24 21-24s21 9 21 24v35"
+                  fill="none" stroke="#15213b" stroke-width="3.4" stroke-linecap="round"/>
+            <rect x="146" y="111" width="66" height="45" rx="15"
+                  fill="#fff9e9" stroke="#15213b" stroke-width="3.4"/>
+            <path d="M163 111v-11a16 16 0 0 1 32 0v11"
+                  fill="none" stroke="#15213b" stroke-width="3.4" stroke-linecap="round"/>
+            <circle cx="179" cy="131" r="4.5" fill="#15213b"/>
+            <path d="M179 135v9" stroke="#15213b" stroke-width="3.4" stroke-linecap="round"/>
+          </g>
+
+          <!-- Playful editorial squiggles -->
+          <path d="M29 94c-2-18 12-29 27-22 14 7 3 27-8 18-7-6 5-17 27-12"
+                fill="none" stroke="#ff7f73" stroke-width="3" stroke-linecap="round"/>
+          <path d="M292 90c24-9 39 3 27 13-10 8-21-7-6-10 13-2 27 8 22 24"
+                fill="none" stroke="#ff7f73" stroke-width="3" stroke-linecap="round"/>
+
+          <!-- Hospital bed -->
+          <path d="M53 236c19-8 42-7 64 0h136v27H53z"
+                fill="#7d83f7" stroke="#15213b" stroke-width="3.4" stroke-linejoin="round"/>
+          <path d="M53 249c16-10 32 11 50 2 18-10 31 9 47 1 17-8 33 10 50 1 18-9 35 5 53-3v13H53z"
+                fill="#ffffff"/>
+          <path d="M67 263v9M237 263v9" stroke="#15213b" stroke-width="3.4" stroke-linecap="round"/>
+
+          <!-- Sick patient -->
+          <g>
+            <path d="M107 175c-10-12-7-31 9-39 17-9 38-1 44 15 7 18-4 39-23 43z"
+                  fill="#ffffff" stroke="#15213b" stroke-width="3.4"/>
+            <path d="M109 151c10-15 35-18 48-4" fill="none" stroke="#ffffff" stroke-width="13" stroke-linecap="round"/>
+            <path d="M119 141l7 20M138 137l7 20" stroke="#7d83f7" stroke-width="3"/>
+            <path d="M121 164c3 3 7 3 10 0M141 163c3 3 7 3 10 0"
+                  fill="none" stroke="#15213b" stroke-width="2.8" stroke-linecap="round"/>
+            <path d="M132 177c5-3 10-3 15 0" fill="none" stroke="#ff7f73" stroke-width="2.8" stroke-linecap="round"/>
+            <path d="M117 191c17-10 40-4 50 14l15 31h-72z"
+                  fill="#6877ef" stroke="#15213b" stroke-width="3.4" stroke-linejoin="round"/>
+            <path d="M120 203c-14 8-20 19-18 33" fill="none" stroke="#15213b" stroke-width="3.4" stroke-linecap="round"/>
+            <circle cx="102" cy="236" r="6" fill="#ff8e7e" stroke="#15213b" stroke-width="2.5"/>
+            <path d="M164 207c14 4 24 14 33 26" fill="none" stroke="#ff8e7e" stroke-width="11" stroke-linecap="round"/>
+            <circle cx="198" cy="234" r="6" fill="#ff8e7e" stroke="#15213b" stroke-width="2.5"/>
+          </g>
+
+          <!-- Doctor pointing toward the safe route -->
+          <g>
+            <path d="M235 165c-6-16 5-33 22-35 17-2 31 12 29 29-2 17-18 28-35 22z"
+                  fill="#ff8e7e" stroke="#15213b" stroke-width="3.4"/>
+            <path d="M237 142c9-12 25-16 39-9l-3 13-38 7z"
+                  fill="#6877ef" stroke="#15213b" stroke-width="3.4" stroke-linejoin="round"/>
+            <path d="M275 162c4 2 8 2 12 0" fill="none" stroke="#15213b" stroke-width="2.7" stroke-linecap="round"/>
+            <path d="M247 182c18-8 38-2 48 15l12 37h-73z"
+                  fill="#ffffff" stroke="#15213b" stroke-width="3.4" stroke-linejoin="round"/>
+            <path d="M283 194c17 4 28 9 40 14l17-7"
+                  fill="none" stroke="#15213b" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M283 194c17 4 28 9 40 14l17-7"
+                  fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M337 194l13 4-10 9" fill="#ff8e7e" stroke="#15213b" stroke-width="3" stroke-linejoin="round"/>
+            <path d="M260 196v38M279 196v38" stroke="#7d83f7" stroke-width="3"/>
+            <path d="M255 214h31" stroke="#7d83f7" stroke-width="3"/>
+          </g>
+
+          <!-- Tiny heartbeat on the blanket -->
+          <path class="medical-pulse-line" d="M174 249h16l5-8 7 16 7-12 6 4h18"
+                fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+
+        <div class="medical-scene-copy">
+          <span class="medical-scene-code">403</span>
+          <span class="medical-scene-label">Permission required</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="forbidden-content">
+      <p class="forbidden-kicker">ClinicHub secure access</p>
+
+      <h1 class="forbidden-title" id="forbidden-title">Access denied</h1>
+
+      <p class="forbidden-message">
+        Your account does not currently have permission to access this page.
+        Please contact the system administrator if you believe access is required.
+        <span class="forbidden-message-ar">
+          لا يمتلك حسابك حاليًا صلاحية الوصول إلى هذه الصفحة.
+        </span>
+      </p>
+
+      <p class="forbidden-path" title="Requested path">
+        Requested: {{ request.path|default:"Protected resource" }}
+      </p>
+
+      <div class="forbidden-actions">
+        {% if request.user.is_authenticated %}
+          {% if request.user.is_superuser or request.user.role == "admin" %}
+            <a class="forbidden-btn forbidden-btn-primary" href="{% url 'analytics:dashboard' %}">
+              Return to dashboard
+            </a>
+          {% elif request.user.role == "doctor" %}
+            <a class="forbidden-btn forbidden-btn-primary" href="{% url 'doctor:dashboard' %}">
+              Return to dashboard
+            </a>
+          {% elif request.user.role == "secretary" %}
+            <a class="forbidden-btn forbidden-btn-primary" href="{% url 'appointments:secretary_dashboard' %}">
+              Return to dashboard
+            </a>
+          {% elif request.user.role == "patient" %}
+            <a class="forbidden-btn forbidden-btn-primary" href="{% url 'patient:dashboard' %}">
+              Return to dashboard
+            </a>
+          {% else %}
+            <a class="forbidden-btn forbidden-btn-primary" href="{% url 'home:index' %}">
+              Return home
+            </a>
+          {% endif %}
+        {% else %}
+          <a class="forbidden-btn forbidden-btn-primary" href="{% url 'accounts:login' %}">
+            Sign in
+          </a>
+        {% endif %}
+
+        <button class="forbidden-btn forbidden-btn-secondary" type="button" onclick="window.history.back();">
+          Go back
+        </button>
+      </div>
+
+      <p class="forbidden-help">
+        Access attempts are protected by ClinicHub's role and permission controls.
+      </p>
+    </div>
+  </section>
+</main>
+{% endblock %}

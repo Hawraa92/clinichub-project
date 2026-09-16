@@ -9,13 +9,21 @@
 
 {% block content %}
 <div class="container py-5 prescription-page">
-  <div class="modern-card mx-auto" style="max-width: 960px;">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-      <h2 class="text-primary">
+  <div class="modern-card mx-auto" style="max-width: 980px;">
+
+    <!-- Header + Next Patient -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+      <h2 class="text-primary mb-0">
         <i class="bi bi-prescription2"></i>
         {% if editing %} Edit Prescription {% else %} Create Prescription {% endif %}
       </h2>
-      <a href="{% url 'prescription:new_prescription' %}" class="btn btn-outline-secondary">
+
+      <a
+        href="{% if next_appointment %}{% url 'prescription:new_prescription' %}?appointment={{ next_appointment.pk }}{% else %}#{% endif %}"
+        class="btn btn-outline-secondary {% if not next_appointment %}disabled{% endif %}"
+        {% if not next_appointment %}aria-disabled="true" tabindex="-1"{% endif %}
+        title="{% if next_appointment %}Go to next patient{% else %}No next patient available{% endif %}"
+      >
         <i class="bi bi-arrow-clockwise"></i> Next Patient
       </a>
     </div>
@@ -26,101 +34,167 @@
           class="needs-validation"
           novalidate>
       {% csrf_token %}
-      {{ form.non_field_errors }}
+
+      {% if form.non_field_errors %}
+        <div class="alert alert-danger">
+          {{ form.non_field_errors }}
+        </div>
+      {% endif %}
+
+      {% if medication_formset.non_form_errors %}
+        <div class="alert alert-danger">
+          {{ medication_formset.non_form_errors }}
+        </div>
+      {% endif %}
 
       <!-- Section: General Info -->
       <div class="section-title">
         <i class="bi bi-person-vcard"></i> General Information
       </div>
+
       <div class="row g-3 mb-4">
+        <!-- Appointment -->
         <div class="col-md-6">
           <label for="{{ form.appointment.id_for_label }}" class="form-label fw-semibold">
             {{ form.appointment.label }}
           </label>
           {{ form.appointment }}
-          {% if form.appointment.errors %}
-            <div class="invalid-feedback">{{ form.appointment.errors|striptags }}</div>
-          {% endif %}
+          {% if form.appointment.help_text %}<div class="form-text">{{ form.appointment.help_text }}</div>{% endif %}
+          {% if form.appointment.errors %}<div class="invalid-feedback d-block">{{ form.appointment.errors|striptags }}</div>{% endif %}
         </div>
+
+        <!-- Patient Name -->
         <div class="col-md-6">
           <label for="{{ form.patient_full_name.id_for_label }}" class="form-label fw-semibold">
             {{ form.patient_full_name.label }}
           </label>
           {{ form.patient_full_name }}
+          {% if form.patient_full_name.help_text %}<div class="form-text">{{ form.patient_full_name.help_text }}</div>{% endif %}
+          {% if form.patient_full_name.errors %}<div class="invalid-feedback d-block">{{ form.patient_full_name.errors|striptags }}</div>{% endif %}
         </div>
+
+        <!-- Age -->
         <div class="col-md-6">
           <label for="{{ form.age.id_for_label }}" class="form-label fw-semibold">
             {{ form.age.label }}
           </label>
           {{ form.age }}
+          {% if form.age.help_text %}<div class="form-text">{{ form.age.help_text }}</div>{% endif %}
+          {% if form.age.errors %}<div class="invalid-feedback d-block">{{ form.age.errors|striptags }}</div>{% endif %}
         </div>
+
+        <!-- Dx (Diagnosis) -->
+        {% if form.diagnosis %}
+          <div class="col-md-6">
+            <label for="{{ form.diagnosis.id_for_label }}" class="form-label fw-semibold">
+              {% if form.diagnosis.label %}{{ form.diagnosis.label }}{% else %}Diagnosis (Dx){% endif %}
+            </label>
+            {{ form.diagnosis }}
+            {% if form.diagnosis.help_text %}<div class="form-text">{{ form.diagnosis.help_text }}</div>{% endif %}
+            {% if form.diagnosis.errors %}<div class="invalid-feedback d-block">{{ form.diagnosis.errors|striptags }}</div>{% endif %}
+          </div>
+        {% endif %}
+
+        <!-- Instructions -->
         <div class="col-12">
           <label for="{{ form.instructions.id_for_label }}" class="form-label fw-semibold">
             {{ form.instructions.label }}
           </label>
           {{ form.instructions }}
-          {% if form.instructions.help_text %}
-            <div class="form-text">{{ form.instructions.help_text }}</div>
-          {% endif %}
-          {% if form.instructions.errors %}
-            <div class="invalid-feedback">{{ form.instructions.errors|striptags }}</div>
-          {% endif %}
+          {% if form.instructions.help_text %}<div class="form-text">{{ form.instructions.help_text }}</div>{% endif %}
+          {% if form.instructions.errors %}<div class="invalid-feedback d-block">{{ form.instructions.errors|striptags }}</div>{% endif %}
         </div>
-        <div class="col-md-6">
-          <label for="{{ form.voice_note.id_for_label }}" class="form-label fw-semibold">
-            {{ form.voice_note.label }}
-          </label>
-          {{ form.voice_note }}
-        </div>
+
+        <!-- Doctor signature -->
         <div class="col-md-6">
           <label for="{{ form.doctor_signature.id_for_label }}" class="form-label fw-semibold">
             {{ form.doctor_signature.label }}
           </label>
           {{ form.doctor_signature }}
+          {% if form.doctor_signature.help_text %}<div class="form-text">{{ form.doctor_signature.help_text }}</div>{% endif %}
+          {% if form.doctor_signature.errors %}<div class="invalid-feedback d-block">{{ form.doctor_signature.errors|striptags }}</div>{% endif %}
+        </div>
+
+        <!-- Doctor logo -->
+        <div class="col-md-6">
+          <label for="{{ form.doctor_logo.id_for_label }}" class="form-label fw-semibold">
+            {{ form.doctor_logo.label }}
+          </label>
+          {{ form.doctor_logo }}
+          {% if form.doctor_logo.help_text %}<div class="form-text">{{ form.doctor_logo.help_text }}</div>{% endif %}
+          {% if form.doctor_logo.errors %}<div class="invalid-feedback d-block">{{ form.doctor_logo.errors|striptags }}</div>{% endif %}
         </div>
       </div>
 
-      <!-- Section: Medications & Dosage -->
+      <!-- Section: Medications & Dosage (SIMPLE) -->
       <div class="section-title">
         <i class="bi bi-capsule-pill"></i> Medications & Dosage
       </div>
+
       {{ medication_formset.management_form }}
-      <div id="medications" class="mb-4">
+
+      <!-- Header row (labels) -->
+      <div class="p-3 rounded-3 border bg-light mb-2">
+        <div class="row g-2 align-items-center small text-muted fw-semibold">
+          <div class="col-lg-6">Medication</div>
+          <div class="col-lg-5">Dose</div>
+          <div class="col-lg-1 text-end">Remove</div>
+        </div>
+      </div>
+
+      <div id="medications" class="mb-3" data-formset-prefix="{{ medication_formset.prefix }}">
         {% for mform in medication_formset %}
-          <div class="medication-entry input-group mb-2">
+          <div class="medication-entry p-3 rounded-3 border mb-2">
             {{ mform.id }} {{ mform.DELETE }}
-            <div class="flex-fill me-2">
-              {{ mform.name }}
-              {% if mform.name.errors %}
-                <div class="invalid-feedback">{{ mform.name.errors|striptags }}</div>
-              {% endif %}
+
+            <div class="row g-2 align-items-start">
+              <!-- Name -->
+              <div class="col-lg-6">
+                {{ mform.name }}
+                {% if mform.name.errors %}
+                  <div class="invalid-feedback d-block">{{ mform.name.errors|striptags }}</div>
+                {% endif %}
+              </div>
+
+              <!-- Dosage -->
+              <div class="col-lg-5">
+                {{ mform.dosage }}
+                {% if mform.dosage.errors %}
+                  <div class="invalid-feedback d-block">{{ mform.dosage.errors|striptags }}</div>
+                {% endif %}
+              </div>
+
+              <!-- Remove -->
+              <div class="col-lg-1 d-flex justify-content-end">
+                <button type="button" class="btn btn-outline-danger remove-medication" title="Remove">
+                  <i class="bi bi-dash-circle-fill"></i>
+                </button>
+              </div>
             </div>
-            <div class="flex-fill me-2">
-              {{ mform.dosage }}
-              {% if mform.dosage.errors %}
-                <div class="invalid-feedback">{{ mform.dosage.errors|striptags }}</div>
-              {% endif %}
-            </div>
-            <button type="button" class="btn btn-outline-danger remove-medication">
-              <i class="bi bi-dash-circle-fill"></i>
-            </button>
           </div>
         {% endfor %}
       </div>
 
-      <!-- Empty template for dynamic cloning -->
+      <!-- Empty template for dynamic cloning (KEEP ID for existing JS) -->
       <div id="empty-form" class="d-none">
-        <div class="medication-entry input-group mb-2">
+        <div class="medication-entry p-3 rounded-3 border mb-2">
           {{ medication_formset.empty_form.id }} {{ medication_formset.empty_form.DELETE }}
-          <div class="flex-fill me-2">
-            {{ medication_formset.empty_form.name }}
+
+          <div class="row g-2 align-items-start">
+            <div class="col-lg-6">
+              {{ medication_formset.empty_form.name }}
+            </div>
+
+            <div class="col-lg-5">
+              {{ medication_formset.empty_form.dosage }}
+            </div>
+
+            <div class="col-lg-1 d-flex justify-content-end">
+              <button type="button" class="btn btn-outline-danger remove-medication" title="Remove">
+                <i class="bi bi-dash-circle-fill"></i>
+              </button>
+            </div>
           </div>
-          <div class="flex-fill me-2">
-            {{ medication_formset.empty_form.dosage }}
-          </div>
-          <button type="button" class="btn btn-outline-danger remove-medication">
-            <i class="bi bi-dash-circle-fill"></i>
-          </button>
         </div>
       </div>
 
@@ -139,7 +213,9 @@
       </div>
       <div id="recordStatus" class="form-text text-info mb-2">No recording yet</div>
       <audio id="audioPlayer" controls class="w-100 d-none mb-2"></audio>
-      <input type="file" name="voice_note" id="voiceNoteInput" accept="audio/*" hidden>
+
+      {# هذا الحقل الخفي يستقبل ملف الصوت من الـ JS ويُرسَل كـ voice_note #}
+      <input type="file" name="voice_note" id="id_voice_note" accept="audio/*" hidden>
 
       <!-- Section: Archive Option -->
       <div class="section-title">
@@ -150,9 +226,8 @@
         <label class="form-check-label" for="{{ form.archive_prescription.id_for_label }}">
           {{ form.archive_prescription.label }}
         </label>
-        {% if form.archive_prescription.help_text %}
-          <div class="form-text">{{ form.archive_prescription.help_text }}</div>
-        {% endif %}
+        {% if form.archive_prescription.help_text %}<div class="form-text">{{ form.archive_prescription.help_text }}</div>{% endif %}
+        {% if form.archive_prescription.errors %}<div class="invalid-feedback d-block">{{ form.archive_prescription.errors|striptags }}</div>{% endif %}
       </div>
 
       <!-- Submit Button -->
@@ -162,6 +237,7 @@
           {% if editing %} Update & View {% else %} Save & View {% endif %}
         </button>
       </div>
+
     </form>
   </div>
 </div>

@@ -1,0 +1,1861 @@
+{% extends "base.html" %}
+
+{% block title %}
+صلاحيات {{ target_user }} | ClinicHub
+{% endblock %}
+
+{% block meta_description %}
+تعديل حساب وصلاحيات مستخدم ClinicHub.
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  .permission-editor {
+    --pe-primary: #0f766e;
+    --pe-primary-dark: #12325b;
+    --pe-accent: #14b8a6;
+    --pe-bg: #f3f7fb;
+    --pe-surface: #ffffff;
+    --pe-surface-soft: #f8fafc;
+    --pe-border: #dbe5ef;
+    --pe-text: #10213f;
+    --pe-muted: #66758f;
+    --pe-success: #059669;
+    --pe-warning: #d97706;
+    --pe-danger: #dc2626;
+    direction: rtl;
+    min-height: calc(100vh - 110px);
+    padding: 1.5rem 0 6rem;
+    color: var(--pe-text);
+    background:
+      radial-gradient(
+        circle at 90% 0,
+        rgba(20, 184, 166, 0.09),
+        transparent 26rem
+      ),
+      var(--pe-bg);
+  }
+
+  html[data-theme="dark"] .permission-editor {
+    --pe-bg: #0f172a;
+    --pe-surface: #172033;
+    --pe-surface-soft: #111a2c;
+    --pe-border: #2c3a52;
+    --pe-text: #e8eef8;
+    --pe-muted: #a6b2c5;
+  }
+
+  .editor-container {
+    width: min(1220px, calc(100% - 2rem));
+    margin-inline: auto;
+  }
+
+  .editor-hero {
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.25rem;
+    padding: 1.5rem;
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 1.2rem;
+    background:
+      linear-gradient(
+        120deg,
+        rgba(15, 118, 110, 0.97),
+        rgba(18, 50, 91, 0.98)
+      );
+    box-shadow: 0 18px 45px rgba(17, 49, 84, 0.18);
+  }
+
+  .editor-hero::after {
+    content: "";
+    position: absolute;
+    inset-inline-start: -5rem;
+    bottom: -7rem;
+    width: 17rem;
+    height: 17rem;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .hero-user,
+  .hero-actions {
+    position: relative;
+    z-index: 1;
+  }
+
+  .hero-user {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+  }
+
+  .hero-avatar {
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    width: 3.65rem;
+    height: 3.65rem;
+    color: #0f766e;
+    border: 3px solid rgba(255, 255, 255, 0.28);
+    border-radius: 1rem;
+    font-size: 1.35rem;
+    font-weight: 950;
+    background: #ffffff;
+  }
+
+  .hero-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.35rem;
+    color: rgba(255, 255, 255, 0.78);
+    font-size: 0.72rem;
+    font-weight: 800;
+  }
+
+  .editor-hero h1 {
+    margin: 0;
+    font-size: clamp(1.3rem, 3vw, 1.85rem);
+    font-weight: 950;
+  }
+
+  .hero-email {
+    direction: ltr;
+    margin-top: 0.3rem;
+    color: rgba(255, 255, 255, 0.78);
+    font-size: 0.78rem;
+    text-align: right;
+  }
+
+  .hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+  }
+
+  .pe-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    min-height: 2.6rem;
+    padding: 0.62rem 0.9rem;
+    color: var(--pe-text);
+    border: 1px solid var(--pe-border);
+    border-radius: 0.7rem;
+    font-size: 0.8rem;
+    font-weight: 900;
+    text-decoration: none;
+    background: var(--pe-surface);
+    transition:
+      transform 0.18s ease,
+      box-shadow 0.18s ease,
+      background 0.18s ease;
+  }
+
+  .pe-button:hover {
+    color: var(--pe-primary);
+    transform: translateY(-1px);
+  }
+
+  .pe-button-light {
+    color: #12325b;
+    border-color: rgba(255, 255, 255, 0.5);
+    background: #ffffff;
+  }
+
+  .pe-button-primary {
+    color: #ffffff;
+    border-color: var(--pe-primary);
+    background: var(--pe-primary);
+    box-shadow: 0 8px 20px rgba(15, 118, 110, 0.2);
+  }
+
+  .pe-button-primary:hover {
+    color: #ffffff;
+    background: #0b625c;
+  }
+
+  .pe-button-danger {
+    color: var(--pe-danger);
+    border-color: rgba(220, 38, 38, 0.22);
+    background: rgba(220, 38, 38, 0.06);
+  }
+
+  .editor-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 310px;
+    gap: 1rem;
+    margin-top: 1rem;
+    align-items: start;
+  }
+
+  .editor-main,
+  .editor-sidebar {
+    display: grid;
+    gap: 1rem;
+  }
+
+  .pe-card {
+    overflow: hidden;
+    border: 1px solid var(--pe-border);
+    border-radius: 1rem;
+    background: var(--pe-surface);
+    box-shadow: 0 10px 30px rgba(29, 55, 86, 0.06);
+  }
+
+  .pe-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.8rem;
+    padding: 1rem 1.05rem;
+    border-bottom: 1px solid var(--pe-border);
+    background: var(--pe-surface-soft);
+  }
+
+  .pe-card-title {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+  }
+
+  .pe-card-title-icon {
+    display: grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    color: var(--pe-primary);
+    border-radius: 0.58rem;
+    background: rgba(20, 184, 166, 0.11);
+  }
+
+  .pe-card-title h2 {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 950;
+  }
+
+  .pe-card-title p {
+    margin: 0.18rem 0 0;
+    color: var(--pe-muted);
+    font-size: 0.7rem;
+  }
+
+  .pe-card-body {
+    padding: 1.05rem;
+  }
+
+  .account-grid {
+    display: grid;
+    grid-template-columns: 1.25fr repeat(3, minmax(125px, 0.75fr));
+    gap: 0.8rem;
+  }
+
+  .role-preset-panel {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: 1rem;
+    padding: 0.9rem;
+    border: 1px solid rgba(20, 184, 166, 0.28);
+    border-radius: 0.85rem;
+    background:
+      linear-gradient(
+        135deg,
+        rgba(20, 184, 166, 0.08),
+        rgba(15, 118, 110, 0.03)
+      );
+  }
+
+  .role-preset-copy {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.7rem;
+    min-width: 0;
+  }
+
+  .role-preset-icon {
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    width: 2.35rem;
+    height: 2.35rem;
+    color: var(--pe-primary);
+    border-radius: 0.7rem;
+    background: rgba(20, 184, 166, 0.14);
+  }
+
+  .role-preset-copy strong {
+    display: block;
+    margin-bottom: 0.2rem;
+    font-size: 0.82rem;
+    font-weight: 950;
+  }
+
+  .role-preset-copy small {
+    display: block;
+    color: var(--pe-muted);
+    font-size: 0.69rem;
+    line-height: 1.65;
+  }
+
+  .role-preset-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-top: 0.45rem;
+    padding: 0.25rem 0.55rem;
+    color: var(--pe-primary);
+    border-radius: 999px;
+    font-size: 0.66rem;
+    font-weight: 900;
+    background: rgba(20, 184, 166, 0.12);
+  }
+
+  .role-preset-button {
+    flex: 0 0 auto;
+    color: #ffffff;
+    border-color: var(--pe-primary);
+    background: var(--pe-primary);
+  }
+
+  .role-preset-button:hover {
+    color: #ffffff;
+    background: #0b625c;
+  }
+
+  .pe-field label {
+    display: block;
+    margin-bottom: 0.38rem;
+    color: var(--pe-muted);
+    font-size: 0.73rem;
+    font-weight: 850;
+  }
+
+  .pe-select,
+  .permission-search {
+    width: 100%;
+    min-height: 2.65rem;
+    padding: 0.58rem 0.78rem;
+    color: var(--pe-text);
+    border: 1px solid var(--pe-border);
+    border-radius: 0.72rem;
+    outline: none;
+    background: var(--pe-surface-soft);
+  }
+
+  .pe-select:focus,
+  .permission-search:focus {
+    border-color: var(--pe-accent);
+    box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.12);
+  }
+
+  .account-switch {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.55rem;
+    min-height: 4.7rem;
+    padding: 0.75rem;
+    cursor: pointer;
+    border: 1px solid var(--pe-border);
+    border-radius: 0.78rem;
+    background: var(--pe-surface-soft);
+  }
+
+  .account-switch input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .switch-copy strong {
+    display: block;
+    font-size: 0.78rem;
+    font-weight: 900;
+  }
+
+  .switch-copy small {
+    display: block;
+    margin-top: 0.16rem;
+    color: var(--pe-muted);
+    font-size: 0.65rem;
+  }
+
+  .switch-ui {
+    position: relative;
+    flex: 0 0 auto;
+    width: 2.65rem;
+    height: 1.48rem;
+    border-radius: 999px;
+    background: #cbd5e1;
+    transition: background 0.18s ease;
+  }
+
+  .switch-ui::after {
+    content: "";
+    position: absolute;
+    top: 0.2rem;
+    right: 0.2rem;
+    width: 1.08rem;
+    height: 1.08rem;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.2);
+    transition: transform 0.18s ease;
+  }
+
+  .account-switch input:checked + .switch-ui {
+    background: var(--pe-success);
+  }
+
+  .account-switch input:checked + .switch-ui::after {
+    transform: translateX(-1.17rem);
+  }
+
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.65rem;
+  }
+
+  .summary-item {
+    padding: 0.8rem;
+    border: 1px solid var(--pe-border);
+    border-radius: 0.78rem;
+    background: var(--pe-surface-soft);
+  }
+
+  .summary-item span {
+    display: block;
+    color: var(--pe-muted);
+    font-size: 0.66rem;
+    font-weight: 800;
+  }
+
+  .summary-item strong {
+    display: block;
+    margin-top: 0.28rem;
+    font-size: 1.25rem;
+    font-weight: 950;
+  }
+
+  .summary-item.direct strong {
+    color: #2563eb;
+  }
+
+  .summary-item.inherited strong {
+    color: #7c3aed;
+  }
+
+  .summary-item.effective strong {
+    color: var(--pe-success);
+  }
+
+  .permission-toolbar {
+    display: grid;
+    grid-template-columns: minmax(220px, 1fr) auto;
+    gap: 0.65rem;
+    padding: 0.8rem 1rem;
+    border-bottom: 1px solid var(--pe-border);
+  }
+
+  .bulk-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .permission-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+    padding: 0.75rem 1rem;
+    color: var(--pe-muted);
+    border-bottom: 1px solid var(--pe-border);
+    font-size: 0.68rem;
+  }
+
+  .legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .legend-dot {
+    width: 0.58rem;
+    height: 0.58rem;
+    border-radius: 50%;
+  }
+
+  .legend-dot.direct {
+    background: #2563eb;
+  }
+
+  .legend-dot.inherited {
+    background: #7c3aed;
+  }
+
+  .legend-dot.empty {
+    border: 1px solid #94a3b8;
+    background: transparent;
+  }
+
+  .modules-list {
+    display: grid;
+    gap: 0.8rem;
+    padding: 1rem;
+  }
+
+  .permission-module {
+    overflow: hidden;
+    border: 1px solid var(--pe-border);
+    border-radius: 0.9rem;
+    background: var(--pe-surface);
+  }
+
+  .permission-module[hidden] {
+    display: none;
+  }
+
+  .module-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.8rem;
+    padding: 0.85rem;
+    cursor: pointer;
+    list-style: none;
+    background: var(--pe-surface-soft);
+  }
+
+  .module-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .module-identity {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+  }
+
+  .module-icon {
+    display: grid;
+    place-items: center;
+    width: 2.3rem;
+    height: 2.3rem;
+    color: var(--pe-primary);
+    border-radius: 0.68rem;
+    background: rgba(20, 184, 166, 0.12);
+  }
+
+  .module-name {
+    margin: 0;
+    font-size: 0.86rem;
+    font-weight: 950;
+  }
+
+  .module-description {
+    margin-top: 0.15rem;
+    color: var(--pe-muted);
+    font-size: 0.66rem;
+  }
+
+  .module-summary-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+  }
+
+  .module-count {
+    min-width: 4.8rem;
+    padding: 0.32rem 0.52rem;
+    color: var(--pe-primary);
+    border-radius: 999px;
+    font-size: 0.65rem;
+    font-weight: 900;
+    text-align: center;
+    background: rgba(20, 184, 166, 0.11);
+  }
+
+  .module-chevron {
+    transition: transform 0.18s ease;
+  }
+
+  .permission-module[open] .module-chevron {
+    transform: rotate(180deg);
+  }
+
+  .module-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.7rem;
+    padding: 0.7rem 0.85rem;
+    border-top: 1px solid var(--pe-border);
+    border-bottom: 1px solid var(--pe-border);
+  }
+
+  .module-master-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin: 0;
+    cursor: pointer;
+    font-size: 0.72rem;
+    font-weight: 900;
+  }
+
+  .module-master-label input {
+    width: 1rem;
+    height: 1rem;
+    accent-color: var(--pe-primary);
+  }
+
+  .module-selection-status {
+    color: var(--pe-muted);
+    font-size: 0.66rem;
+    font-weight: 800;
+  }
+
+  .permissions-table-wrap {
+    overflow-x: auto;
+  }
+
+  .permissions-table {
+    width: 100%;
+    min-width: 680px;
+    border-collapse: collapse;
+  }
+
+  .permissions-table th {
+    padding: 0.72rem;
+    color: var(--pe-muted);
+    border-bottom: 1px solid var(--pe-border);
+    font-size: 0.67rem;
+    font-weight: 900;
+    text-align: center;
+    background: var(--pe-surface-soft);
+  }
+
+  .permissions-table th:first-child {
+    text-align: right;
+  }
+
+  .permissions-table td {
+    padding: 0.72rem;
+    border-bottom: 1px solid var(--pe-border);
+    text-align: center;
+    vertical-align: middle;
+  }
+
+  .permissions-table tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+  .model-name {
+    min-width: 180px;
+    text-align: right !important;
+  }
+
+  .model-name strong {
+    display: block;
+    font-size: 0.76rem;
+    font-weight: 900;
+  }
+
+  .model-name small {
+    direction: ltr;
+    display: block;
+    margin-top: 0.15rem;
+    color: var(--pe-muted);
+    font-size: 0.6rem;
+    text-align: right;
+  }
+
+  .permission-cell {
+    min-width: 92px;
+  }
+
+  .permission-control {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+  }
+
+  .permission-check {
+    position: relative;
+    display: inline-grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    margin: 0;
+    cursor: pointer;
+  }
+
+  .permission-check input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .permission-check-ui {
+    display: grid;
+    place-items: center;
+    width: 1.8rem;
+    height: 1.8rem;
+    color: #94a3b8;
+    border: 1px solid #b7c2d0;
+    border-radius: 0.5rem;
+    background: transparent;
+    transition:
+      color 0.16s ease,
+      border-color 0.16s ease,
+      background 0.16s ease,
+      transform 0.16s ease;
+  }
+
+  .permission-check:hover .permission-check-ui {
+    transform: translateY(-1px);
+    border-color: var(--pe-accent);
+  }
+
+  .permission-check input:focus-visible + .permission-check-ui {
+    box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.15);
+  }
+
+  .permission-check input:checked + .permission-check-ui {
+    color: #ffffff;
+    border-color: #2563eb;
+    background: #2563eb;
+  }
+
+  .inherited-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.22rem 0.38rem;
+    color: #7c3aed;
+    border-radius: 999px;
+    font-size: 0.57rem;
+    font-weight: 900;
+    background: rgba(124, 58, 237, 0.1);
+  }
+
+  .permission-unavailable {
+    color: #b7c2d0;
+    font-size: 1rem;
+  }
+
+  .custom-permissions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.55rem;
+  }
+
+  .custom-permission {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin: 0;
+    padding: 0.35rem 0.5rem;
+    cursor: pointer;
+    color: var(--pe-muted);
+    border: 1px solid var(--pe-border);
+    border-radius: 0.55rem;
+    font-size: 0.61rem;
+    font-weight: 800;
+    background: var(--pe-surface-soft);
+  }
+
+  .custom-permission input {
+    width: 0.9rem;
+    height: 0.9rem;
+    accent-color: var(--pe-primary);
+  }
+
+  .empty-modules {
+    padding: 3rem 1rem;
+    color: var(--pe-muted);
+    text-align: center;
+  }
+
+  .scope-list,
+  .group-list {
+    display: grid;
+    gap: 0.55rem;
+  }
+
+  .scope-item {
+    padding: 0.72rem;
+    border: 1px solid var(--pe-border);
+    border-radius: 0.72rem;
+    background: var(--pe-surface-soft);
+  }
+
+  .scope-item strong {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 900;
+  }
+
+  .scope-item span {
+    display: block;
+    margin-top: 0.24rem;
+    color: var(--pe-muted);
+    font-size: 0.65rem;
+  }
+
+  .scope-role {
+    display: inline-flex !important;
+    width: fit-content;
+    margin-top: 0.45rem !important;
+    padding: 0.25rem 0.45rem;
+    color: var(--pe-primary) !important;
+    border-radius: 999px;
+    font-weight: 900;
+    background: rgba(20, 184, 166, 0.1);
+  }
+
+  .group-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    width: fit-content;
+    padding: 0.38rem 0.55rem;
+    color: #7c3aed;
+    border-radius: 999px;
+    font-size: 0.67rem;
+    font-weight: 900;
+    background: rgba(124, 58, 237, 0.1);
+  }
+
+  .sidebar-empty {
+    margin: 0;
+    color: var(--pe-muted);
+    font-size: 0.7rem;
+    line-height: 1.8;
+  }
+
+  .security-note {
+    display: flex;
+    gap: 0.6rem;
+    padding: 0.75rem;
+    color: #92400e;
+    border: 1px solid rgba(217, 119, 6, 0.22);
+    border-radius: 0.72rem;
+    font-size: 0.68rem;
+    line-height: 1.75;
+    background: rgba(217, 119, 6, 0.08);
+  }
+
+  html[data-theme="dark"] .security-note {
+    color: #fbbf24;
+  }
+
+  .save-bar {
+    position: sticky;
+    z-index: 15;
+    bottom: 0.7rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.8rem;
+    margin-top: 1rem;
+    padding: 0.8rem;
+    border: 1px solid var(--pe-border);
+    border-radius: 0.9rem;
+    background: color-mix(
+      in srgb,
+      var(--pe-surface) 94%,
+      transparent
+    );
+    box-shadow: 0 15px 40px rgba(15, 35, 60, 0.17);
+    backdrop-filter: blur(12px);
+  }
+
+  .save-copy strong {
+    display: block;
+    font-size: 0.78rem;
+    font-weight: 950;
+  }
+
+  .save-copy small {
+    display: block;
+    margin-top: 0.18rem;
+    color: var(--pe-muted);
+    font-size: 0.64rem;
+  }
+
+  .save-actions {
+    display: flex;
+    gap: 0.55rem;
+  }
+
+  @media (max-width: 1020px) {
+    .editor-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .editor-sidebar {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .account-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (max-width: 720px) {
+    .editor-container {
+      width: min(100% - 1rem, 1220px);
+    }
+
+    .editor-hero {
+      align-items: flex-start;
+      flex-direction: column;
+      padding: 1.1rem;
+    }
+
+    .permission-toolbar,
+    .account-grid,
+    .summary-grid,
+    .editor-sidebar {
+      grid-template-columns: 1fr;
+    }
+
+    .role-preset-panel {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .role-preset-button {
+      width: 100%;
+    }
+
+    .bulk-actions .pe-button {
+      flex: 1;
+    }
+
+    .save-bar {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .save-actions .pe-button {
+      flex: 1;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="permission-editor">
+  <div class="editor-container">
+
+    <section class="editor-hero">
+      <div class="hero-user">
+        <div class="hero-avatar">
+          {% if target_user.first_name %}
+            {{ target_user.first_name|slice:":1"|upper }}
+          {% else %}
+            {{ target_user.email|slice:":1"|upper }}
+          {% endif %}
+        </div>
+
+        <div>
+          <div class="hero-eyebrow">
+            <i class="bi bi-shield-check"></i>
+            تحرير حساب وصلاحيات المستخدم
+          </div>
+
+          <h1>
+            {% if target_user.get_full_name %}
+              {{ target_user.get_full_name }}
+            {% elif target_user.username %}
+              {{ target_user.username }}
+            {% else %}
+              مستخدم ClinicHub
+            {% endif %}
+          </h1>
+
+          <div class="hero-email">
+            {{ target_user.email }}
+          </div>
+        </div>
+      </div>
+
+      <div class="hero-actions">
+        <a
+          class="pe-button pe-button-light"
+          href="{% url 'accounts:permissions_dashboard' %}"
+        >
+          <i class="bi bi-arrow-right"></i>
+          جميع المستخدمين
+        </a>
+      </div>
+    </section>
+
+    <form
+      id="permissionsForm"
+      method="post"
+      novalidate
+    >
+      {% csrf_token %}
+
+      <div class="editor-grid">
+        <div class="editor-main">
+
+          <section class="pe-card">
+            <header class="pe-card-header">
+              <div class="pe-card-title">
+                <span class="pe-card-title-icon">
+                  <i class="bi bi-person-gear"></i>
+                </span>
+
+                <div>
+                  <h2>إعدادات الحساب</h2>
+                  <p>
+                    الدور وحالات الوصول الأساسية للمستخدم.
+                  </p>
+                </div>
+              </div>
+            </header>
+
+            <div class="pe-card-body">
+              <div class="account-grid">
+
+                <div class="pe-field">
+                  <label for="userRole">
+                    الدور الوظيفي
+                  </label>
+
+                  <select
+                    class="pe-select"
+                    id="userRole"
+                    name="role"
+                    required
+                  >
+                    {% for role_value, role_label in role_choices %}
+                      <option
+                        value="{{ role_value }}"
+                        {% if target_user.role == role_value %}
+                          selected
+                        {% endif %}
+                      >
+                        {{ role_label }}
+                      </option>
+                    {% endfor %}
+                  </select>
+                </div>
+
+                <label class="account-switch">
+                  <span class="switch-copy">
+                    <strong>الحساب فعال</strong>
+                    <small>يسمح بتسجيل الدخول</small>
+                  </span>
+
+                  <input
+                    type="checkbox"
+                    name="is_active"
+                    {% if target_user.is_active %}
+                      checked
+                    {% endif %}
+                  >
+
+                  <span class="switch-ui"></span>
+                </label>
+
+                <label class="account-switch">
+                  <span class="switch-copy">
+                    <strong>الحساب معتمد</strong>
+                    <small>تمت الموافقة الإدارية</small>
+                  </span>
+
+                  <input
+                    type="checkbox"
+                    name="is_approved"
+                    {% if target_user.is_approved %}
+                      checked
+                    {% endif %}
+                  >
+
+                  <span class="switch-ui"></span>
+                </label>
+
+                <label class="account-switch">
+                  <span class="switch-copy">
+                    <strong>Django Staff</strong>
+                    <small>دخول لوحة Django Admin</small>
+                  </span>
+
+                  <input
+                    type="checkbox"
+                    name="is_staff"
+                    {% if target_user.is_staff %}
+                      checked
+                    {% endif %}
+                  >
+
+                  <span class="switch-ui"></span>
+                </label>
+
+              </div>
+
+              {% if role_preset_options %}
+                <div class="role-preset-panel">
+                  <div class="role-preset-copy">
+                    <span class="role-preset-icon">
+                      <i class="bi bi-magic"></i>
+                    </span>
+
+                    <div>
+                      <strong>
+                        حزمة صلاحيات جاهزة حسب الدور
+                      </strong>
+
+                      <small id="rolePresetDescription">
+                        اختاري الدور الوظيفي ثم طبّقي الحزمة المناسبة تلقائيًا.
+                      </small>
+
+                      <span class="role-preset-meta">
+                        <i class="bi bi-check2-square"></i>
+                        <span id="rolePresetCount">0</span>
+                        صلاحية ضمن الحزمة
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    class="pe-button role-preset-button"
+                    id="applyRolePresetButton"
+                    type="submit"
+                    name="submit_action"
+                    value="apply_role_preset"
+                  >
+                    <i class="bi bi-stars"></i>
+                    تطبيق حزمة الدور
+                  </button>
+
+                  <div id="rolePresetData" hidden>
+                    {% for preset in role_preset_options %}
+                      <span
+                        data-role-preset
+                        data-role="{{ preset.value }}"
+                        data-label="{{ preset.label|escape }}"
+                        data-description="{{ preset.description|escape }}"
+                        data-permission-count="{{ preset.permission_count }}"
+                      ></span>
+                    {% endfor %}
+                  </div>
+                </div>
+              {% endif %}
+            </div>
+          </section>
+
+          <section class="pe-card">
+            <header class="pe-card-header">
+              <div class="pe-card-title">
+                <span class="pe-card-title-icon">
+                  <i class="bi bi-check2-square"></i>
+                </span>
+
+                <div>
+                  <h2>مصفوفة صلاحيات ClinicHub</h2>
+                  <p>
+                    ضعي علامة صح أمام العمليات التي تريدين منحها مباشرة.
+                  </p>
+                </div>
+              </div>
+            </header>
+
+            <div class="permission-toolbar">
+              <input
+                class="permission-search"
+                id="permissionSearch"
+                type="search"
+                placeholder="ابحثي عن وحدة أو موديل..."
+                autocomplete="off"
+              >
+
+              <div class="bulk-actions">
+                <button
+                  class="pe-button"
+                  id="selectViewPermissions"
+                  type="button"
+                >
+                  <i class="bi bi-eye"></i>
+                  تحديد العرض
+                </button>
+
+                <button
+                  class="pe-button pe-button-danger"
+                  id="clearDirectPermissions"
+                  type="button"
+                >
+                  <i class="bi bi-x-square"></i>
+                  إلغاء المباشرة
+                </button>
+              </div>
+            </div>
+
+            <div class="permission-legend">
+              <span class="legend-item">
+                <span class="legend-dot direct"></span>
+                الأزرق: صلاحية مباشرة قابلة للتعديل
+              </span>
+
+              <span class="legend-item">
+                <span class="legend-dot inherited"></span>
+                البنفسجي: صلاحية موروثة من Group
+              </span>
+
+              <span class="legend-item">
+                <span class="legend-dot empty"></span>
+                الفارغ: غير ممنوحة مباشرة
+              </span>
+            </div>
+
+            {% if permission_modules %}
+              <div
+                class="modules-list"
+                id="permissionModules"
+              >
+                {% for module in permission_modules %}
+                  <details
+                    class="permission-module"
+                    data-permission-module
+                    open
+                  >
+                    <summary class="module-summary">
+                      <div class="module-identity">
+                        <span class="module-icon">
+                          <i class="bi {{ module.icon }}"></i>
+                        </span>
+
+                        <div>
+                          <h3 class="module-name">
+                            {{ module.label }}
+                          </h3>
+                          <div class="module-description">
+                            {{ module.description }}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="module-summary-meta">
+                        <span class="module-count">
+                          {{ module.effective_count }}
+                          /
+                          {{ module.permission_count }}
+                          فعالة
+                        </span>
+
+                        <i class="bi bi-chevron-down module-chevron"></i>
+                      </div>
+                    </summary>
+
+                    <div class="module-controls">
+                      <label class="module-master-label">
+                        <input
+                          class="module-master"
+                          type="checkbox"
+                          {% if module.all_direct_selected %}
+                            checked
+                          {% endif %}
+                        >
+                        تحديد جميع صلاحيات هذه الوحدة
+                      </label>
+
+                      <span class="module-selection-status">
+                        {{ module.direct_count }}
+                        صلاحية مباشرة
+                        {% if module.inherited_count %}
+                          +
+                          {{ module.inherited_count }}
+                          موروثة
+                        {% endif %}
+                      </span>
+                    </div>
+
+                    <div class="permissions-table-wrap">
+                      <table class="permissions-table">
+                        <thead>
+                          <tr>
+                            <th>القسم أو البيانات</th>
+
+                            {% for action in permission_actions %}
+                              <th>
+                                <i class="bi {{ action.icon }}"></i>
+                                {{ action.label }}
+                              </th>
+                            {% endfor %}
+                          </tr>
+                        </thead>
+
+                        <tbody>
+                          {% for model in module.models %}
+                            <tr>
+                              <td class="model-name">
+                                <strong>
+                                  {{ model.model_label }}
+                                </strong>
+                                <small>
+                                  {{ module.app_label }}.{{ model.model_key }}
+                                </small>
+
+                                {% if model.custom_permissions %}
+                                  <div class="custom-permissions">
+                                    {% for permission in model.custom_permissions %}
+                                      <label class="custom-permission">
+                                        <input
+                                          class="permission-checkbox"
+                                          type="checkbox"
+                                          name="permissions"
+                                          value="{{ permission.id }}"
+                                          data-action="custom"
+                                          {% if permission.is_direct %}
+                                            checked
+                                          {% endif %}
+                                        >
+
+                                        <span>
+                                          {{ permission.name }}
+                                        </span>
+
+                                        {% if permission.is_inherited %}
+                                          <span class="inherited-badge">
+                                            Group
+                                          </span>
+                                        {% endif %}
+                                      </label>
+                                    {% endfor %}
+                                  </div>
+                                {% endif %}
+                              </td>
+
+                              {% for action_cell in model.actions %}
+                                <td class="permission-cell">
+                                  {% if action_cell.permission %}
+                                    <div class="permission-control">
+                                      <label
+                                        class="permission-check"
+                                        title="{{ action_cell.permission.name }}"
+                                      >
+                                        <input
+                                          class="permission-checkbox"
+                                          type="checkbox"
+                                          name="permissions"
+                                          value="{{ action_cell.permission.id }}"
+                                          data-action="{{ action_cell.key }}"
+                                          {% if action_cell.permission.is_direct %}
+                                            checked
+                                          {% endif %}
+                                        >
+
+                                        <span class="permission-check-ui">
+                                          <i class="bi bi-check-lg"></i>
+                                        </span>
+
+                                        <span class="visually-hidden">
+                                          {{ action_cell.label }}
+                                          {{ model.model_label }}
+                                        </span>
+                                      </label>
+
+                                      {% if action_cell.permission.is_inherited %}
+                                        <span
+                                          class="inherited-badge"
+                                          title="هذه الصلاحية موروثة من مجموعة المستخدم"
+                                        >
+                                          <i class="bi bi-diagram-3"></i>
+                                          Group
+                                        </span>
+                                      {% endif %}
+                                    </div>
+                                  {% else %}
+                                    <span class="permission-unavailable">
+                                      —
+                                    </span>
+                                  {% endif %}
+                                </td>
+                              {% endfor %}
+                            </tr>
+                          {% endfor %}
+                        </tbody>
+                      </table>
+                    </div>
+                  </details>
+                {% endfor %}
+              </div>
+            {% else %}
+              <div class="empty-modules">
+                <i class="bi bi-shield-x fs-2 d-block mb-2"></i>
+                لا توجد صلاحيات متاحة ضمن وحدات ClinicHub حاليًا.
+              </div>
+            {% endif %}
+          </section>
+
+        </div>
+
+        <aside class="editor-sidebar">
+          <section class="pe-card">
+            <header class="pe-card-header">
+              <div class="pe-card-title">
+                <span class="pe-card-title-icon">
+                  <i class="bi bi-activity"></i>
+                </span>
+
+                <div>
+                  <h2>ملخص الصلاحيات</h2>
+                  <p>الحالة الفعلية الحالية.</p>
+                </div>
+              </div>
+            </header>
+
+            <div class="pe-card-body">
+              <div class="summary-grid">
+                <div class="summary-item">
+                  <span>المتاحة</span>
+                  <strong>
+                    {{ permission_summary.available }}
+                  </strong>
+                </div>
+
+                <div class="summary-item direct">
+                  <span>المباشرة</span>
+                  <strong>
+                    {{ permission_summary.direct }}
+                  </strong>
+                </div>
+
+                <div class="summary-item inherited">
+                  <span>الموروثة</span>
+                  <strong>
+                    {{ permission_summary.inherited }}
+                  </strong>
+                </div>
+
+                <div class="summary-item effective">
+                  <span>الفعالة</span>
+                  <strong>
+                    {{ permission_summary.effective }}
+                  </strong>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="pe-card">
+            <header class="pe-card-header">
+              <div class="pe-card-title">
+                <span class="pe-card-title-icon">
+                  <i class="bi bi-buildings"></i>
+                </span>
+
+                <div>
+                  <h2>نطاق العمل</h2>
+                  <p>المؤسسة والفرع والتكليف.</p>
+                </div>
+              </div>
+            </header>
+
+            <div class="pe-card-body">
+              {% if assignments %}
+                <div class="scope-list">
+                  {% for assignment in assignments %}
+                    <div class="scope-item">
+                      <strong>
+                        {{ assignment.hospital.name }}
+                      </strong>
+
+                      <span>
+                        {% if assignment.branch %}
+                          الفرع:
+                          {{ assignment.branch.name }}
+                        {% else %}
+                          جميع فروع المؤسسة
+                        {% endif %}
+
+                        {% if assignment.department %}
+                          ·
+                          القسم:
+                          {{ assignment.department.name }}
+                        {% endif %}
+                      </span>
+
+                      <span class="scope-role">
+                        {{ assignment.get_role_display }}
+                        {% if assignment.is_primary %}
+                          · أساسي
+                        {% endif %}
+                      </span>
+                    </div>
+                  {% endfor %}
+                </div>
+              {% else %}
+                <p class="sidebar-empty">
+                  لا يوجد تكليف تشغيلي فعال لهذا المستخدم.
+                  حددي المؤسسة والفرع من Staff Assignments
+                  قبل منحه صلاحيات تشغيلية.
+                </p>
+              {% endif %}
+            </div>
+          </section>
+
+          <section class="pe-card">
+            <header class="pe-card-header">
+              <div class="pe-card-title">
+                <span class="pe-card-title-icon">
+                  <i class="bi bi-diagram-3"></i>
+                </span>
+
+                <div>
+                  <h2>المجموعات</h2>
+                  <p>مصدر الصلاحيات الموروثة.</p>
+                </div>
+              </div>
+            </header>
+
+            <div class="pe-card-body">
+              {% if groups %}
+                <div class="group-list">
+                  {% for group in groups %}
+                    <span class="group-chip">
+                      <i class="bi bi-people"></i>
+                      {{ group.name }}
+                    </span>
+                  {% endfor %}
+                </div>
+              {% else %}
+                <p class="sidebar-empty">
+                  المستخدم غير مضاف إلى أي Group.
+                </p>
+              {% endif %}
+            </div>
+          </section>
+
+          <div class="security-note">
+            <i class="bi bi-exclamation-triangle-fill"></i>
+            <span>
+              الصلاحيات تحدد ما يستطيع المستخدم فعله،
+              أما نطاق العمل فيحدد المؤسسة والفرع اللذين
+              يستطيع العمل داخلهما.
+            </span>
+          </div>
+        </aside>
+      </div>
+
+      <div class="save-bar">
+        <div class="save-copy">
+          <strong>راجعي التكات قبل الحفظ</strong>
+          <small id="changeStatus">
+            لن تُطبّق التغييرات إلا بعد الضغط على حفظ.
+          </small>
+        </div>
+
+        <div class="save-actions">
+          <a
+            class="pe-button"
+            href="{% url 'accounts:permissions_dashboard' %}"
+          >
+            إلغاء
+          </a>
+
+          <button
+            class="pe-button pe-button-primary"
+            id="savePermissionsButton"
+            type="submit"
+            name="submit_action"
+            value="save"
+          >
+            <i class="bi bi-shield-check"></i>
+            حفظ الحساب والصلاحيات
+          </button>
+        </div>
+      </div>
+    </form>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const form = document.getElementById("permissionsForm");
+    const modules = Array.from(
+      document.querySelectorAll("[data-permission-module]")
+    );
+    const searchInput = document.getElementById("permissionSearch");
+    const selectViewButton = document.getElementById(
+      "selectViewPermissions"
+    );
+    const clearButton = document.getElementById(
+      "clearDirectPermissions"
+    );
+    const saveButton = document.getElementById(
+      "savePermissionsButton"
+    );
+    const roleSelect = document.getElementById("userRole");
+    const applyRolePresetButton = document.getElementById(
+      "applyRolePresetButton"
+    );
+    const rolePresetDescription = document.getElementById(
+      "rolePresetDescription"
+    );
+    const rolePresetCount = document.getElementById(
+      "rolePresetCount"
+    );
+    const rolePresetItems = Array.from(
+      document.querySelectorAll("[data-role-preset]")
+    );
+    const changeStatus = document.getElementById("changeStatus");
+
+    const rolePresets = new Map();
+
+    rolePresetItems.forEach(function (item) {
+      rolePresets.set(
+        item.dataset.role,
+        {
+          label: item.dataset.label || item.dataset.role,
+          description: item.dataset.description || "",
+          permissionCount: (
+            item.dataset.permissionCount || "0"
+          ),
+        }
+      );
+    });
+
+    function syncRolePresetPanel() {
+      if (!roleSelect) {
+        return;
+      }
+
+      const selectedRole = roleSelect.value;
+      const preset = rolePresets.get(selectedRole);
+
+      if (applyRolePresetButton) {
+        applyRolePresetButton.disabled = !preset;
+      }
+
+      if (rolePresetCount) {
+        rolePresetCount.textContent = (
+          preset
+          ? preset.permissionCount
+          : "0"
+        );
+      }
+
+      if (rolePresetDescription) {
+        rolePresetDescription.textContent = (
+          preset
+          ? preset.description
+          : "لا توجد حزمة جاهزة لهذا الدور."
+        );
+      }
+    }
+
+    function getModuleCheckboxes(moduleElement) {
+      return Array.from(
+        moduleElement.querySelectorAll(".permission-checkbox")
+      );
+    }
+
+    function syncModule(moduleElement) {
+      const master = moduleElement.querySelector(".module-master");
+      const checkboxes = getModuleCheckboxes(moduleElement);
+
+      if (!master) {
+        return;
+      }
+
+      const checkedCount = checkboxes.filter(function (checkbox) {
+        return checkbox.checked;
+      }).length;
+
+      master.checked = (
+        checkboxes.length > 0
+        && checkedCount === checkboxes.length
+      );
+
+      master.indeterminate = (
+        checkedCount > 0
+        && checkedCount < checkboxes.length
+      );
+    }
+
+    function syncAllModules() {
+      modules.forEach(syncModule);
+    }
+
+    function markChanged() {
+      if (changeStatus) {
+        changeStatus.textContent =
+          "توجد تغييرات غير محفوظة.";
+        changeStatus.style.color = "#d97706";
+      }
+    }
+
+    modules.forEach(function (moduleElement) {
+      const master = moduleElement.querySelector(".module-master");
+      const checkboxes = getModuleCheckboxes(moduleElement);
+
+      if (master) {
+        master.addEventListener("change", function () {
+          checkboxes.forEach(function (checkbox) {
+            checkbox.checked = master.checked;
+          });
+
+          syncModule(moduleElement);
+          markChanged();
+        });
+      }
+
+      checkboxes.forEach(function (checkbox) {
+        checkbox.addEventListener("change", function () {
+          syncModule(moduleElement);
+          markChanged();
+        });
+      });
+
+      syncModule(moduleElement);
+    });
+
+    if (searchInput) {
+      searchInput.addEventListener("input", function () {
+        const query = searchInput.value
+          .trim()
+          .toLocaleLowerCase("ar");
+
+        modules.forEach(function (moduleElement) {
+          const searchableText = moduleElement.textContent
+            .toLocaleLowerCase("ar");
+
+          moduleElement.hidden = (
+            query !== ""
+            && !searchableText.includes(query)
+          );
+
+          if (!moduleElement.hidden && query !== "") {
+            moduleElement.open = true;
+          }
+        });
+      });
+    }
+
+    if (selectViewButton) {
+      selectViewButton.addEventListener("click", function () {
+        document
+          .querySelectorAll(
+            '.permission-checkbox[data-action="view"]'
+          )
+          .forEach(function (checkbox) {
+            checkbox.checked = true;
+          });
+
+        syncAllModules();
+        markChanged();
+      });
+    }
+
+    if (clearButton) {
+      clearButton.addEventListener("click", function () {
+        const confirmed = window.confirm(
+          "هل تريدين إلغاء جميع الصلاحيات المباشرة الظاهرة؟ "
+          + "الصلاحيات الموروثة من Groups ستبقى فعالة."
+        );
+
+        if (!confirmed) {
+          return;
+        }
+
+        document
+          .querySelectorAll(".permission-checkbox")
+          .forEach(function (checkbox) {
+            checkbox.checked = false;
+          });
+
+        syncAllModules();
+        markChanged();
+      });
+    }
+
+    if (roleSelect) {
+      roleSelect.addEventListener("change", function () {
+        syncRolePresetPanel();
+        markChanged();
+      });
+    }
+
+    if (applyRolePresetButton) {
+      applyRolePresetButton.addEventListener(
+        "click",
+        function (event) {
+          const selectedOption = (
+            roleSelect
+            ? roleSelect.options[roleSelect.selectedIndex]
+            : null
+          );
+          const roleLabel = (
+            selectedOption
+            ? selectedOption.textContent.trim()
+            : "الدور المحدد"
+          );
+
+          const confirmed = window.confirm(
+            "سيتم استبدال جميع الصلاحيات المباشرة المُدارة "
+            + "بحزمة دور "
+            + roleLabel
+            + ". هل تريدين المتابعة؟"
+          );
+
+          if (!confirmed) {
+            event.preventDefault();
+          }
+        }
+      );
+    }
+
+    syncRolePresetPanel();
+
+    if (form) {
+      form.addEventListener("change", markChanged);
+
+      form.addEventListener("submit", function (event) {
+        const submitter = event.submitter;
+
+        if (
+          submitter === saveButton
+          && saveButton
+        ) {
+          saveButton.disabled = true;
+          saveButton.innerHTML =
+            '<span class="spinner-border spinner-border-sm" '
+            + 'aria-hidden="true"></span> جاري الحفظ...';
+        }
+
+        if (
+          submitter === applyRolePresetButton
+          && applyRolePresetButton
+        ) {
+          applyRolePresetButton.innerHTML =
+            '<span class="spinner-border spinner-border-sm" '
+            + 'aria-hidden="true"></span> جاري تطبيق الحزمة...';
+        }
+      });
+    }
+  });
+</script>
+{% endblock %}

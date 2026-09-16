@@ -4,6 +4,7 @@ from django.urls import reverse
 from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied
 
+from accounts.tests.permission_utils import apply_role_permissions
 from doctor.models import Doctor
 
 User = get_user_model()
@@ -19,6 +20,7 @@ def create_doctor_user(email='doc@example.com'):
     """Create a user + Doctor profile."""
     user = create_user(email=email, role='doctor')
     Doctor.objects.create(user=user, full_name='Dr. Test')
+    apply_role_permissions(user)
     return user
 
 

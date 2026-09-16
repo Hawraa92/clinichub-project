@@ -1,0 +1,239 @@
+{% extends "pharmacy/base.html" %}
+
+{% block title %}Receipt {{ sale.sale_number }} | ClinicHub{% endblock %}
+
+{% block extra_head %}
+<style>
+    .pos-receipt {
+        max-width: 900px;
+        margin: 0 auto;
+        background: #fff;
+        border: 1px solid #dbe5ef;
+        border-radius: 1rem;
+        overflow: hidden;
+        box-shadow: 0 1rem 2rem rgba(15, 23, 42, .08);
+    }
+    .pos-receipt-header {
+        background: #0f6b8d;
+        color: #fff;
+    }
+    .receipt-data-box {
+        background: #f8fafc;
+        border: 1px solid #dbe5ef;
+        border-radius: .75rem;
+    }
+    .signature-line {
+        border-top: 1px solid #94a3b8;
+        padding-top: .5rem;
+        margin-top: 3.5rem;
+    }
+    @media print {
+        .pharmacy-navbar,
+        .receipt-actions,
+        .alert {
+            display: none !important;
+        }
+        body,
+        .pharmacy-body,
+        main {
+            background: #fff !important;
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+        .pos-receipt {
+            max-width: none;
+            border: 0;
+            border-radius: 0;
+            box-shadow: none;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="receipt-actions d-flex flex-wrap justify-content-center gap-2 mb-3">
+    <a class="btn btn-outline-secondary btn-sm" href="{% url 'pharmacy:sale_detail' sale.pk %}">
+        <i class="bi bi-arrow-left me-1"></i>
+        Back
+    </a>
+    {% if can_record_payment %}
+        <a class="btn btn-success btn-sm" href="{% url 'pharmacy:sale_payment' sale.pk %}">
+            <i class="bi bi-cash-coin me-1"></i>
+            Record payment
+        </a>
+    {% endif %}
+    <button class="btn btn-primary btn-sm" type="button" onclick="window.print()">
+        <i class="bi bi-printer me-1"></i>
+        Print receipt
+    </button>
+</div>
+
+<article class="pos-receipt">
+    <header class="pos-receipt-header p-4">
+        <div class="d-flex justify-content-between align-items-start gap-3">
+            <div>
+                <h1 class="h4 fw-bold mb-1">{{ pharmacy.name }}</h1>
+                <div>{{ hospital.name }}</div>
+                <div>{{ pharmacy.branch.name }}</div>
+                {% if pharmacy.location %}<div>{{ pharmacy.location }}</div>{% endif %}
+            </div>
+            <div class="text-end">
+                <div class="h5 fw-bold mb-1">{{ sale.sale_number }}</div>
+                <div>Direct Sale Receipt</div>
+                <div>وصل بيع مباشر</div>
+                <div>{{ sale.completed_at|default:sale.created_at|date:"Y-m-d H:i" }}</div>
+            </div>
+        </div>
+    </header>
+
+    <div class="p-4">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+            <div>
+                <h2 class="h4 mb-1">Official Receipt</h2>
+                <span class="text-muted">Receipt for {{ sale.sale_number }}</span>
+            </div>
+            <div class="d-flex gap-2">
+                {% if sale.status == "voided" %}
+                    <span class="badge rounded-pill text-bg-danger">Voided</span>
+                {% else %}
+                    <span class="badge rounded-pill text-bg-success">Completed</span>
+                {% endif %}
+
+                {% if sale.payment_status == "paid" %}
+                    <span class="badge rounded-pill text-bg-success">Paid</span>
+                {% elif sale.payment_status == "partially_paid" %}
+                    <span class="badge rounded-pill text-bg-warning">Partially paid</span>
+                {% else %}
+                    <span class="badge rounded-pill text-bg-danger">Unpaid</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="row g-3 mb-4">
+            <div class="col-12 col-md-6">
+                <section class="receipt-data-box h-100 p-3">
+                    <h3 class="h6 fw-bold text-primary mb-3">
+                        <i class="bi bi-person me-1"></i>
+                        Customer information
+                    </h3>
+                    <dl class="row small mb-0">
+                        <dt class="col-5 text-muted">Customer</dt>
+                        <dd class="col-7">{{ sale.customer_name|default:"Walk-in customer" }}</dd>
+
+                        <dt class="col-5 text-muted">Phone</dt>
+                        <dd class="col-7">{{ sale.customer_phone|default:"—" }}</dd>
+
+                        <dt class="col-5 text-muted">Cashier</dt>
+                        <dd class="col-7">{{ sale.cashier.user }}</dd>
+                    </dl>
+                </section>
+            </div>
+
+            <div class="col-12 col-md-6">
+                <section class="receipt-data-box h-100 p-3">
+                    <h3 class="h6 fw-bold text-primary mb-3">
+                        <i class="bi bi-credit-card me-1"></i>
+                        Payment information
+                    </h3>
+                    <dl class="row small mb-0">
+                        <dt class="col-5 text-muted">Status</dt>
+                        <dd class="col-7">{{ sale.get_payment_status_display }}</dd>
+
+                        <dt class="col-5 text-muted">Method</dt>
+                        <dd class="col-7">
+                            {% if sale.payment_method %}{{ sale.get_payment_method_display }}{% else %}—{% endif %}
+                        </dd>
+
+                        <dt class="col-5 text-muted">Reference</dt>
+                        <dd class="col-7">{{ sale.transaction_reference|default:"—" }}</dd>
+                    </dl>
+                </section>
+            </div>
+        </div>
+
+        <div class="table-responsive border rounded-3 mb-4">
+            <table class="table table-sm align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>#</th>
+                        <th>Medicine</th>
+                        <th>Batch</th>
+                        <th>Qty</th>
+                        <th>Unit price</th>
+                        <th class="text-end">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in sale_items %}
+                        <tr>
+                            <td>{{ forloop.counter }}</td>
+                            <td>
+                                <strong>{{ item.medicine.display_name }}</strong>
+                                <div class="small text-muted">{{ item.medicine.code }}</div>
+                            </td>
+                            <td>
+                                {% for allocation in item.allocations.all %}
+                                    <div class="small">
+                                        {{ allocation.stock_batch.batch_number }}
+                                        × {{ allocation.quantity }}
+                                    </div>
+                                {% endfor %}
+                            </td>
+                            <td>{{ item.quantity }}</td>
+                            <td>{{ item.unit_price|floatformat:2 }} IQD</td>
+                            <td class="text-end fw-semibold">{{ item.total_price|floatformat:2 }} IQD</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="row g-3">
+            <div class="col-12 col-md-7">
+                <section class="receipt-data-box h-100 p-3">
+                    <h3 class="h6 fw-bold">Notes</h3>
+                    <div class="small">{{ sale.notes|default:"—"|linebreaksbr }}</div>
+                </section>
+            </div>
+            <div class="col-12 col-md-5">
+                <section class="receipt-data-box p-3">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Subtotal</span>
+                        <strong>{{ sale.subtotal|floatformat:2 }} IQD</strong>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Discount</span>
+                        <strong>{{ sale.discount_amount|floatformat:2 }} IQD</strong>
+                    </div>
+                    <hr>
+                    <div class="d-flex justify-content-between mb-2">
+                        <strong>Total amount</strong>
+                        <strong>{{ sale.total_amount|floatformat:2 }} IQD</strong>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Amount paid</span>
+                        <strong>{{ sale.amount_paid|floatformat:2 }} IQD</strong>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span>Balance due</span>
+                        <strong>{{ sale.balance_due|floatformat:2 }} IQD</strong>
+                    </div>
+                </section>
+            </div>
+        </div>
+
+        <div class="row g-5 text-center small">
+            <div class="col-6">
+                <div class="signature-line">Pharmacist signature / توقيع الصيدلي</div>
+            </div>
+            <div class="col-6">
+                <div class="signature-line">Customer signature / توقيع الزبون</div>
+            </div>
+        </div>
+
+        <footer class="text-center text-muted small border-top mt-4 pt-3">
+            This receipt was generated electronically by ClinicHub.
+        </footer>
+    </div>
+</article>
+{% endblock %}

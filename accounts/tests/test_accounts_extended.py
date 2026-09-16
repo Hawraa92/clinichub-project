@@ -190,7 +190,10 @@ class ExtendedRegisterViewTest(AccountsBaseCase):
         u = User.objects.create_user(email="logg@in.com", password="x")
         u.is_approved = True
         u.save()
-        Patient.objects.create(user=u, full_name="Logged", email=u.email)
+        Patient.objects.update_or_create(
+            user=u,
+            defaults={"full_name": "Logged", "email": u.email},
+        )
         self.client.login(username="logg@in.com", password="x")
         resp = self.client.get(self.url_register)
         self.assertEqual(resp.status_code, 302)
@@ -249,7 +252,7 @@ class ExtendedLoginViewRedirectTest(AccountsBaseCase):
             f"{self.url_login}?next={self.url_home}",
             {"username": user.email, "password": pwd},
         )
-        self.assertRedirects(resp, self.url_home, fetch_redirect_response=False)
+        self.assertRedirects(resp, self.url_patient_dashboard, fetch_redirect_response=False)
 
     def test_login_with_external_next_ignored(self):
         user, pwd = self._make_user("nextevil2@example.com", approved=True)
@@ -293,7 +296,10 @@ class PasswordResetFlowTest(AccountsBaseCase):
         self.user = User.objects.create_user(email="pwreset@example.com", password=strong_pass())
         self.user.is_approved = True
         self.user.save()
-        Patient.objects.create(user=self.user, full_name="PW Reset", email=self.user.email)
+        Patient.objects.update_or_create(
+            user=self.user,
+            defaults={"full_name": "PW Reset", "email": self.user.email},
+        )
 
     def test_password_reset_sends_email(self):
         resp = self.client.post(reverse("accounts:password_reset"), {"email": self.user.email})

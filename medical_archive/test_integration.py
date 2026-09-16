@@ -1,41 +1,86 @@
-# medical_archive/test_integration.py
-
-from django.test import TestCase, Client
-from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.auth import get_user_model
-from patient.models import Patient
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import Client, TestCase
+
 from doctor.models import Doctor
-from medical_archive.models import PatientArchive, ArchiveAttachment
+from medical_archive.models import (
+    ArchiveAttachment,
+    PatientArchive,
+)
+from medical_archive.test_support import (
+    grant_archive_permissions,
+)
+from patient.models import Patient
+
 
 User = get_user_model()
 
+
 class ArchiveIntegrationTest(TestCase):
     def test_full_workflow(self):
-        # 1. تسجيل مستخدم وإنشاء دكتور ومريض
-        user = User.objects.create_user(email='int@test.com', password='pass', username='user')
-        doctor = Doctor.objects.create(user=user, full_name='Dr. Integrate', specialty='Gen')
-        patient = Patient.objects.create(user=user, full_name='Ali Integrate')
-        client = Client()
-        client.login(email='int@test.com', password='pass')
+        user = User.objects.create_user(
+            email="int@test.com",
+            password="pass",
+            username="user",
+            role="doctor",
+            is_approved=True,
+        )
+        doctor = Doctor.objects.create(
+            user=user,
+            full_name="Dr. Integrate",
+            specialty="Gen",
+        )
+        patient, _ = Patient.objects.update_or_create(
+            user=user,
+            defaults={
+                "full_name": "Ali Integrate",
+                "doctor": doctor,
+            },
+        )
 
-        # 2. أرشفة سجل مع مرفق
+        grant_archive_permissions(user)
+
+        client = Client()
+        client.force_login(user)
+
         archive = PatientArchive.objects.create(
             patient=patient,
             doctor=doctor,
             title="Integration Archive",
-            archive_type='visit',
-            status='final'
+            archive_type="visit",
+            status="final",
         )
-        file_data = SimpleUploadedFile("integrate.pdf", b"123456", content_type="application/pdf")
-        attachment = ArchiveAttachment.objects.create(
-            archive=archive, file=file_data, description="Test"
+        ArchiveAttachment.objects.create(
+            archive=archive,
+            file=SimpleUploadedFile(
+                "integrate.pdf",
+                b"123456",
+                content_type="application/pdf",
+            ),
+            description="Test",
         )
 
-        # 3. البحث عن السجل
-        response = client.get('/archive/?search=Integration')
-        assert response.status_code == 200
+        response = client.get(
+            "/archive/",
+            {"search": "Integration"},
+        )
 
-        # 4. حذف السجل
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+        self.assertContains(
+            response,
+            "Integration Archive",
+        )
+
         archive.delete()
-        self.assertEqual(PatientArchive.objects.count(), 0)
-        self.assertEqual(ArchiveAttachment.objects.count(), 0)
+
+        self.assertEqual(
+            PatientArchive.objects.count(),
+            0,
+        )
+        self.assertEqual(
+            ArchiveAttachment.objects.count(),
+            0,
+        )

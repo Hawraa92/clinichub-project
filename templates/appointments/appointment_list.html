@@ -6,6 +6,20 @@
   <link rel="stylesheet" href="{% static 'css/appointments/appointment_list.css' %}">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+
+  {# ✅ Highlight row for newly created appointment #}
+  <style>
+    .g-row-created{
+      outline: 2px solid rgba(82, 168, 255, 0.55);
+      box-shadow: 0 0 0 6px rgba(82, 168, 255, 0.12);
+      border-radius: 14px;
+      animation: createdPulse 1.6s ease-in-out 1;
+    }
+    @keyframes createdPulse{
+      0%{ box-shadow: 0 0 0 0 rgba(82,168,255,0.35); }
+      100%{ box-shadow: 0 0 0 10px rgba(82,168,255,0.00); }
+    }
+  </style>
 {% endblock %}
 
 {% block content %}
@@ -26,9 +40,13 @@
         <h3><i class="bi bi-calendar-check"></i> Appointment List</h3>
         <div class="glass-appt-subtitle">All booked appointments in one place</div>
       </div>
-      <a href="{% url 'appointments:create_appointment' %}" class="glass-btn-new shine-btn">
-        <i class="bi bi-plus-circle"></i> New Appointment
-      </a>
+
+      {# Create is visible only when the user has add permission. #}
+      {% if perms.appointments.add_appointment %}
+        <a href="{% url 'appointments:create_appointment' %}" class="glass-btn-new shine-btn">
+          <i class="bi bi-plus-circle"></i> New Appointment
+        </a>
+      {% endif %}
     </div>
 
     <form method="get" class="g-search-form" role="search" aria-label="Search appointments">
@@ -38,10 +56,19 @@
              placeholder="Search patient or doctor…"
              class="g-search-input"
              aria-label="Search by patient or doctor name">
+
       <input type="hidden" name="sort" value="{{ current_sort }}">
-      <button type="submit" class="g-search-btn" title="Search"><i class="bi bi-search"></i></button>
+      {# ✅ keep status if your view supports it #}
+      <input type="hidden" name="status" value="{{ current_status|default:'all' }}">
+
+      <button type="submit" class="g-search-btn" title="Search" aria-label="Search">
+        <i class="bi bi-search"></i>
+      </button>
+
       {% if search_query %}
-        <a href="?sort={{ current_sort }}" class="g-clear-search" aria-label="Clear search">&times;</a>
+        <a href="?sort={{ current_sort }}&amp;status={{ current_status|default:'all' }}"
+           class="g-clear-search"
+           aria-label="Clear search">&times;</a>
       {% endif %}
     </form>
 
@@ -52,13 +79,13 @@
           <tr>
             <th scope="col">#</th>
             <th scope="col">
-              <a href="?q={{ search_query }}&amp;sort=patient"
+              <a href="?q={{ search_query|urlencode }}&amp;sort=patient&amp;status={{ current_status|default:'all' }}"
                  class="{% if current_sort == 'patient' %}g-sort-active{% endif %}">
                 Patient
               </a>
             </th>
             <th scope="col">
-              <a href="?q={{ search_query }}&amp;sort=doctor"
+              <a href="?q={{ search_query|urlencode }}&amp;sort=doctor&amp;status={{ current_status|default:'all' }}"
                  class="{% if current_sort == 'doctor' %}g-sort-active{% endif %}">
                 Doctor
               </a>
@@ -71,10 +98,16 @@
             <th scope="col" class="actions-col">Actions</th>
           </tr>
         </thead>
+
         <tbody>
           {% with start=appointments.start_index %}
           {% for appt in appointments %}
-            <tr>
+            <tr
+              {% if created_id and appt.pk == created_id %}
+                class="g-row-created"
+                data-created="1"
+              {% endif %}
+            >
               <td data-label="#"> {{ start|add:forloop.counter0 }} </td>
 
               <td data-label="Patient">
@@ -132,38 +165,57 @@
               </td>
 
               <td class="g-actions" data-label="Actions">
-                <a href="{% url 'appointments:edit_appointment' appt.pk %}"
-                   class="btn btn-sm btn-outline-primary"
-                   title="Edit appointment" aria-label="Edit appointment">
-                   <i class="bi bi-pencil-square" aria-hidden="true"></i>
-                </a>
 
-                {% if appt.status == 'pending' %}
-                  <a href="{% url 'appointments:cancel_appointment' appt.pk %}"
-                     class="btn btn-sm btn-outline-warning"
-                     title="Cancel appointment" aria-label="Cancel appointment">
-                     <i class="bi bi-x-circle" aria-hidden="true"></i>
+                {# Edit and cancel require change permission. #}
+                {% if perms.appointments.change_appointment %}
+                  <a href="{% url 'appointments:edit_appointment' appt.pk %}"
+                     class="btn btn-sm btn-outline-primary"
+                     title="Edit appointment" aria-label="Edit appointment">
+                     <i class="bi bi-pencil-square" aria-hidden="true"></i>
                   </a>
-                {% else %}
-                  <button class="btn btn-sm btn-outline-secondary" disabled
-                          title="Cancel disabled" aria-label="Cancel disabled">
-                    <i class="bi bi-x-circle" aria-hidden="true"></i>
-                  </button>
+
+                  {% if appt.status == 'pending' %}
+                    <a href="{% url 'appointments:cancel_appointment' appt.pk %}"
+                       class="btn btn-sm btn-outline-warning"
+                       title="Cancel appointment" aria-label="Cancel appointment">
+                       <i class="bi bi-x-circle" aria-hidden="true"></i>
+                    </a>
+                  {% else %}
+                    <button class="btn btn-sm btn-outline-secondary" disabled
+                            title="Cancel disabled" aria-label="Cancel disabled">
+                      <i class="bi bi-x-circle" aria-hidden="true"></i>
+                    </button>
+                  {% endif %}
                 {% endif %}
 
-                {% if request.user.is_superuser %}
+                {# Viewing the ticket requires view permission. #}
+                {% if perms.appointments.view_appointment %}
+                  <a href="{% url 'appointments:appointment_ticket' appt.pk %}"
+                     class="btn btn-sm btn-outline-secondary"
+                     title="View ticket" aria-label="View ticket">
+                     <i class="bi bi-eye" aria-hidden="true"></i>
+                  </a>
+                {% endif %}
+
+                {# Delete is visible only when delete permission is granted. #}
+                {% if perms.appointments.delete_appointment %}
                   <a href="{% url 'appointments:delete_appointment' appt.pk %}"
                      class="btn btn-sm btn-outline-danger"
-                     title="Delete permanently" aria-label="Delete permanently">
+                     title="Delete appointment" aria-label="Delete appointment">
                      <i class="bi bi-trash" aria-hidden="true"></i>
                   </a>
                 {% endif %}
 
-                <a href="{% url 'appointments:appointment_ticket' appt.pk %}"
-                   class="btn btn-sm btn-outline-secondary"
-                   title="Print ticket" aria-label="Print ticket">
-                   <i class="bi bi-printer" aria-hidden="true"></i>
-                </a>
+                {# Printing remains restricted to the Super Admin. #}
+                {% if request.user.is_superuser %}
+                  <a href="{% url 'appointments:appointment_ticket' appt.pk %}"
+                     class="btn btn-sm btn-outline-secondary"
+                     title="Print ticket" aria-label="Print ticket"
+                     target="_blank" rel="noopener">
+                     <i class="bi bi-printer" aria-hidden="true"></i>
+                  </a>
+                {% endif %}
+
               </td>
             </tr>
           {% empty %}
@@ -180,8 +232,8 @@
       <!-- Pagination -->
       <div class="g-pagination" role="navigation" aria-label="Pagination">
         {% if appointments.has_previous %}
-          <a href="?q={{ search_query }}&amp;sort={{ current_sort }}&amp;page=1" class="g-btn-pg">First</a>
-          <a href="?q={{ search_query }}&amp;sort={{ current_sort }}&amp;page={{ appointments.previous_page_number }}" class="g-btn-pg">Previous</a>
+          <a href="?q={{ search_query|urlencode }}&amp;sort={{ current_sort }}&amp;status={{ current_status|default:'all' }}&amp;page=1" class="g-btn-pg">First</a>
+          <a href="?q={{ search_query|urlencode }}&amp;sort={{ current_sort }}&amp;status={{ current_status|default:'all' }}&amp;page={{ appointments.previous_page_number }}" class="g-btn-pg">Previous</a>
         {% endif %}
 
         <span class="g-pg-info">
@@ -189,11 +241,20 @@
         </span>
 
         {% if appointments.has_next %}
-          <a href="?q={{ search_query }}&amp;sort={{ current_sort }}&amp;page={{ appointments.next_page_number }}" class="g-btn-pg">Next</a>
-          <a href="?q={{ search_query }}&amp;sort={{ current_sort }}&amp;page={{ appointments.paginator.num_pages }}" class="g-btn-pg">Last</a>
+          <a href="?q={{ search_query|urlencode }}&amp;sort={{ current_sort }}&amp;status={{ current_status|default:'all' }}&amp;page={{ appointments.next_page_number }}" class="g-btn-pg">Next</a>
+          <a href="?q={{ search_query|urlencode }}&amp;sort={{ current_sort }}&amp;status={{ current_status|default:'all' }}&amp;page={{ appointments.paginator.num_pages }}" class="g-btn-pg">Last</a>
         {% endif %}
       </div>
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+  <script>
+    document.addEventListener('DOMContentLoaded', function(){
+      const row = document.querySelector('tr[data-created="1"]');
+      if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  </script>
 {% endblock %}

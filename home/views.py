@@ -1,78 +1,52 @@
 # home/views.py
+from __future__ import annotations
 
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.utils import timezone
-from django.core.exceptions import PermissionDenied
-from django.http import Http404
+from django.urls import reverse
 
 from doctor.models import Doctor
-from appointments.models import Appointment
-from patient.models import Patient
-from prescription.models import Prescription
+
+
+LAB_ROLES = {"lab", "laboratory", "lab_tech", "lab_staff"}
 
 
 def home_view(request):
-    context = {}
+    """
+    Home page behavior:
+    - Anonymous users: show public landing page.
+    - Authenticated users: redirect to their role dashboard مباشرة
+      (حتى ما يصير لخبطة بالواجهة، وخصوصاً لأن home.html يعرض Quick Actions لأي logged-in user).
+    """
 
-    # -------------------------
-    # 1) مريض مسجّل → أظهر الأطباء
-    # -------------------------
-    if request.user.is_authenticated and getattr(request.user, "role", "").lower() == "patient":
-        doctors = (
-            Doctor.objects
-            .select_related("user")
-            .filter(user__is_active=True)
-            .order_by("user__first_name", "user__last_name")
-        )
-        context["doctors"] = doctors
+    if request.user.is_authenticated:
+        role = (getattr(request.user, "role", "") or "").lower()
 
-    # -------------------------
-    # 2) طبيب مسجّل → معلومات اليوم
-    # -------------------------
-    if request.user.is_authenticated and getattr(request.user, "role", None) == "doctor":
-        today = timezone.localdate()
+        # Superuser/Admin
+        if request.user.is_superuser or role == "admin":
+            return redirect("admin:index")
 
-        # مواعيد اليوم
-        todays_appointments = (
-            Appointment.objects
-            .select_related("patient", "doctor__user")
-            .filter(
-                doctor__user=request.user,
-                scheduled_time__date=today
-            )
-            .order_by("scheduled_time")
-        )
-        next_queue_number = (
-            todays_appointments.first().queue_number
-            if todays_appointments else None
-        )
+        # Doctor
+        if role == "doctor":
+            return redirect("doctor:dashboard")
 
-        # آخر 5 مرضى تم إنشاؤهم اليوم
-        recent_patients = (
-            Patient.objects
-            .filter(created_at__date=today)
-            .order_by("-created_at")[:5]
-        )
+        # Secretary
+        if role == "secretary":
+            return redirect("appointments:secretary_dashboard")
 
-        # الوصفات المسودّة (status='draft') مرتبة حسب date_issued
-        drafted_prescriptions = (
-            Prescription.objects
-            .select_related("doctor__user", "patient")
-            .filter(
-                doctor__user=request.user,
-                status="draft"
-            )
-            .order_by("-date_issued")
-        )
+        # Lab
+        if role in LAB_ROLES:
+            return redirect("lab:dashboard")
 
-        context.update({
-            "todays_appointments": todays_appointments,
-            "next_queue_number": next_queue_number,
-            "recent_patients": recent_patients,
-            "drafted_prescriptions": drafted_prescriptions,
-        })
+        # Patient
+        if role == "patient":
+            return redirect("patient:dashboard")
 
-    # -------------------------
-    # 3) الزائر أو السكرتير → الواجهة العادية
-    # -------------------------
+        # Unknown role -> go to login (or keep home)
+        return redirect("accounts:login")
+
+    # Anonymous -> landing
+    context = {
+        "now": timezone.now(),
+    }
     return render(request, "home/home.html", context)

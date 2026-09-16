@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from datetime import timedelta
 
+from accounts.tests.permission_utils import apply_role_permissions
 from doctor.models import Doctor
 from patient.models import Patient
 
@@ -23,6 +24,7 @@ class DoctorViewsTests(TestCase):
             user=self.doctor_user,
             specialty='Dentist'
         )
+        apply_role_permissions(self.doctor_user)
         self.patient = Patient.objects.create(full_name='John Doe')
         # حجز موعد مؤجّل قليلًا لتجنّب خطأ الحجز في الماضي
         from appointments.models import Appointment

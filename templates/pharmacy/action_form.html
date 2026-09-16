@@ -1,0 +1,10 @@
+{% extends "pharmacy/base.html" %}
+{% block title %}{{ page_title }} | ClinicHub{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-7 col-xl-6">
+        <div class="mb-4"><h1 class="h3 mb-1">{{ page_title }}</h1>{% if order %}<p class="text-secondary mb-0">Patient: {{ order.prescription.patient_full_name }} · Pharmacy: {{ order.pharmacy.name }}</p>{% endif %}</div>
+        <div class="card pharmacy-card"><div class="card-body p-lg-4">{% include "pharmacy/_form_fields.html" %}</div></div>
+    </div>
+</div>
+{% endblock %}

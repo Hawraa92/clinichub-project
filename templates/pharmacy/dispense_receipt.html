@@ -1,0 +1,699 @@
+{% extends "pharmacy/base.html" %}
+
+{% block title %}Receipt {{ dispense.receipt_number }} | ClinicHub{% endblock %}
+
+{% block extra_head %}
+<style>
+    .receipt-page {
+        max-width: 980px;
+        margin: 0 auto;
+    }
+
+    .receipt-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+    }
+
+    .receipt-sheet {
+        position: relative;
+        overflow: hidden;
+        background: #ffffff;
+        border: 1px solid #dbe5ee;
+        border-radius: 18px;
+        box-shadow: 0 14px 40px rgba(15, 53, 78, 0.10);
+        color: #14213d;
+    }
+
+    .receipt-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 2rem;
+        padding: 2rem;
+        background: linear-gradient(135deg, #075985 0%, #0e7490 100%);
+        color: #ffffff;
+    }
+
+    .receipt-brand {
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+
+    .receipt-brand-icon {
+        display: grid;
+        width: 56px;
+        height: 56px;
+        place-items: center;
+        flex: 0 0 56px;
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.15);
+        font-size: 1.7rem;
+    }
+
+    .receipt-brand h1 {
+        margin: 0 0 0.3rem;
+        font-size: 1.75rem;
+        font-weight: 800;
+    }
+
+    .receipt-brand p,
+    .receipt-header-meta p {
+        margin: 0.15rem 0;
+        color: rgba(255, 255, 255, 0.88);
+    }
+
+    .receipt-header-meta {
+        min-width: 260px;
+        text-align: right;
+    }
+
+    .receipt-number {
+        margin-bottom: 0.45rem;
+        font-size: 1.25rem;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+    }
+
+    .receipt-body {
+        padding: 2rem;
+    }
+
+    .receipt-status-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .receipt-title h2 {
+        margin: 0;
+        font-size: 1.55rem;
+        font-weight: 800;
+    }
+
+    .receipt-title p {
+        margin: 0.25rem 0 0;
+        color: #64748b;
+    }
+
+    .status-badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .receipt-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.45rem 0.75rem;
+        border-radius: 999px;
+        font-size: 0.82rem;
+        font-weight: 750;
+    }
+
+    .badge-completed,
+    .badge-paid {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .badge-draft,
+    .badge-partially_paid {
+        background: #fef3c7;
+        color: #92400e;
+    }
+
+    .badge-unpaid,
+    .badge-voided {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
+    .receipt-info-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .receipt-panel {
+        padding: 1.25rem;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        background: #f8fafc;
+    }
+
+    .receipt-panel h3 {
+        margin: 0 0 1rem;
+        font-size: 1.05rem;
+        font-weight: 800;
+        color: #075985;
+    }
+
+    .info-list {
+        display: grid;
+        gap: 0.65rem;
+        margin: 0;
+    }
+
+    .info-row {
+        display: grid;
+        grid-template-columns: 145px minmax(0, 1fr);
+        gap: 1rem;
+    }
+
+    .info-row dt {
+        color: #64748b;
+        font-weight: 650;
+    }
+
+    .info-row dd {
+        margin: 0;
+        overflow-wrap: anywhere;
+        font-weight: 700;
+    }
+
+    .receipt-table-wrap {
+        overflow-x: auto;
+        margin-bottom: 1.5rem;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+    }
+
+    .receipt-table {
+        width: 100%;
+        margin: 0;
+        border-collapse: collapse;
+    }
+
+    .receipt-table th,
+    .receipt-table td {
+        padding: 0.9rem 0.85rem;
+        border-bottom: 1px solid #e2e8f0;
+        vertical-align: middle;
+    }
+
+    .receipt-table th {
+        background: #eff6ff;
+        color: #334155;
+        font-size: 0.78rem;
+        letter-spacing: 0.035em;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+
+    .receipt-table tbody tr:last-child td {
+        border-bottom: 0;
+    }
+
+    .medicine-name {
+        font-weight: 800;
+    }
+
+    .medicine-subtext {
+        margin-top: 0.2rem;
+        color: #64748b;
+        font-size: 0.85rem;
+    }
+
+    .money-cell {
+        text-align: right;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .receipt-summary {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+        gap: 1.25rem;
+        align-items: start;
+    }
+
+    .receipt-notes {
+        min-height: 150px;
+        padding: 1.25rem;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+    }
+
+    .receipt-notes h3 {
+        margin: 0 0 0.65rem;
+        font-size: 1rem;
+        font-weight: 800;
+    }
+
+    .receipt-notes p {
+        margin: 0;
+        color: #475569;
+        white-space: pre-line;
+    }
+
+    .payment-summary {
+        padding: 1.25rem;
+        border-radius: 14px;
+        background: #f1f5f9;
+    }
+
+    .payment-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 0.55rem 0;
+        color: #475569;
+    }
+
+    .payment-row strong {
+        color: #0f172a;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .payment-row.total {
+        margin-top: 0.35rem;
+        padding-top: 0.9rem;
+        border-top: 2px solid #cbd5e1;
+        color: #075985;
+        font-size: 1.12rem;
+        font-weight: 800;
+    }
+
+    .payment-row.total strong {
+        color: #075985;
+    }
+
+    .receipt-signatures {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 3rem;
+        margin-top: 2.5rem;
+        padding-top: 1.25rem;
+    }
+
+    .signature-box {
+        padding-top: 0.75rem;
+        border-top: 1px solid #94a3b8;
+        text-align: center;
+        color: #475569;
+    }
+
+    .receipt-footer-note {
+        margin-top: 2rem;
+        padding-top: 1rem;
+        border-top: 1px dashed #cbd5e1;
+        text-align: center;
+        color: #64748b;
+        font-size: 0.85rem;
+    }
+
+    .void-watermark {
+        position: absolute;
+        top: 46%;
+        left: 50%;
+        z-index: 5;
+        transform: translate(-50%, -50%) rotate(-22deg);
+        color: rgba(185, 28, 28, 0.13);
+        font-size: clamp(4rem, 14vw, 8rem);
+        font-weight: 900;
+        letter-spacing: 0.1em;
+        pointer-events: none;
+    }
+
+    @media (max-width: 767.98px) {
+        .receipt-header,
+        .receipt-status-row {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+
+        .receipt-header-meta {
+            min-width: 0;
+            text-align: left;
+        }
+
+        .receipt-info-grid,
+        .receipt-summary,
+        .receipt-signatures {
+            grid-template-columns: 1fr;
+        }
+
+        .receipt-body,
+        .receipt-header {
+            padding: 1.25rem;
+        }
+
+        .info-row {
+            grid-template-columns: 1fr;
+            gap: 0.15rem;
+        }
+    }
+
+    @media print {
+        @page {
+            size: A4;
+            margin: 10mm;
+        }
+
+        body,
+        .pharmacy-body {
+            background: #ffffff !important;
+        }
+
+        .pharmacy-navbar,
+        .receipt-actions,
+        .alert,
+        .toast-container {
+            display: none !important;
+        }
+
+        main.container-fluid {
+            padding: 0 !important;
+        }
+
+        .receipt-page {
+            max-width: none;
+            margin: 0;
+        }
+
+        .receipt-sheet {
+            overflow: visible;
+            border: 0;
+            border-radius: 0;
+            box-shadow: none;
+        }
+
+        .receipt-header {
+            print-color-adjust: exact;
+            -webkit-print-color-adjust: exact;
+        }
+
+        .receipt-panel,
+        .payment-summary,
+        .receipt-table th,
+        .receipt-badge {
+            print-color-adjust: exact;
+            -webkit-print-color-adjust: exact;
+        }
+
+        .receipt-table-wrap {
+            overflow: visible;
+        }
+
+        .receipt-table {
+            font-size: 0.82rem;
+        }
+
+        .receipt-header,
+        .receipt-body {
+            padding: 1rem 1.2rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="receipt-page">
+    <div class="receipt-actions">
+        <a
+            class="btn btn-outline-secondary"
+            href="{% url 'pharmacy:dispense_detail' dispense.pk %}"
+        >
+            <i class="bi bi-arrow-left me-1"></i>
+            Back
+        </a>
+
+        {% if can_record_payment %}
+            <a
+                class="btn btn-success"
+                href="{% url 'pharmacy:record_payment' dispense.pk %}"
+            >
+                <i class="bi bi-cash-coin me-1"></i>
+                {% if dispense.payment_status == 'partially_paid' %}
+                    Continue payment
+                {% else %}
+                    Record payment
+                {% endif %}
+            </a>
+        {% endif %}
+
+        <button
+            class="btn btn-primary"
+            type="button"
+            onclick="window.print()"
+        >
+            <i class="bi bi-printer me-1"></i>
+            Print receipt
+        </button>
+    </div>
+
+    <article class="receipt-sheet">
+        {% if dispense.status == 'voided' %}
+            <div class="void-watermark">VOIDED</div>
+        {% endif %}
+
+        <header class="receipt-header">
+            <div class="receipt-brand">
+                <div class="receipt-brand-icon">
+                    <i class="bi bi-capsule-pill"></i>
+                </div>
+
+                <div>
+                    <h1>{{ pharmacy.name|default:"ClinicHub Pharmacy" }}</h1>
+                    <p>{{ hospital.name }}</p>
+                    <p>{{ pharmacy.branch.name }}</p>
+
+                    {% if pharmacy.location %}
+                        <p>{{ pharmacy.location }}</p>
+                    {% elif pharmacy.branch.address %}
+                        <p>{{ pharmacy.branch.address }}</p>
+                    {% endif %}
+
+                    {% if pharmacy.phone %}
+                        <p>Tel: {{ pharmacy.phone }}</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="receipt-header-meta">
+                <div class="receipt-number">
+                    {{ dispense.receipt_number }}
+                </div>
+                <p>Pharmacy Dispensing Receipt</p>
+                <p>وصل صرف أدوية</p>
+                <p>
+                    {% if dispense.dispensed_at %}
+                        {{ dispense.dispensed_at|date:"Y-m-d H:i" }}
+                    {% else %}
+                        {{ dispense.created_at|date:"Y-m-d H:i" }}
+                    {% endif %}
+                </p>
+            </div>
+        </header>
+
+        <div class="receipt-body">
+            <div class="receipt-status-row">
+                <div class="receipt-title">
+                    <h2>Official Receipt</h2>
+                    <p>
+                        Order #{{ order.pk }} · Prescription #{{ prescription.pk }}
+                    </p>
+                </div>
+
+                <div class="status-badges">
+                    <span class="receipt-badge badge-{{ dispense.status }}">
+                        <i class="bi bi-bag-check"></i>
+                        {{ dispense.get_status_display }}
+                    </span>
+
+                    <span class="receipt-badge badge-{{ dispense.payment_status }}">
+                        <i class="bi bi-cash-coin"></i>
+                        {{ dispense.get_payment_status_display }}
+                    </span>
+                </div>
+            </div>
+
+            <section class="receipt-info-grid">
+                <div class="receipt-panel">
+                    <h3>
+                        <i class="bi bi-person me-1"></i>
+                        Patient information
+                    </h3>
+
+                    <dl class="info-list">
+                        <div class="info-row">
+                            <dt>Patient</dt>
+                            <dd>
+                                {% if patient %}
+                                    {{ patient.full_name|default:prescription.patient_full_name }}
+                                {% else %}
+                                    {{ prescription.patient_full_name|default:"—" }}
+                                {% endif %}
+                            </dd>
+                        </div>
+
+                        <div class="info-row">
+                            <dt>Received by</dt>
+                            <dd>{{ dispense.received_by_name|default:"—" }}</dd>
+                        </div>
+
+                        <div class="info-row">
+                            <dt>Prescription</dt>
+                            <dd>#{{ prescription.pk }}</dd>
+                        </div>
+
+                        <div class="info-row">
+                            <dt>Doctor</dt>
+                            <dd>
+                                {% if prescription.doctor.full_name %}
+                                    {{ prescription.doctor.full_name }}
+                                {% else %}
+                                    {{ prescription.doctor.user|default:"—" }}
+                                {% endif %}
+                            </dd>
+                        </div>
+                    </dl>
+                </div>
+
+                <div class="receipt-panel">
+                    <h3>
+                        <i class="bi bi-receipt me-1"></i>
+                        Payment information
+                    </h3>
+
+                    <dl class="info-list">
+                        <div class="info-row">
+                            <dt>Payment status</dt>
+                            <dd>{{ dispense.get_payment_status_display }}</dd>
+                        </div>
+
+                        <div class="info-row">
+                            <dt>Payment method</dt>
+                            <dd>
+                                {% if dispense.payment_method %}
+                                    {{ dispense.get_payment_method_display }}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </dd>
+                        </div>
+
+                        <div class="info-row">
+                            <dt>Reference</dt>
+                            <dd>{{ dispense.transaction_reference|default:"—" }}</dd>
+                        </div>
+
+                        <div class="info-row">
+                            <dt>Dispensed by</dt>
+                            <dd>
+                                {{ dispense.dispensed_by.staff_assignment.user|default:"—" }}
+                            </dd>
+                        </div>
+                    </dl>
+                </div>
+            </section>
+
+            <section class="receipt-table-wrap">
+                <table class="receipt-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Medicine</th>
+                            <th>Batch</th>
+                            <th>Quantity</th>
+                            <th class="money-cell">Unit price</th>
+                            <th class="money-cell">Total</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for item in dispense_items %}
+                            <tr>
+                                <td>{{ forloop.counter }}</td>
+                                <td>
+                                    <div class="medicine-name">
+                                        {{ item.stock_batch.inventory.medicine }}
+                                    </div>
+
+                                    <div class="medicine-subtext">
+                                        Prescribed as:
+                                        {{ item.order_item.medication_name }}
+                                    </div>
+                                </td>
+                                <td>{{ item.stock_batch.batch_number }}</td>
+                                <td>
+                                    {{ item.quantity }}
+                                    {{ item.order_item.requested_unit|default:"unit" }}
+                                </td>
+                                <td class="money-cell">
+                                    {{ item.unit_price|floatformat:2 }} IQD
+                                </td>
+                                <td class="money-cell">
+                                    <strong>{{ item.total_price|floatformat:2 }} IQD</strong>
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="6" class="text-center text-muted py-4">
+                                    No dispensed medicines were found.
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </section>
+
+            <section class="receipt-summary">
+                <div class="receipt-notes">
+                    <h3>Notes</h3>
+                    <p>{{ dispense.notes|default:"No additional notes." }}</p>
+                </div>
+
+                <div class="payment-summary">
+                    <div class="payment-row total">
+                        <span>Total amount</span>
+                        <strong>{{ dispense.total_amount|floatformat:2 }} IQD</strong>
+                    </div>
+
+                    <div class="payment-row">
+                        <span>Amount paid</span>
+                        <strong>{{ dispense.amount_paid|floatformat:2 }} IQD</strong>
+                    </div>
+
+                    <div class="payment-row">
+                        <span>Balance due</span>
+                        <strong>{{ dispense.balance_due|floatformat:2 }} IQD</strong>
+                    </div>
+                </div>
+            </section>
+
+            <section class="receipt-signatures">
+                <div class="signature-box">
+                    Pharmacist signature / توقيع الصيدلي
+                </div>
+                <div class="signature-box">
+                    Patient signature / توقيع المستلم
+                </div>
+            </section>
+
+            <footer class="receipt-footer-note">
+                This receipt was generated electronically by ClinicHub.
+                Please retain it for your records.
+            </footer>
+        </div>
+    </article>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener("keydown", function (event) {
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "p") {
+            event.preventDefault();
+            window.print();
+        }
+    });
+</script>
+{% endblock %}

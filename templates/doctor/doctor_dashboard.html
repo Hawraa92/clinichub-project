@@ -1,96 +1,294 @@
+{# File: doctor/templates/doctor/doctor_dashboard.html #}
 {% extends "base.html" %}
-{% load static i18n %}
+{% load static %}
+
+{% block title %}Doctor Dashboard{% endblock %}
 
 {% block extra_head %}
   <link rel="stylesheet" href="{% static 'css/doctor/doctor_dashboard.css' %}">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    .permissions-empty-state {
+      position: relative;
+      display: grid;
+      grid-template-columns: minmax(180px, 0.72fr) minmax(300px, 1.28fr);
+      min-height: 330px;
+      margin-top: 30px;
+      overflow: hidden;
+      border: 1px solid #d9e7f0;
+      border-radius: 28px;
+      background: #ffffff;
+      box-shadow: 0 20px 55px rgba(18, 52, 77, 0.10);
+    }
+
+    .permissions-empty-visual {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 330px;
+      color: #ffffff;
+      background:
+        radial-gradient(circle at 18% 16%, rgba(255, 255, 255, 0.15) 0 54px, transparent 55px),
+        radial-gradient(circle at 92% 92%, rgba(101, 163, 255, 0.22) 0 88px, transparent 89px),
+        linear-gradient(145deg, #118a83 0%, #145b70 48%, #153d68 100%);
+    }
+
+    .permissions-empty-icon {
+      position: relative;
+      display: grid;
+      width: 132px;
+      height: 132px;
+      place-items: center;
+      border: 1px solid rgba(255, 255, 255, 0.34);
+      border-radius: 38px;
+      background: rgba(255, 255, 255, 0.12);
+      box-shadow: 0 18px 45px rgba(5, 30, 54, 0.22);
+      backdrop-filter: blur(8px);
+    }
+
+    .permissions-empty-icon::after {
+      position: absolute;
+      right: -10px;
+      bottom: -10px;
+      display: grid;
+      width: 43px;
+      height: 43px;
+      place-items: center;
+      border: 4px solid #15536c;
+      border-radius: 50%;
+      color: #075d56;
+      background: #bff6e8;
+      content: "!";
+      font-size: 22px;
+      font-weight: 800;
+    }
+
+    .permissions-empty-icon i {
+      font-size: 62px;
+      line-height: 1;
+    }
+
+    .permissions-empty-copy {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 46px 52px;
+    }
+
+    .permissions-empty-badge {
+      display: inline-flex;
+      align-items: center;
+      align-self: flex-start;
+      gap: 8px;
+      margin-bottom: 16px;
+      padding: 8px 13px;
+      border: 1px solid #bde8df;
+      border-radius: 999px;
+      color: #08746c;
+      background: #eafaf6;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .permissions-empty-badge::before {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #13a89e;
+      box-shadow: 0 0 0 5px rgba(19, 168, 158, 0.10);
+      content: "";
+    }
+
+    .permissions-empty-copy h2 {
+      margin: 0 0 12px;
+      color: #10213f;
+      font-size: clamp(28px, 3vw, 40px);
+      font-weight: 700;
+      line-height: 1.15;
+    }
+
+    .permissions-empty-copy > p {
+      max-width: 590px;
+      margin: 0;
+      color: #62728b;
+      font-size: 15px;
+      line-height: 1.8;
+    }
+
+    .permissions-empty-copy .permissions-empty-ar {
+      margin-top: 7px;
+      color: #455a78;
+      font-family: Tahoma, Arial, sans-serif;
+      text-align: right;
+    }
+
+    .permissions-empty-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 24px;
+    }
+
+    .permissions-empty-meta span {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 9px 12px;
+      border: 1px solid #dce8f1;
+      border-radius: 12px;
+      color: #536881;
+      background: #f7fafc;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .permissions-empty-meta i {
+      color: #11958b;
+      font-size: 15px;
+    }
+
+    @media (max-width: 850px) {
+      .permissions-empty-state {
+        grid-template-columns: 1fr;
+      }
+
+      .permissions-empty-visual {
+        min-height: 205px;
+      }
+
+      .permissions-empty-icon {
+        width: 108px;
+        height: 108px;
+        border-radius: 30px;
+      }
+
+      .permissions-empty-icon i {
+        font-size: 50px;
+      }
+
+      .permissions-empty-copy {
+        padding: 34px 28px 38px;
+      }
+    }
+  </style>
 {% endblock %}
 
 {% block content %}
+{% with general_label="General" %}
+{% with view_name=request.resolver_match.view_name %}
+{% with lab_pending=lab_stats.pending|default:0 lab_completed=lab_stats.completed|default:0 lab_today=lab_stats.today|default:0 lab_unread=lab_stats.unread|default:0 %}
+
 <div class="dashboard-container">
   <!-- Sidebar -->
   <aside class="sidebar">
     <div class="brand-container">
-      <div class="doctor-avatar" aria-label="{% trans 'Doctor avatar' %}">
+      <div class="doctor-avatar" aria-label="Doctor avatar">
         <i class="bi bi-person-circle" aria-hidden="true"></i>
       </div>
+
       <div class="brand-text">
-        <h3>Dr.&nbsp;{{ doctor.full_name|default:request.user.username }}</h3>
-        <p>{{ doctor.specialty|default:_("General") }}</p>
+        <h3>Dr.&nbsp;{{ doctor.user.get_full_name|default:request.user.username }}</h3>
+        <p>{{ doctor.specialty_name|default:doctor.specialty|default:general_label }}</p>
       </div>
     </div>
 
-    <!-- Navigation -->
-    <nav class="nav-menu">
-      <!-- Dashboard -->
+    <nav class="nav-menu" aria-label="Doctor navigation">
       <a href="{% url 'doctor:dashboard' %}"
-         class="nav-item{% if request.resolver_match.view_name == 'doctor:dashboard' %} active{% endif %}"
-         aria-current="{% if request.resolver_match.view_name == 'doctor:dashboard' %}page{% endif %}">
+         class="nav-item{% if view_name == 'doctor:dashboard' %} active{% endif %}">
         <i class="bi bi-house-door" aria-hidden="true"></i>
-        <span>{% trans "Dashboard" %}</span>
+        <span>Dashboard</span>
       </a>
 
-      <!-- Patients -->
-      <a href="{% url 'doctor:patients_list' %}"
-         class="nav-item{% if request.resolver_match.view_name == 'doctor:patients_list' %} active{% endif %}"
-         aria-current="{% if request.resolver_match.view_name == 'doctor:patients_list' %}page{% endif %}">
-        <i class="bi bi-people" aria-hidden="true"></i>
-        <span>{% trans "Patients" %}</span>
-      </a>
+      {# Appointments navigation requires permission to view appointments. #}
+      {% if perms.appointments.view_appointment %}
+        <a href="#today-appointments" class="nav-item">
+          <i class="bi bi-calendar-check" aria-hidden="true"></i>
+          <span>Today's Appointments</span>
+        </a>
+      {% endif %}
 
-      <!-- Prescriptions -->
-      <a href="{% url 'prescription:list' %}"
-         class="nav-item{% if request.resolver_match.view_name == 'prescription:list' %} active{% endif %}"
-         aria-current="{% if request.resolver_match.view_name == 'prescription:list' %}page{% endif %}">
-        <i class="bi bi-file-medical" aria-hidden="true"></i>
-        <span>{% trans "Prescriptions" %}</span>
-      </a>
+      {# Show Patients only when the user can view patient records. #}
+      {% if perms.patient.view_patient %}
+        <a href="{% url 'doctor:patients_list' %}"
+           class="nav-item{% if view_name == 'doctor:patients_list' or view_name == 'doctor:patient_list' %} active{% endif %}">
+          <i class="bi bi-people" aria-hidden="true"></i>
+          <span>Patients</span>
+        </a>
+      {% endif %}
 
-      <!-- Archive -->
-      <a href="{% url 'medical_archive:archive_list' %}"
-         class="nav-item{% if request.resolver_match.view_name == 'medical_archive:archive_list' %} active{% endif %}"
-         aria-current="{% if request.resolver_match.view_name == 'medical_archive:archive_list' %}page{% endif %}">
-        <i class="bi bi-archive" aria-hidden="true"></i>
-        <span>{% trans "Archive" %}</span>
-      </a>
+      {# Prescription list requires view permission. #}
+      {% if perms.prescription.view_prescription %}
+        <a href="{% url 'prescription:list' %}"
+           class="nav-item{% if view_name == 'prescription:list' %} active{% endif %}">
+          <i class="bi bi-file-medical" aria-hidden="true"></i>
+          <span>Prescriptions</span>
+        </a>
+      {% endif %}
 
-      <!-- NEW ⇢ Doctor Reports (لوحة تقارير الطبيب) -->
-      <a href="{% url 'doctor:doctor_reports' %}"
-         class="nav-item{% if request.resolver_match.view_name in 'doctor:doctor_reports doctor:reports_export' %} active{% endif %}"
-         aria-current="{% if request.resolver_match.view_name in 'doctor:doctor_reports doctor:reports_export' %}page{% endif %}">
-        <i class="bi bi-clipboard-data" aria-hidden="true"></i>
-        <span>{% trans "Doctor Reports" %}</span>
-      </a>
+      {# Show the archive link only when the user can view patient archives. #}
+      {% if perms.medical_archive.view_patientarchive %}
+        <a href="{% url 'medical_archive:archive_list' %}"
+           class="nav-item{% if view_name == 'medical_archive:archive_list' %} active{% endif %}">
+          <i class="bi bi-archive" aria-hidden="true"></i>
+          <span>Archive</span>
+        </a>
+      {% endif %}
 
-      <!-- Patient Reports (البحث حسب مريض) -->
-      <a href="{% url 'doctor:report_search' %}"
-         class="nav-item{% if request.resolver_match.view_name == 'doctor:report_search' %} active{% endif %}"
-         aria-current="{% if request.resolver_match.view_name == 'doctor:report_search' %}page{% endif %}">
-        <i class="bi bi-file-earmark-text" aria-hidden="true"></i>
-        <span>{% trans "Patient Reports" %}</span>
-      </a>
+      {# The Lab inbox is visible only with permission to view lab orders. #}
+      {% if perms.lab.view_laborder %}
+        <a href="{% url 'lab:doctor_orders_inbox' %}"
+           class="nav-item{% if view_name == 'lab:doctor_orders_inbox' or view_name == 'lab:doctor_order_detail' or view_name == 'lab:doctor_order_detail_alias' or view_name == 'lab:doctor_create_order' or view_name == 'lab:doctor_create_order_patient' %} active{% endif %}">
+          <i class="bi bi-droplet" aria-hidden="true"></i>
+          <span>Lab</span>
+
+          {% if lab_unread|add:0 > 0 %}
+            <span class="nav-badge" aria-label="Unread lab items">{{ lab_unread|default:0 }}</span>
+          {% endif %}
+        </a>
+      {% endif %}
+
+      {# Reports & Analytics uses its independent feature permission. #}
+      {% if perms.doctor.view_doctoranalyticsaccess %}
+        <a href="{% url 'doctor:doctor_reports' %}"
+           class="nav-item{% if view_name == 'doctor:doctor_reports' or view_name == 'doctor:doctor_reports_export' or view_name == 'doctor:doctor_reports_pdf' %} active{% endif %}">
+          <i class="bi bi-clipboard-data" aria-hidden="true"></i>
+          <span>Reports &amp; Analytics</span>
+        </a>
+      {% endif %}
+
+      {# Generate Patient Report uses its independent feature permission. #}
+      {% if perms.doctor.view_patientreportexportaccess %}
+        <a href="{% url 'doctor:report_search' %}"
+           class="nav-item{% if view_name == 'doctor:report_search' %} active{% endif %}">
+          <i class="bi bi-file-earmark-text" aria-hidden="true"></i>
+          <span>Generate Patient Report</span>
+        </a>
+      {% endif %}
     </nav>
 
     <div class="logout-container">
       <a href="{% url 'accounts:logout' %}" class="nav-item">
         <i class="bi bi-box-arrow-right" aria-hidden="true"></i>
-        <span>{% trans "Logout" %}</span>
+        <span>Logout</span>
       </a>
     </div>
   </aside>
 
-  <!-- Main Content -->
+  <!-- Main -->
   <main class="main-content">
-    <!-- Header -->
     <header class="dashboard-header">
       <div class="welcome-section">
-        <h1>{% blocktrans %}Welcome back, Dr. {{ doctor.full_name|default:request.user.username }}!{% endblocktrans %}</h1>
-        <p class="inspiration">{% trans '"Your expertise saves lives. Stay confident, stay caring."' %}</p>
+        <h1>Welcome back, Dr. {{ doctor.user.get_full_name|default:request.user.username }}!</h1>
+        <p class="inspiration">“Your expertise saves lives. Stay confident, stay caring.”</p>
       </div>
 
-      <div class="datetime-card" aria-label="{% trans 'Current date and time' %}">
+      <div class="datetime-card" aria-label="Current date and time">
         <div class="clock-icon"><i class="bi bi-clock" aria-hidden="true"></i></div>
         <div class="datetime-info">
           <div id="digital-clock" class="clock"></div>
@@ -99,91 +297,197 @@
       </div>
     </header>
 
+    {% if perms.appointments.view_appointment or perms.patient.view_patient or perms.prescription.view_prescription or perms.medical_archive.view_patientarchive or perms.lab.view_laborder or perms.lab.add_laborder or perms.doctor.view_doctorvisit or perms.doctor.view_doctoranalyticsaccess or perms.doctor.view_patientreportexportaccess %}
+
     <!-- Quick Actions -->
-    <div class="quick-actions">
-      <a href="{% url 'prescription:list' %}" class="action-btn" data-tooltip="{% trans 'Go to prescriptions' %}">
-        <i class="bi bi-file-medical" aria-hidden="true"></i><span>{% trans "Prescriptions" %}</span>
-      </a>
-      <a href="{% url 'medical_archive:archive_list' %}" class="action-btn" data-tooltip="{% trans 'Browse archive' %}">
-        <i class="bi bi-archive" aria-hidden="true"></i><span>{% trans "Archive" %}</span>
-      </a>
-      <a href="{% url 'doctor:patients_list' %}" class="action-btn" data-tooltip="{% trans 'All patients' %}">
-        <i class="bi bi-people" aria-hidden="true"></i><span>{% trans "Patients" %}</span>
-      </a>
-      <!-- NEW ⇢ Doctor Reports (اختصار مباشر) -->
-      <a href="{% url 'doctor:doctor_reports' %}" class="action-btn" data-tooltip="{% trans 'Open doctor analytics' %}">
-        <i class="bi bi-clipboard-data" aria-hidden="true"></i><span>{% trans "Doctor Reports" %}</span>
-      </a>
-      <!-- Patient Reports (اختياري) -->
-      <a href="{% url 'doctor:report_search' %}" class="action-btn" data-tooltip="{% trans 'Generate patient report' %}">
-        <i class="bi bi-file-earmark-text" aria-hidden="true"></i><span>{% trans "Patient Reports" %}</span>
-      </a>
+    <div class="quick-actions" aria-label="Quick actions">
+      {% if perms.prescription.view_prescription %}
+        <a href="{% url 'prescription:list' %}" class="action-btn" data-tooltip="Go to prescriptions">
+          <i class="bi bi-file-medical" aria-hidden="true"></i><span>Prescriptions</span>
+        </a>
+      {% endif %}
+      {% if perms.medical_archive.view_patientarchive %}
+        <a href="{% url 'medical_archive:archive_list' %}" class="action-btn" data-tooltip="Browse archive">
+          <i class="bi bi-archive" aria-hidden="true"></i><span>Archive</span>
+        </a>
+      {% endif %}
+      {% if perms.patient.view_patient %}
+        <a href="{% url 'doctor:patients_list' %}" class="action-btn" data-tooltip="All patients">
+          <i class="bi bi-people" aria-hidden="true"></i><span>Patients</span>
+        </a>
+      {% endif %}
+      {% if perms.lab.view_laborder %}
+        <a href="{% url 'lab:doctor_orders_inbox' %}" class="action-btn" data-tooltip="View lab orders and results">
+          <i class="bi bi-droplet" aria-hidden="true"></i><span>Lab Orders</span>
+        </a>
+      {% endif %}
+      {% if perms.lab.add_laborder %}
+        <a href="{% url 'lab:doctor_create_order' %}" class="action-btn" data-tooltip="Create a new lab order">
+          <i class="bi bi-clipboard2-plus" aria-hidden="true"></i><span>New Lab Order</span>
+        </a>
+      {% endif %}
+      {% if perms.doctor.view_doctoranalyticsaccess %}
+        <a href="{% url 'doctor:doctor_reports' %}" class="action-btn" data-tooltip="Open reports & analytics">
+          <i class="bi bi-clipboard-data" aria-hidden="true"></i><span>Reports &amp; Analytics</span>
+        </a>
+      {% endif %}
+      {% if perms.doctor.view_patientreportexportaccess %}
+        <a href="{% url 'doctor:report_search' %}" class="action-btn" data-tooltip="Generate patient report">
+          <i class="bi bi-file-earmark-text" aria-hidden="true"></i><span>Generate Patient Report</span>
+        </a>
+      {% endif %}
     </div>
 
-    <!-- Stats Cards -->
-    <div class="stats-grid">
-      <div class="stat-card">
-        <div class="card-icon prescription"><i class="bi bi-file-medical" aria-hidden="true"></i></div>
-        <div class="card-content">
-          <h3>{% trans "Prescriptions" %}</h3>
-          <p>{{ stats.prescription_count }}</p>
-        </div>
+    <!-- Today's Appointments -->
+    {% if perms.appointments.view_appointment %}
+    <section class="chart-section" id="today-appointments">
+      <div class="section-header">
+        <h2><i class="bi bi-calendar-check" aria-hidden="true"></i> Today's Appointments</h2>
       </div>
 
-      <div class="stat-card">
-        <div class="card-icon patient"><i class="bi bi-people-fill" aria-hidden="true"></i></div>
-        <div class="card-content">
-          <h3>{% trans "Patients" %}</h3>
-          <p>{{ unique_patients }}</p>
-        </div>
-      </div>
+      <div class="table-wrap">
+        <table class="clean" aria-label="Today’s appointments table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Patient</th>
+              <th>Status</th>
+              <th>Queue</th>
+              <th class="th-actions">Actions</th>
+            </tr>
+          </thead>
 
-      <div class="stat-card">
-        <div class="card-icon archive"><i class="bi bi-clock-history" aria-hidden="true"></i></div>
-        <div class="card-content">
-          <h3>{% trans "Recent Archives" %}</h3>
-          <p>{{ recent_archives|length }}</p>
-        </div>
-      </div>
-    </div>
+          <tbody>
+            {% if today_appointments %}
+              {% for appt in today_appointments %}
+                <tr>
+                  <td>
+                    {% if appt.scheduled_time %}
+                      {{ appt.scheduled_time|time:"H:i" }}
+                    {% else %}
+                      —
+                    {% endif %}
+                  </td>
 
-    <!-- Chart Section -->
+                  <td>{{ appt.patient }}</td>
+
+                  <td>
+                    {% with s=appt.status|default:"" %}
+                      {% if s == "completed" %}
+                        <span class="pill pill-completed">{{ appt.get_status_display|default:"Completed" }}</span>
+                      {% elif s == "cancelled" %}
+                        <span class="pill pill-cancelled">{{ appt.get_status_display|default:"Cancelled" }}</span>
+                      {% else %}
+                        <span class="pill pill-pending">{{ appt.get_status_display|default:"Pending" }}</span>
+                      {% endif %}
+                    {% endwith %}
+                  </td>
+
+                  <td>{{ appt.queue_number|default:"—" }}</td>
+
+                  <td>
+                    <div class="td-actions">
+                      {# Starting a consultation creates a DoctorVisit. #}
+                      {% if perms.doctor.add_doctorvisit %}
+                        {% if appt.status != "cancelled" %}
+                          <a class="icon-btn"
+                             title="Start consultation (symptoms & diagnosis)"
+                             aria-label="Start consultation"
+                             href="{% url 'doctor:visit' appt.id %}">
+                            <i class="bi bi-clipboard2-pulse" aria-hidden="true"></i>
+                          </a>
+                        {% else %}
+                          <span class="icon-btn is-disabled" title="Cancelled" aria-label="Cancelled">
+                            <i class="bi bi-clipboard2-pulse" aria-hidden="true"></i>
+                          </span>
+                        {% endif %}
+                      {% endif %}
+
+                      {% if perms.doctor.view_patientreportexportaccess %}
+                        <a class="icon-btn"
+                           title="Open patient file"
+                           aria-label="Open patient file"
+                           href="{% url 'doctor:patient_report' appt.patient_id %}">
+                          <i class="bi bi-eye" aria-hidden="true"></i>
+                        </a>
+                      {% endif %}
+
+                      {% if perms.prescription.add_prescription %}
+                        <a class="icon-btn"
+                           title="Create prescription"
+                           aria-label="Create prescription"
+                           href="{% url 'prescription:create' appt.id %}">
+                          <i class="bi bi-prescription2" aria-hidden="true"></i>
+                        </a>
+                      {% endif %}
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="5" class="table-empty">No appointments scheduled for today.</td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    {% endif %}
+
+    <!-- Weekly chart -->
+    {% if perms.appointments.view_appointment %}
     <section class="chart-section">
       <div class="section-header">
-        <h2><i class="bi bi-bar-chart-line" aria-hidden="true"></i> {% trans "Weekly Appointments" %}</h2>
+        <h2><i class="bi bi-bar-chart-line" aria-hidden="true"></i> Weekly Appointments</h2>
       </div>
+
       <div class="chart-container">
         <canvas id="patientsWeekChart"></canvas>
         <script id="chart-data" type="application/json">{{ chart_data_json|safe }}</script>
       </div>
     </section>
+    {% endif %}
 
-    <!-- Archives Section -->
-    <section class="archives-section">
-      <div class="section-header">
-        <h2><i class="bi bi-list-task" aria-hidden="true"></i> {% trans "Recent Archives" %}</h2>
-      </div>
-      <div class="archives-list">
-        {% if recent_archives %}
-          {% for item in recent_archives %}
-            <div class="archive-item">
-              <div class="archive-time">{{ item.created_at|time:"H:i" }}</div>
-              <div class="archive-content">
-                <i class="bi bi-file-medical" aria-hidden="true"></i>
-                <div class="archive-text"><span>{{ item.title }}</span></div>
-              </div>
-            </div>
-          {% endfor %}
-        {% else %}
-          <div class="no-archives">
-            <i class="bi bi-inbox" aria-hidden="true"></i>
-            <p>{% trans "No recent archives available" %}</p>
+    {% else %}
+      <section class="permissions-empty-state" role="status" aria-live="polite">
+        <div class="permissions-empty-visual" aria-hidden="true">
+          <div class="permissions-empty-icon">
+            <i class="bi bi-shield-lock"></i>
           </div>
-        {% endif %}
-      </div>
-    </section>
+        </div>
+
+        <div class="permissions-empty-copy">
+          <span class="permissions-empty-badge">ClinicHub secure access</span>
+
+          <h2>No permissions assigned yet</h2>
+
+          <p>
+            Your account is active, but no clinical modules are currently assigned.
+            Please contact the system administrator to activate the services required
+            for your role.
+          </p>
+
+          <p class="permissions-empty-ar" dir="rtl" lang="ar">
+            حسابك فعّال، لكن لم تُمنح لك أي صلاحيات تشغيلية بعد.
+            يرجى التواصل مع مدير النظام لتفعيل الأقسام المطلوبة.
+          </p>
+
+          <div class="permissions-empty-meta" aria-label="Access status">
+            <span><i class="bi bi-person-check"></i> Account active</span>
+            <span><i class="bi bi-shield-check"></i> Role protected</span>
+            <span><i class="bi bi-key"></i> Administrator managed</span>
+          </div>
+        </div>
+      </section>
+    {% endif %}
+
   </main>
 </div>
+
+{% endwith %}
+{% endwith %}
+{% endwith %}
 {% endblock %}
 
 {% block extra_js %}

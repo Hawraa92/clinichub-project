@@ -1,11 +1,15 @@
-/* doctor_dashboard.css – 28‑Jul‑2025  (root‑fix + tooltip) */
+/* File: static/css/doctor/doctor_dashboard.css
+   Doctor Dashboard (Scoped + Organized)
+   ✅ Scoped to .dashboard-container (no global body/* resets)
+   ✅ Dark mode support
+   ✅ Safe with base.html (doesn't override global .main-content outside this page)
+   ✅ Includes badges + table + pills + icon buttons + tooltip
+*/
 
-/* ------------------------------------------------------------------
-   1) استبدال ::root بـ :root لاتباع المعيار
-   2) إضافة تنسيق مبسّط لفئة .tooltip التي ينشئها ملف JS
-   ------------------------------------------------------------------ */
-
-   :root {
+/* =========================
+   1) Page Scope + Tokens
+   ========================= */
+   .dashboard-container{
     /* Pastel Color Palette */
     --primary: #8ECAE6;
     --primary-light: #B8E0F9;
@@ -29,34 +33,35 @@
   
     /* Shadows */
     --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
-    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.10);
     --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
   
     /* Typography */
     --font-main: 'Poppins', sans-serif;
     --radius: 16px;
-  }
   
-  * {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-  }
+    /* Badge / Status Colors */
+    --badge-red: #ef4444;
   
-  body {
-    font-family: var(--font-main);
+    /* Page background */
     background: linear-gradient(135deg, #f5f7fa 0%, #e4edf5 100%);
     color: var(--dark);
     min-height: 100vh;
-  }
   
-  .dashboard-container {
     display: flex;
-    min-height: 100vh;
+    width: 100%;
   }
   
-  /* ========== Sidebar ========== */
-  .sidebar {
+  /* Safe box sizing within this page only */
+  .dashboard-container,
+  .dashboard-container *{
+    box-sizing: border-box;
+  }
+  
+  /* =========================
+     2) Sidebar
+     ========================= */
+  .dashboard-container .sidebar{
     width: 260px;
     background: var(--glass-bg);
     backdrop-filter: blur(12px);
@@ -68,13 +73,13 @@
     z-index: 100;
   }
   
-  .brand-container {
+  .dashboard-container .brand-container{
     display: flex;
     align-items: center;
     margin-bottom: 32px;
   }
   
-  .doctor-avatar {
+  .dashboard-container .doctor-avatar{
     width: 56px;
     height: 56px;
     border-radius: 50%;
@@ -83,30 +88,32 @@
     align-items: center;
     justify-content: center;
     margin-right: 16px;
-    color: white;
+    color: #fff;
     font-size: 28px;
   }
   
-  .brand-text h3 {
+  .dashboard-container .brand-text h3{
     font-size: 18px;
     font-weight: 600;
     color: var(--dark);
+    margin: 0;
   }
   
-  .brand-text p {
+  .dashboard-container .brand-text p{
     font-size: 14px;
     color: var(--dark-gray);
-    margin-top: 4px;
+    margin: 4px 0 0;
   }
   
-  .nav-menu {
+  .dashboard-container .nav-menu{
     display: flex;
     flex-direction: column;
     gap: 8px;
     flex: 1;
   }
   
-  .nav-item {
+  .dashboard-container .nav-item{
+    position: relative;
     display: flex;
     align-items: center;
     padding: 14px 16px;
@@ -114,72 +121,104 @@
     color: var(--dark-gray);
     text-decoration: none;
     font-weight: 500;
-    transition: all 0.3s ease;
+    transition: background .2s ease, color .2s ease, transform .15s ease, box-shadow .2s ease;
+    outline: none;
   }
   
-  .nav-item i {
+  .dashboard-container .nav-item i{
     font-size: 20px;
     margin-right: 12px;
     width: 24px;
     text-align: center;
   }
   
-  .nav-item:hover {
+  .dashboard-container .nav-item:hover{
     background: var(--primary-light);
     color: var(--primary-dark);
+    transform: translateY(-1px);
   }
   
-  .nav-item.active {
+  .dashboard-container .nav-item:focus-visible{
+    outline: 3px solid rgba(33, 158, 188, 0.35);
+    outline-offset: 2px;
+  }
+  
+  .dashboard-container .nav-item.active{
     background: var(--primary);
-    color: white;
+    color: #fff;
     box-shadow: var(--shadow-sm);
+    transform: none;
   }
   
-  .nav-item.active i {
-    color: white;
+  .dashboard-container .nav-item.active i{
+    color: #fff;
   }
   
-  .nav-item.disabled {
-    opacity: 0.5;
+  /* supports both "disabled" (old) and "is-disabled" (new) */
+  .dashboard-container .nav-item.disabled,
+  .dashboard-container .nav-item.is-disabled{
+    opacity: 0.55;
     cursor: not-allowed;
+    pointer-events: none;
   }
   
-  .logout-container {
+  /* Sidebar badge (Lab unread count) */
+  .dashboard-container .nav-badge{
+    margin-left: auto;
+    background: var(--badge-red);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 900;
+    line-height: 1;
+    padding: 4px 10px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8px 18px rgba(239, 68, 68, 0.25);
+  }
+  
+  .dashboard-container .logout-container{
     margin-top: auto;
     padding-top: 16px;
     border-top: 1px solid var(--medium-gray);
   }
   
-  /* ========== Main Content ========== */
-  .main-content {
+  /* =========================
+     3) Main Content
+     ========================= */
+  .dashboard-container .main-content{
     flex: 1;
     padding: 32px;
     display: flex;
     flex-direction: column;
     gap: 24px;
+    font-family: var(--font-main);
   }
   
-  .dashboard-header {
+  .dashboard-container .dashboard-header{
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 16px;
+    gap: 16px;
   }
   
-  .welcome-section h1 {
+  .dashboard-container .welcome-section h1{
     font-size: 28px;
     font-weight: 700;
     color: var(--dark);
-    margin-bottom: 8px;
+    margin: 0 0 8px;
   }
   
-  .inspiration {
+  .dashboard-container .inspiration{
     font-size: 16px;
     color: var(--dark-gray);
     font-style: italic;
+    margin: 0;
   }
   
-  .datetime-card {
+  .dashboard-container .datetime-card{
     display: flex;
     align-items: center;
     background: var(--glass-bg);
@@ -187,9 +226,10 @@
     padding: 16px 24px;
     box-shadow: var(--shadow-sm);
     border: 1px solid var(--glass-border);
+    min-width: 260px;
   }
   
-  .clock-icon {
+  .dashboard-container .clock-icon{
     width: 48px;
     height: 48px;
     background: linear-gradient(135deg, var(--accent) 0%, var(--primary) 100%);
@@ -198,30 +238,32 @@
     align-items: center;
     justify-content: center;
     margin-right: 16px;
-    color: white;
+    color: #fff;
     font-size: 20px;
   }
   
-  .clock {
+  .dashboard-container .clock{
     font-size: 24px;
     font-weight: 600;
     color: var(--dark);
   }
   
-  .date {
+  .dashboard-container .date{
     font-size: 14px;
     color: var(--dark-gray);
     margin-top: 4px;
   }
   
-  /* Quick Actions */
-  .quick-actions {
+  /* =========================
+     4) Quick Actions
+     ========================= */
+  .dashboard-container .quick-actions{
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
     gap: 16px;
   }
   
-  .action-btn {
+  .dashboard-container .action-btn{
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -232,238 +274,321 @@
     border: 1px solid var(--glass-border);
     text-decoration: none;
     color: var(--dark);
-    transition: all 0.3s ease;
+    transition: transform .2s ease, box-shadow .2s ease, background .2s ease, border-color .2s ease;
     box-shadow: var(--shadow-sm);
+    outline: none;
   }
   
-  .action-btn:hover {
+  .dashboard-container .action-btn:hover{
     transform: translateY(-5px);
     box-shadow: var(--shadow-lg);
-    background: white;
+    background: #fff;
     border-color: var(--primary-light);
   }
   
-  .action-btn i {
+  .dashboard-container .action-btn:focus-visible{
+    outline: 3px solid rgba(33, 158, 188, 0.35);
+    outline-offset: 4px;
+  }
+  
+  .dashboard-container .action-btn i{
     font-size: 32px;
     margin-bottom: 12px;
     color: var(--primary-dark);
   }
   
-  .action-btn span {
+  .dashboard-container .action-btn span{
     font-size: 14px;
     font-weight: 500;
   }
   
-  /* Stats Grid */
-  .stats-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: 24px;
-  }
-  
-  .stat-card {
+  /* =========================
+     5) Sections (Charts + Table)
+     ========================= */
+  .dashboard-container .chart-section{
     background: var(--glass-bg);
     border-radius: var(--radius);
     padding: 24px;
-    display: flex;
-    align-items: center;
     border: 1px solid var(--glass-border);
     box-shadow: var(--shadow-sm);
-    transition: all 0.3s ease;
   }
   
-  .stat-card:hover {
-    transform: translateY(-5px);
-    box-shadow: var(--shadow-lg);
-  }
-  
-  .card-icon {
-    width: 64px;
-    height: 64px;
-    border-radius: 16px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-right: 20px;
-    font-size: 28px;
-    color: white;
-  }
-  
-  .card-icon.prescription {
-    background: linear-gradient(135deg, var(--accent) 0%, #6F9DF0 100%);
-  }
-  
-  .card-icon.patient {
-    background: linear-gradient(135deg, var(--success) 0%, #57CC99 100%);
-  }
-  
-  .card-icon.archive {
-    background: linear-gradient(135deg, var(--secondary) 0%, #E5989B 100%);
-  }
-  
-  .card-content h3 {
-    font-size: 16px;
-    font-weight: 500;
-    color: var(--dark-gray);
-    margin-bottom: 8px;
-  }
-  
-  .card-content p {
-    font-size: 32px;
-    font-weight: 700;
-    color: var(--dark);
-  }
-  
-  /* Chart Section */
-  .section-header {
+  .dashboard-container .section-header{
     display: flex;
     align-items: center;
     margin-bottom: 20px;
   }
   
-  .section-header h2 {
+  .dashboard-container .section-header h2{
     font-size: 20px;
     font-weight: 600;
     color: var(--dark);
+    margin: 0;
   }
   
-  .section-header i {
+  .dashboard-container .section-header i{
     margin-right: 12px;
     color: var(--primary-dark);
   }
   
-  .chart-section {
-    background: var(--glass-bg);
-    border-radius: var(--radius);
-    padding: 24px;
-    border: 1px solid var(--glass-border);
-    box-shadow: var(--shadow-sm);
-  }
-  
-  .chart-container {
+  .dashboard-container .chart-container{
     height: 300px;
     position: relative;
   }
   
-  /* Archives Section */
-  .archives-section {
-    background: var(--glass-bg);
-    border-radius: var(--radius);
-    padding: 24px;
-    border: 1px solid var(--glass-border);
-    box-shadow: var(--shadow-sm);
+  /* =========================
+     6) Today's Appointments Table
+     ========================= */
+  .dashboard-container .table-wrap{
+    overflow: auto;
+    border-radius: 14px;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    background: #fff;
   }
   
-  .archives-list {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+  .dashboard-container table.clean{
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 680px;
   }
   
-  .archive-item {
+  .dashboard-container table.clean th,
+  .dashboard-container table.clean td{
+    padding: 14px 16px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    text-align: left;
+    vertical-align: middle;
+  }
+  
+  .dashboard-container table.clean th{
+    background: #f3f6fb;
+    font-weight: 700;
+  }
+  
+  .dashboard-container .th-actions{
+    text-align: right;
+  }
+  
+  .dashboard-container .table-empty{
+    padding: 18px;
+    color: #6b7280;
+  }
+  
+  /* Row actions */
+  .dashboard-container .td-actions{
     display: flex;
+    gap: 10px;
+    justify-content: flex-end;
     align-items: center;
-    padding: 16px;
-    background: white;
-    border-radius: 12px;
-    box-shadow: var(--shadow-sm);
-    border-left: 4px solid var(--accent);
-    transition: all 0.3s ease;
   }
   
-  .archive-item:hover {
-    transform: translateX(5px);
-    box-shadow: var(--shadow-md);
-  }
-  
-  .archive-time {
-    min-width: 80px;
-    font-weight: 600;
-    color: var(--primary-dark);
-  }
-  
-  .archive-content {
-    display: flex;
-    align-items: center;
-    flex: 1;
-  }
-  
-  .archive-content i {
-    font-size: 20px;
-    color: var(--accent);
-    margin-right: 16px;
-  }
-  
-  .archive-text span {
-    font-weight: 500;
-    color: var(--dark);
-  }
-  
-  .no-archives {
-    display: flex;
-    flex-direction: column;
+  /* Icon button actions */
+  .dashboard-container .icon-btn{
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 40px 20px;
-    text-align: center;
-    color: var(--dark-gray);
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    background: #fff;
+    text-decoration: none;
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.06);
+    transition: transform .15s ease, box-shadow .15s ease, filter .15s ease, opacity .15s ease;
+    cursor: pointer;
   }
   
-  .no-archives i {
-    font-size: 48px;
-    margin-bottom: 16px;
-    color: var(--medium-gray);
+  .dashboard-container .icon-btn:hover{
+    transform: translateY(-1px);
+    box-shadow: 0 10px 18px rgba(0, 0, 0, 0.08);
   }
   
-  /* Tooltip */
-  .tooltip {
+  .dashboard-container .icon-btn:focus-visible{
+    outline: 3px solid rgba(33, 158, 188, 0.35);
+    outline-offset: 2px;
+  }
+  
+  .dashboard-container .icon-btn i{
+    font-size: 18px;
+  }
+  
+  /* Disabled icon buttons (used in template: .is-disabled) */
+  .dashboard-container .icon-btn.is-disabled{
+    opacity: 0.55;
+    cursor: not-allowed;
+    pointer-events: none;
+    box-shadow: none;
+    transform: none;
+  }
+  
+  /* Status pills */
+  .dashboard-container .pill{
+    display: inline-flex;
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: 12px;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  
+  .dashboard-container .pill-pending{
+    background: #fff7ed;
+    color: #9a3412;
+    border: 1px solid #fed7aa;
+  }
+  
+  .dashboard-container .pill-completed{
+    background: #ecfdf5;
+    color: #065f46;
+    border: 1px solid #a7f3d0;
+  }
+  
+  .dashboard-container .pill-cancelled{
+    background: #fef2f2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+  }
+  
+  /* =========================
+     7) Tooltip (Used by JS)
+     NOTE: kept as .tooltip to match your JS,
+     but made conservative to avoid surprises.
+     ========================= */
+  .tooltip{
     position: fixed;
-    background: rgba(0, 0, 0, 0.75);
+    background: rgba(0, 0, 0, 0.78);
     color: #fff;
     padding: 6px 10px;
-    border-radius: 6px;
+    border-radius: 8px;
     font-size: 12px;
     pointer-events: none;
     z-index: 9999;
     opacity: 0;
     transform: translateY(-4px);
-    transition: opacity 0.15s ease, transform 0.15s ease;
+    transition: opacity .15s ease, transform .15s ease;
+    max-width: min(260px, 90vw);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   
-  .tooltip.show {
+  .tooltip.show{
     opacity: 1;
     transform: translateY(0);
   }
   
-  /* Responsive Design */
-  @media (max-width: 992px) {
-    .dashboard-container {
+  /* =========================
+     8) Responsive
+     ========================= */
+  @media (max-width: 992px){
+    .dashboard-container{
       flex-direction: column;
     }
   
-    .sidebar {
+    .dashboard-container .sidebar{
       width: 100%;
       padding: 16px;
+      border-right: none;
+      border-bottom: 1px solid var(--glass-border);
     }
   
-    .main-content {
+    .dashboard-container .main-content{
       padding: 24px;
     }
   
-    .dashboard-header {
+    .dashboard-container .dashboard-header{
       flex-direction: column;
       align-items: flex-start;
       gap: 20px;
     }
+  
+    .dashboard-container .datetime-card{
+      width: 100%;
+    }
   }
   
-  @media (max-width: 768px) {
-    .stats-grid {
-      grid-template-columns: 1fr;
+  @media (max-width: 768px){
+    .dashboard-container .quick-actions{
+      grid-template-columns: repeat(2, 1fr);
     }
   
-    .quick-actions {
-      grid-template-columns: repeat(2, 1fr);
+    .dashboard-container table.clean{
+      min-width: 620px;
+    }
+  }
+  
+  /* =========================
+     9) Dark Mode
+     ========================= */
+  @media (prefers-color-scheme: dark){
+    .dashboard-container{
+      background: radial-gradient(1200px 600px at 20% 10%, rgba(33,158,188,.18), transparent 60%),
+                  radial-gradient(900px 500px at 90% 40%, rgba(162,210,255,.16), transparent 55%),
+                  #070b14;
+      color: rgba(255,255,255,.92);
+    }
+  
+    .dashboard-container .sidebar{
+      background: rgba(15, 23, 42, 0.70);
+      border-color: rgba(255,255,255,.08);
+    }
+  
+    .dashboard-container .brand-text h3{ color: rgba(255,255,255,.92); }
+    .dashboard-container .brand-text p{ color: rgba(255,255,255,.65); }
+  
+    .dashboard-container .nav-item{
+      color: rgba(255,255,255,.72);
+    }
+    .dashboard-container .nav-item:hover{
+      background: rgba(184,224,249,.16);
+      color: rgba(255,255,255,.92);
+    }
+    .dashboard-container .nav-item.active{
+      background: rgba(33,158,188,.35);
+      color: rgba(255,255,255,.95);
+    }
+  
+    .dashboard-container .welcome-section h1{ color: rgba(255,255,255,.95); }
+    .dashboard-container .inspiration{ color: rgba(255,255,255,.65); }
+  
+    .dashboard-container .datetime-card,
+    .dashboard-container .chart-section,
+    .dashboard-container .action-btn{
+      background: rgba(15, 23, 42, 0.70);
+      border-color: rgba(255,255,255,.08);
+    }
+  
+    .dashboard-container .clock,
+    .dashboard-container .section-header h2{
+      color: rgba(255,255,255,.92);
+    }
+    .dashboard-container .date{
+      color: rgba(255,255,255,.65);
+    }
+  
+    .dashboard-container .table-wrap{
+      background: rgba(15, 23, 42, 0.85);
+      border-color: rgba(255,255,255,.08);
+    }
+  
+    .dashboard-container table.clean th{
+      background: rgba(255,255,255,.06);
+      color: rgba(255,255,255,.90);
+    }
+    .dashboard-container table.clean td{
+      border-bottom-color: rgba(255,255,255,.08);
+      color: rgba(255,255,255,.85);
+    }
+  
+    .dashboard-container .icon-btn{
+      background: rgba(255,255,255,.06);
+      border-color: rgba(255,255,255,.10);
+      box-shadow: none;
+      color: rgba(255,255,255,.90);
+    }
+    .dashboard-container .icon-btn:hover{
+      box-shadow: 0 10px 18px rgba(0,0,0,.25);
     }
   }
   

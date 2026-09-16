@@ -1,39 +1,124 @@
+{# File: templates/medical_archive/delete_archive.html #}
 {% extends "base.html" %}
-
 {% load static %}
+
+{% block title %}Archive Action • Medical Archive{% endblock %}
 
 {% block extra_head %}
   <link rel="stylesheet" href="{% static 'css/medical_archive/delete_archive.css' %}">
 {% endblock %}
 
 {% block content %}
-<div class="container mt-4">
-  <div class="card border-danger">
-    <div class="card-header bg-danger text-white">
-      <h3 class="mb-0">Confirm Archive Deletion</h3>
+<div class="delete-container">
+  <div class="delete-card" role="region" aria-label="Archive action confirmation">
+    <!-- Header -->
+    <div class="delete-header">
+      <div class="warning-icon" aria-hidden="true">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <path d="M12 9V13M12 17H12.01M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+
+      <h1 class="delete-title">Move Archive to Trash</h1>
+      <p class="delete-subtitle">Soft delete (can be restored by an admin)</p>
     </div>
-    <div class="card-body">
-      {% if messages %}
+
+    <!-- Messages -->
+    {% if messages %}
+      <div class="messages-container" aria-live="polite" aria-atomic="true">
         {% for message in messages %}
-          <div class="alert alert-{{ message.tags }}" role="alert">
+          <div class="message message-{{ message.tags|default:'info' }}">
             {{ message }}
           </div>
         {% endfor %}
-      {% endif %}
-      <p>
-        Are you sure you want to <strong>permanently delete</strong> the archive titled
-        <em>{{ archive.title }}</em> for patient <strong>{{ archive.patient.full_name }}</strong>?
-      </p>
-      <form method="POST">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-danger me-2">
-          🗑️ Yes, Delete
-        </button>
-        <a href="{% url 'medical_archive:archive_detail' archive.id %}" class="btn btn-secondary">
-          ↩️ Cancel
-        </a>
-      </form>
+      </div>
+    {% endif %}
+
+    <!-- Archive Details -->
+    <div class="archive-details">
+      <div class="detail-row">
+        <span class="detail-label">Title</span>
+        <span class="detail-value">{{ archive.title|default:"—" }}</span>
+      </div>
+
+      <div class="detail-row">
+        <span class="detail-label">Patient</span>
+        <span class="detail-value">
+          {% if archive.patient %}
+            {{ archive.patient.full_name|default:"—" }}
+          {% else %}
+            —
+          {% endif %}
+        </span>
+      </div>
+
+      <div class="detail-row">
+        <span class="detail-label">Type</span>
+        <span class="detail-value">
+          {{ archive.get_archive_type_display }}
+          {% if archive.is_critical %}
+            <span class="critical-badge">Critical</span>
+          {% endif %}
+        </span>
+      </div>
+
+      <div class="detail-row">
+        <span class="detail-label">Created</span>
+        <span class="detail-value">{{ archive.created_at|date:"M d, Y H:i" }}</span>
+      </div>
+
+      <div class="detail-row">
+        <span class="detail-label">Archive ID</span>
+        <span class="detail-value id-value">ARCH-{{ archive.id|stringformat:"04d" }}</span>
+      </div>
     </div>
+
+    <!-- Info Box (Soft delete) -->
+    <div class="warning-box" role="note">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" class="warning-icon-small" aria-hidden="true">
+        <path d="M10 6V10M10 14H10.01M19 10C19 14.9706 14.9706 19 10 19C5.02944 19 1 14.9706 1 10C1 5.02944 5.02944 1 10 1C14.9706 1 19 5.02944 19 10Z"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div>
+        <strong>Note:</strong> This action will <strong>hide</strong> the archive from normal lists (Soft Delete).
+        Attachments and voice notes remain stored. An admin can restore it later.
+      </div>
+    </div>
+
+    <!-- Confirm -->
+    <div class="confirm-row">
+      <label class="confirm-check">
+        <input type="checkbox" id="confirmCheckbox" />
+        <span>I understand and want to move this archive to Trash.</span>
+      </label>
+    </div>
+
+    <!-- Actions -->
+    <form method="post" class="delete-form" id="deleteForm" novalidate>
+      {% csrf_token %}
+
+      <div class="action-buttons">
+        <a class="btn-cancel" href="{% url 'medical_archive:archive_detail' archive.id %}">
+          Cancel
+        </a>
+
+        <button type="submit" class="btn-delete" id="deleteBtn" disabled aria-label="Move archive to trash">
+          <span class="btn-text">Move to Trash</span>
+          <span class="btn-loader hidden" aria-hidden="true">
+            <span class="loader"></span>
+          </span>
+        </button>
+      </div>
+    </form>
+
+    <p class="hint-keys" aria-hidden="true">
+      Tip: Press <kbd>Esc</kbd> to cancel.
+    </p>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+  <script src="{% static 'js/medical_archive/delete_archive.js' %}" defer></script>
 {% endblock %}

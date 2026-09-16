@@ -1,3 +1,4 @@
+{# templates/patient/patient_list.html #}
 {% extends "base.html" %}
 {% load static %}
 
@@ -8,44 +9,145 @@
 
 {% block content %}
 <div class="patients-container">
-    <h1><i class="fas fa-users"></i> Registered Patients</h1>
 
-    <div class="search-bar">
-        <input type="text" id="searchInput" placeholder="Search by name or phone..." onkeyup="filterPatients()">
+  <div class="patients-header">
+    <div class="patients-title">
+      <h1><i class="fa-solid fa-users"></i> Registered Patients</h1>
+      <p class="patients-subtitle">
+        Search and review your registered patients{% if perms.patient.change_patient %}, and edit their information{% endif %}.
+      </p>
     </div>
 
+    {% if perms.patient.add_patient %}
+      <div class="patients-actions">
+        <a href="{% url 'patient:create' %}"
+           class="btn-add"
+           aria-label="Create a new patient">
+          <i class="fa-solid fa-user-plus" aria-hidden="true"></i>
+          New Patient
+        </a>
+      </div>
+    {% endif %}
+  </div>
+
+  {# Server-side search. The view reads the GET parameter named q. #}
+  {% url 'patient:list' as patient_list_url %}
+  <form class="search-bar"
+        method="get"
+        action="{{ patient_list_url }}"
+        data-list-url="{{ patient_list_url }}"
+        role="search"
+        aria-label="Search registered patients">
+    <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+
+    <input
+      type="text"
+      id="searchInput"
+      name="q"
+      value="{{ search_query|default:'' }}"
+      placeholder="Search by name, phone, or email..."
+      autocomplete="off"
+      aria-label="Search by patient name, phone, or email"
+    >
+
+    {# Reset pagination whenever a new search is performed. #}
+    <input type="hidden" name="page" value="1">
+
+    <button type="button"
+            class="btn-clear"
+            id="clearSearch"
+            title="Clear"
+            aria-label="Clear search"
+            style="display:none;">
+      <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+    </button>
+  </form>
+
+  <div class="table-wrap">
     <table id="patientsTable">
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>Full Name</th>
-                <th>Mobile</th>            {# <— أضف هذا العمود #}
-                <th>Age</th>
-                <th>Registered On</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for patient in patients %}
-            <tr>
-                <td>{{ patient.id }}</td>
-                <td>{{ patient.full_name }}</td>
-                <td>{{ patient.mobile|default:"—" }}</td>  {# <— إظهار الهاتف #}
-                <td>{{ patient.display_age|default:"—" }}</td>
-                <td>{{ patient.created_at|date:"Y-m-d" }}</td>
-                <td>
-                    <a href="{% url 'patient:edit' patient.id %}" class="btn-edit">
-                        <i class="fas fa-pen-to-square"></i> Edit
-                    </a>
-                </td>
-            </tr>
-            {% empty %}
-            <tr>
-                <td colspan="6" style="text-align:center;">No patients found.</td>
-            </tr>
-            {% endfor %}
-        </tbody>
+      <caption class="visually-hidden">
+        Registered patients with contact information and available actions.
+      </caption>
+
+      <thead>
+        <tr>
+          <th scope="col">ID</th>
+          <th scope="col">Full Name</th>
+          <th scope="col">Mobile</th>
+          <th scope="col">Age</th>
+          <th scope="col">Registered On</th>
+          <th scope="col" class="th-actions">Actions</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {% for patient in patients %}
+          <tr>
+            <td class="td-id">{{ patient.id }}</td>
+            <td class="td-name">{{ patient.full_name|default:"—" }}</td>
+            <td class="td-mobile">{{ patient.mobile|default:"—" }}</td>
+            <td class="td-age">{{ patient.display_age|default:"—" }}</td>
+            <td class="td-date">{{ patient.created_at|date:"Y-m-d"|default:"—" }}</td>
+
+            <td class="td-actions">
+              {% if perms.patient.view_patient %}
+                <a href="{% url 'patient:detail' patient.id %}"
+                   class="btn-view"
+                   title="View"
+                   aria-label="View {{ patient.full_name|default:'patient' }}">
+                  <i class="fa-regular fa-eye" aria-hidden="true"></i>
+                </a>
+              {% endif %}
+
+              {% if perms.patient.change_patient %}
+                <a href="{% url 'patient:edit' patient.id %}"
+                   class="btn-edit"
+                   title="Edit"
+                   aria-label="Edit {{ patient.full_name|default:'patient' }}">
+                  <i class="fa-regular fa-pen-to-square" aria-hidden="true"></i>
+                </a>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="6" class="empty-state">
+              <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+              No patients found.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
     </table>
+  </div>
+
+  {# Pagination while preserving the current search query. #}
+  {% if patients.has_other_pages %}
+    <div class="pagination" role="navigation" aria-label="Patient list pagination">
+      {% if patients.has_previous %}
+        <a class="page-btn"
+           href="?page={{ patients.previous_page_number }}{% if search_query %}&amp;q={{ search_query|urlencode }}{% endif %}">
+          &laquo; Prev
+        </a>
+      {% else %}
+        <span class="page-btn disabled" aria-disabled="true">&laquo; Prev</span>
+      {% endif %}
+
+      <span class="page-info">
+        Page {{ patients.number }} of {{ patients.paginator.num_pages }}
+      </span>
+
+      {% if patients.has_next %}
+        <a class="page-btn"
+           href="?page={{ patients.next_page_number }}{% if search_query %}&amp;q={{ search_query|urlencode }}{% endif %}">
+          Next &raquo;
+        </a>
+      {% else %}
+        <span class="page-btn disabled" aria-disabled="true">Next &raquo;</span>
+      {% endif %}
+    </div>
+  {% endif %}
+
 </div>
 {% endblock %}
 

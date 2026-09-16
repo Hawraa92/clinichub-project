@@ -1,0 +1,427 @@
+{% extends "pharmacy/base.html" %}
+{% load static %}
+
+{% block title %}Pharmacy Dashboard | ClinicHub{% endblock %}
+
+{% block extra_head %}
+    <link
+        rel="stylesheet"
+        href="{% static 'css/pharmacy/dashboard.css' %}?v=1"
+    >
+{% endblock %}
+
+{% block content %}
+<div class="pharmacy-dashboard-page">
+
+    <!-- Hero -->
+    <section class="pharmacy-hero">
+        <div class="pharmacy-hero__content">
+            <div class="pharmacy-hero__badge">
+                <i class="bi bi-shield-check"></i>
+                Pharmacy Operations Center
+            </div>
+
+            <h1>Pharmacy Dashboard</h1>
+
+            <p class="pharmacy-hero__description">
+                Monitor prescription orders, dispensing progress and inventory
+                levels from one secure workspace.
+            </p>
+
+            <div class="pharmacy-hero__actions">
+                {% if perms.pharmacy.view_pharmacyorder %}
+                    <a
+                        href="{% url 'pharmacy:orders' %}"
+                        class="pharmacy-hero__button"
+                    >
+                        <i class="bi bi-prescription2"></i>
+                        View pharmacy orders
+                    </a>
+                {% endif %}
+
+                {% if perms.pharmacy.add_stockbatch and pharmacy_assignments %}
+                    <a
+                        href="{% url 'pharmacy:receive_stock' %}"
+                        class="pharmacy-hero__button pharmacy-hero__button--outline"
+                    >
+                        <i class="bi bi-box-arrow-in-down"></i>
+                        Receive stock
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+
+        <aside class="pharmacy-hero__profile">
+            <div class="pharmacy-profile">
+                <div class="pharmacy-profile__avatar">
+                    {{ request.user.email|first|upper }}
+                </div>
+
+                <div class="pharmacy-profile__details">
+                    <div class="pharmacy-profile__name">
+                        {{ request.user.get_full_name|default:request.user.email }}
+                    </div>
+
+                    <div class="pharmacy-profile__email">
+                        {{ request.user.email }}
+                    </div>
+                </div>
+            </div>
+
+            <div class="pharmacy-hero__metrics">
+                <div class="pharmacy-hero__metric">
+                    <span>Active pharmacies</span>
+                    <strong>{{ pharmacies|length }}</strong>
+                </div>
+
+                <div class="pharmacy-hero__metric">
+                    <span>Recent orders</span>
+                    <strong>
+                        {% if perms.pharmacy.view_pharmacyorder %}
+                            {{ recent_orders|length }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </strong>
+                </div>
+            </div>
+        </aside>
+    </section>
+
+    <!-- Assignment warning -->
+    {% if not pharmacies %}
+        <div class="pharmacy-assignment-warning" role="alert">
+            <i class="bi bi-exclamation-triangle-fill"></i>
+
+            <div>
+                <strong>No active pharmacy assignment</strong>
+
+                <p>
+                    Your account is not currently linked to an active pharmacy.
+                    Ask the administrator to connect your staff assignment to a
+                    pharmacy.
+                </p>
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- Statistics -->
+    {% if perms.pharmacy.view_pharmacyorder %}
+        <section
+            class="pharmacy-stat-grid"
+            aria-label="Pharmacy order statistics"
+        >
+            <article class="pharmacy-stat-card pharmacy-stat-card--new">
+                <div class="pharmacy-stat-card__top">
+                    <span class="pharmacy-stat-card__label">
+                        New orders
+                    </span>
+
+                    <span class="pharmacy-stat-card__icon">
+                        <i class="bi bi-inbox"></i>
+                    </span>
+                </div>
+
+                <strong class="pharmacy-stat-card__value">
+                    {{ stats.sent|default:0 }}
+                </strong>
+
+                <span class="pharmacy-stat-card__hint">
+                    Waiting for pharmacy review
+                </span>
+            </article>
+
+            <article class="pharmacy-stat-card pharmacy-stat-card--accepted">
+                <div class="pharmacy-stat-card__top">
+                    <span class="pharmacy-stat-card__label">
+                        Accepted
+                    </span>
+
+                    <span class="pharmacy-stat-card__icon">
+                        <i class="bi bi-check2-circle"></i>
+                    </span>
+                </div>
+
+                <strong class="pharmacy-stat-card__value">
+                    {{ stats.accepted|default:0 }}
+                </strong>
+
+                <span class="pharmacy-stat-card__hint">
+                    Approved for processing
+                </span>
+            </article>
+
+            <article class="pharmacy-stat-card pharmacy-stat-card--progress">
+                <div class="pharmacy-stat-card__top">
+                    <span class="pharmacy-stat-card__label">
+                        In progress
+                    </span>
+
+                    <span class="pharmacy-stat-card__icon">
+                        <i class="bi bi-hourglass-split"></i>
+                    </span>
+                </div>
+
+                <strong class="pharmacy-stat-card__value">
+                    {{ stats.in_progress|default:0 }}
+                </strong>
+
+                <span class="pharmacy-stat-card__hint">
+                    Currently being prepared
+                </span>
+            </article>
+
+            <article class="pharmacy-stat-card pharmacy-stat-card--dispensed">
+                <div class="pharmacy-stat-card__top">
+                    <span class="pharmacy-stat-card__label">
+                        Dispensed
+                    </span>
+
+                    <span class="pharmacy-stat-card__icon">
+                        <i class="bi bi-bag-check"></i>
+                    </span>
+                </div>
+
+                <strong class="pharmacy-stat-card__value">
+                    {{ stats.dispensed|default:0 }}
+                </strong>
+
+                <span class="pharmacy-stat-card__hint">
+                    Successfully completed
+                </span>
+            </article>
+
+            <article class="pharmacy-stat-card pharmacy-stat-card--urgent">
+                <div class="pharmacy-stat-card__top">
+                    <span class="pharmacy-stat-card__label">
+                        Urgent active
+                    </span>
+
+                    <span class="pharmacy-stat-card__icon">
+                        <i class="bi bi-exclamation-triangle"></i>
+                    </span>
+                </div>
+
+                <strong class="pharmacy-stat-card__value">
+                    {{ stats.urgent|default:0 }}
+                </strong>
+
+                <span class="pharmacy-stat-card__hint">
+                    Requires immediate attention
+                </span>
+            </article>
+        </section>
+    {% endif %}
+
+    <!-- Main panels -->
+    <section class="pharmacy-dashboard-panels">
+
+        <!-- Recent orders -->
+        <article class="pharmacy-dashboard-panel">
+            <header class="pharmacy-dashboard-panel__header">
+                <div class="pharmacy-dashboard-panel__title">
+                    <span class="pharmacy-dashboard-panel__title-icon">
+                        <i class="bi bi-list-check"></i>
+                    </span>
+
+                    <div>
+                        <h2>Recent orders</h2>
+                        <p>Latest prescriptions received by the pharmacy.</p>
+                    </div>
+                </div>
+
+                {% if perms.pharmacy.view_pharmacyorder %}
+                    <a
+                        href="{% url 'pharmacy:orders' %}"
+                        class="pharmacy-panel-link"
+                    >
+                        View all
+                        <i class="bi bi-arrow-right"></i>
+                    </a>
+                {% endif %}
+            </header>
+
+            {% if perms.pharmacy.view_pharmacyorder %}
+                {% if recent_orders %}
+                    <div class="table-responsive">
+                        <table class="table pharmacy-orders-table">
+                            <thead>
+                                <tr>
+                                    <th>Order</th>
+                                    <th>Patient</th>
+                                    <th>Pharmacy</th>
+                                    <th>Priority</th>
+                                    <th>Status</th>
+                                    <th>Sent</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                {% for order in recent_orders %}
+                                    <tr>
+                                        <td>
+                                            <a
+                                                href="{% url 'pharmacy:order_detail' order.pk %}"
+                                                class="pharmacy-order-number"
+                                            >
+                                                #{{ order.pk }}
+                                            </a>
+                                        </td>
+
+                                        <td>
+                                            <strong>
+                                                {{ order.prescription.patient_full_name|default:"—" }}
+                                            </strong>
+                                        </td>
+
+                                        <td>
+                                            {{ order.pharmacy.name|default:"—" }}
+                                        </td>
+
+                                        <td>
+                                            <span class="priority priority-{{ order.priority }}">
+                                                {{ order.get_priority_display }}
+                                            </span>
+                                        </td>
+
+                                        <td>
+                                            <span class="status status-{{ order.status }}">
+                                                {{ order.get_status_display }}
+                                            </span>
+                                        </td>
+
+                                        <td class="text-nowrap">
+                                            {{ order.sent_at|date:"Y-m-d H:i" }}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="pharmacy-empty-state">
+                        <div>
+                            <span class="pharmacy-empty-state__icon">
+                                <i class="bi bi-prescription2"></i>
+                            </span>
+
+                            <strong>No pharmacy orders yet</strong>
+
+                            <span>
+                                New prescription orders will appear here.
+                            </span>
+                        </div>
+                    </div>
+                {% endif %}
+            {% else %}
+                <div class="pharmacy-empty-state pharmacy-empty-state--locked">
+                    <div>
+                        <span class="pharmacy-empty-state__icon">
+                            <i class="bi bi-lock"></i>
+                        </span>
+
+                        <strong>Orders access is restricted</strong>
+
+                        <span>
+                            The View Pharmacy Orders permission is required.
+                        </span>
+                    </div>
+                </div>
+            {% endif %}
+        </article>
+
+        <!-- Low stock -->
+        <article class="pharmacy-dashboard-panel">
+            <header class="pharmacy-dashboard-panel__header">
+                <div class="pharmacy-dashboard-panel__title">
+                    <span class="pharmacy-dashboard-panel__title-icon">
+                        <i class="bi bi-box-seam"></i>
+                    </span>
+
+                    <div>
+                        <h2>Low stock</h2>
+                        <p>Medicines approaching reorder level.</p>
+                    </div>
+                </div>
+
+                {% if perms.pharmacy.view_pharmacyinventory %}
+                    <a
+                        href="{% url 'pharmacy:inventory' %}?stock=low"
+                        class="pharmacy-panel-link"
+                    >
+                        Inventory
+                        <i class="bi bi-arrow-right"></i>
+                    </a>
+                {% endif %}
+            </header>
+
+            {% if perms.pharmacy.view_pharmacyinventory %}
+                {% if low_stock %}
+                    <div class="low-stock-list">
+                        {% for item in low_stock %}
+                            <div class="low-stock-item">
+                                <div class="low-stock-item__top">
+                                    <div>
+                                        <div class="low-stock-item__name">
+                                            {{ item.medicine.display_name }}
+                                        </div>
+
+                                        <div class="low-stock-item__pharmacy">
+                                            <i class="bi bi-shop me-1"></i>
+                                            {{ item.pharmacy.name }}
+                                        </div>
+                                    </div>
+
+                                    <span
+                                        class="low-stock-item__quantity"
+                                        title="Available quantity"
+                                    >
+                                        {{ item.available_quantity }}
+                                    </span>
+                                </div>
+
+                                <div class="low-stock-item__footer">
+                                    <span>
+                                        <i class="bi bi-arrow-repeat me-1"></i>
+                                        Reorder level
+                                    </span>
+
+                                    <strong>{{ item.reorder_level }}</strong>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="pharmacy-empty-state">
+                        <div>
+                            <span class="pharmacy-empty-state__icon">
+                                <i class="bi bi-check-circle"></i>
+                            </span>
+
+                            <strong>Inventory looks healthy</strong>
+
+                            <span>
+                                No low-stock medicines were found.
+                            </span>
+                        </div>
+                    </div>
+                {% endif %}
+            {% else %}
+                <div class="pharmacy-empty-state pharmacy-empty-state--locked">
+                    <div>
+                        <span class="pharmacy-empty-state__icon">
+                            <i class="bi bi-lock"></i>
+                        </span>
+
+                        <strong>Inventory access is restricted</strong>
+
+                        <span>
+                            The View Pharmacy Inventories permission is required.
+                        </span>
+                    </div>
+                </div>
+            {% endif %}
+        </article>
+    </section>
+</div>
+{% endblock %}

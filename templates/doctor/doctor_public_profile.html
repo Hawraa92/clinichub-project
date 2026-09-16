@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% load static humanize %}
+
+{% block title %}Doctor Profile{% endblock %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{% static 'css/doctor/doctor_public_profile.css' %}">
+{% endblock %}
+
+{% block content %}
+<section class="dp" aria-labelledby="dpTitle">
+  <div class="dp__container">
+
+    <!-- Back -->
+    <div class="dp__crumb">
+      <a class="dp__backLink" href="{% url 'doctor:available_doctors' %}">
+        <span class="dp__backIcon" aria-hidden="true">←</span>
+        Back to Doctors
+      </a>
+    </div>
+
+    <article class="dp__card">
+      <!-- Cover -->
+      <header class="dp__cover" aria-hidden="true">
+        {% if doctor.get_card_cover_url %}
+          <img src="{{ doctor.get_card_cover_url }}" alt="" loading="lazy" decoding="async">
+        {% else %}
+          <img src="{% static 'img/default-doctor-cover.jpg' %}" alt="" loading="lazy" decoding="async">
+        {% endif %}
+        <div class="dp__coverOverlay" aria-hidden="true"></div>
+      </header>
+
+      <div class="dp__body">
+        <!-- Top -->
+        <div class="dp__top">
+          <div class="dp__avatarWrap">
+            {% if doctor.photo %}
+              <img class="dp__avatar"
+                   src="{{ doctor.photo.url }}"
+                   alt="Dr. {{ doctor.user.get_full_name|default:doctor.user.username }}"
+                   loading="lazy" decoding="async">
+            {% else %}
+              <img class="dp__avatar"
+                   src="{% static 'img/default-doctor.png' %}"
+                   alt="Doctor portrait"
+                   loading="lazy" decoding="async">
+            {% endif %}
+
+            {% if doctor.available %}
+              <span class="dp__status dp__status--online" title="Available now">
+                <span class="dp__dot" aria-hidden="true"></span>
+                Available
+              </span>
+            {% else %}
+              <span class="dp__status dp__status--offline" title="Not available">
+                <span class="dp__dot" aria-hidden="true"></span>
+                Offline
+              </span>
+            {% endif %}
+          </div>
+
+          <div class="dp__info">
+            <h1 id="dpTitle" class="dp__name">
+              Dr. {{ doctor.user.get_full_name|default:doctor.user.username }}
+            </h1>
+
+            <div class="dp__meta">
+              <span class="dp__spec">
+                <span class="dp__metaLabel">Specialty:</span>
+                <b>{{ spec_label|default:"General Practice" }}</b>
+              </span>
+
+              {% if doctor.rating %}
+                <span class="dp__rating" aria-label="Doctor rating">
+                  <span class="dp__stars" aria-hidden="true">★★★★★</span>
+                  <b>{{ doctor.rating|floatformat:1 }}</b>
+                </span>
+              {% else %}
+                <span class="dp__muted">No rating yet</span>
+              {% endif %}
+            </div>
+
+            {% if doctor.short_bio %}
+              <p class="dp__bioText">{{ doctor.short_bio }}</p>
+            {% else %}
+              <p class="dp__bioText dp__muted">No biography available yet.</p>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Highlights -->
+        <div class="dp__grid" aria-label="Doctor highlights">
+          <div class="dp__tile">
+            <div class="dp__tileIcon" aria-hidden="true">👨‍⚕️</div>
+            <div class="dp__tileText">
+              <div class="dp__tileLabel">Experience</div>
+              <div class="dp__tileValue">
+                {{ doctor.experience_years|default:"—" }}
+                <span class="dp__tileUnit">yrs</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="dp__tile">
+            <div class="dp__tileIcon" aria-hidden="true">⏱️</div>
+            <div class="dp__tileText">
+              <div class="dp__tileLabel">Typical Session</div>
+              <div class="dp__tileValue">30 <span class="dp__tileUnit">min</span></div>
+            </div>
+          </div>
+
+          <div class="dp__tile">
+            <div class="dp__tileIcon" aria-hidden="true">💳</div>
+            <div class="dp__tileText">
+              <div class="dp__tileLabel">Consultation Fee</div>
+              <div class="dp__tileValue">
+                {% if doctor.consultation_fee is None %}
+                  —
+                {% elif doctor.consultation_fee == reminder_script 0 %}
+                  Free
+                {% else %}
+                  {{ doctor.consultation_fee|intcomma }} <span class="dp__tileUnit">IQD</span>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+
+          <div class="dp__tile">
+            <div class="dp__tileIcon" aria-hidden="true">📍</div>
+            <div class="dp__tileText">
+              <div class="dp__tileLabel">Clinic</div>
+              <div class="dp__tileValue">{{ doctor.clinic_name|default:"ClinicHub" }}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="dp__actions">
+          <a class="dp__btn dp__btn--ghost" href="{% url 'doctor:available_doctors' %}">Back</a>
+
+          <a class="dp__btn dp__btn--primary" href="{% url 'appointments:book_patient' doctor.pk %}">
+            Book Appointment
+          </a>
+        </div>
+
+        <p class="dp__note">
+          By booking, you agree to ClinicHub policies. For emergencies, contact local services immediately.
+        </p>
+      </div>
+    </article>
+
+  </div>
+</section>
+{% endblock %}

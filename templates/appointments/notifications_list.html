@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+
+{% block title %}
+  Notifications | ClinicHub
+{% endblock %}
+
+{% block meta_description %}
+  Your ClinicHub notifications and recent healthcare updates.
+{% endblock %}
+
+{% block content %}
+
+<section class="container notification-page">
+
+  <div class="notification-page-header">
+
+    <div>
+      <h1 class="h3 mb-0">
+        Notifications
+      </h1>
+
+      <p class="notification-page-subtitle">
+
+        {% if unread_count %}
+
+          You have {{ unread_count }}
+          unread notification{{ unread_count|pluralize }}.
+
+        {% else %}
+
+          You are all caught up.
+
+        {% endif %}
+
+      </p>
+    </div>
+
+    {% if unread_count %}
+
+      <form
+        method="post"
+        action="{% url 'appointments:notifications_mark_all_read' %}"
+      >
+        {% csrf_token %}
+
+        <button
+          class="btn btn-outline-primary"
+          type="submit"
+        >
+          <i class="bi bi-check2-all me-1"></i>
+          Mark all as read
+        </button>
+      </form>
+
+    {% endif %}
+
+  </div>
+
+  <div class="notification-page-list">
+
+    {% for notification in notifications %}
+
+      <article
+        class="notification-page-item
+        {% if not notification.is_read %}
+          is-unread
+        {% endif %}"
+      >
+
+        <span class="notification-page-icon
+          {% if notification.notification_type == 'pharmacy' %}
+            is-pharmacy
+          {% elif notification.notification_type == 'booking_request' %}
+            is-booking
+          {% else %}
+            is-system
+          {% endif %}
+        ">
+
+          <i class="bi
+            {% if notification.notification_type == 'pharmacy' %}
+              bi-capsule-pill
+            {% elif notification.notification_type == 'booking_request' %}
+              bi-calendar2-check
+            {% else %}
+              bi-bell
+            {% endif %}
+          "></i>
+
+        </span>
+
+        <div>
+
+          <h2>
+            {{ notification.title }}
+          </h2>
+
+          <p>
+            {{ notification.message }}
+          </p>
+
+          <span class="notification-page-meta">
+
+            {{ notification.get_notification_type_display }}
+
+            {% if notification.created_at %}
+
+              &middot;
+              {{ notification.created_at|date:"M d, Y - H:i" }}
+
+            {% endif %}
+
+            {% if not notification.is_read %}
+
+              &middot; Unread
+
+            {% endif %}
+
+          </span>
+
+        </div>
+
+        <div class="notification-page-actions">
+
+          <a
+            class="btn btn-sm btn-primary"
+            href="{% url 'appointments:notification_open' notification.pk %}"
+          >
+            Open
+          </a>
+
+          {% if not notification.is_read %}
+
+            <form
+              method="post"
+              action="{% url 'appointments:notification_mark_read' notification.pk %}"
+            >
+              {% csrf_token %}
+
+              <button
+                class="btn btn-sm btn-outline-secondary"
+                type="submit"
+              >
+                Mark read
+              </button>
+
+            </form>
+
+          {% endif %}
+
+        </div>
+
+      </article>
+
+    {% empty %}
+
+      <div class="notification-empty-state">
+
+        <i class="bi bi-bell-slash"></i>
+
+        <h2 class="h5">
+          No notifications yet
+        </h2>
+
+        <p class="mb-0">
+          New booking and pharmacy updates will appear here.
+        </p>
+
+      </div>
+
+    {% endfor %}
+
+  </div>
+
+  {% if notifications.paginator.num_pages > 1 %}
+
+    <nav
+      class="mt-4"
+      aria-label="Notifications pagination"
+    >
+
+      <ul class="pagination justify-content-center">
+
+        {% if notifications.has_previous %}
+
+          <li class="page-item">
+
+            <a
+              class="page-link"
+              href="?page={{ notifications.previous_page_number }}"
+            >
+              Previous
+            </a>
+
+          </li>
+
+        {% endif %}
+
+        <li
+          class="page-item active"
+          aria-current="page"
+        >
+          <span class="page-link">
+
+            {{ notifications.number }}
+            /
+            {{ notifications.paginator.num_pages }}
+
+          </span>
+        </li>
+
+        {% if notifications.has_next %}
+
+          <li class="page-item">
+
+            <a
+              class="page-link"
+              href="?page={{ notifications.next_page_number }}"
+            >
+              Next
+            </a>
+
+          </li>
+
+        {% endif %}
+
+      </ul>
+
+    </nav>
+
+  {% endif %}
+
+</section>
+
+{% endblock %}

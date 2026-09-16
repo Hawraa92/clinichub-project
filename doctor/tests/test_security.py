@@ -5,6 +5,7 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from datetime import timedelta
 
+from accounts.tests.permission_utils import apply_role_permissions
 from doctor.models import Doctor
 from patient.models import Patient
 from appointments.models import Appointment
@@ -21,7 +22,12 @@ def create_user(email, role='patient'):
 
 def create_doctor(email='doc1@example.com', full_name='Dr. One'):
     u = create_user(email, role='doctor')
-    return Doctor.objects.create(user=u, full_name=full_name)
+    doctor = Doctor.objects.create(
+        user=u,
+        full_name=full_name,
+    )
+    apply_role_permissions(u)
+    return doctor
 
 
 def create_patient(name='John Doe'):

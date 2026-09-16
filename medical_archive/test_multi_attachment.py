@@ -14,7 +14,10 @@ class MultiAttachmentTests(TestCase):
         # إنشاء مستخدم وطبيب ومريض
         self.user = User.objects.create_user(email='test@test.com', password='pass', username='user')
         self.doctor = Doctor.objects.create(user=self.user, full_name='Dr. Omar', specialty='Eye')
-        self.patient = Patient.objects.create(user=self.user, full_name='Ali Attach')
+        self.patient, _ = Patient.objects.update_or_create(
+            user=self.user,
+            defaults={"full_name": "Ali Attach"},
+        )
         self.archive = PatientArchive.objects.create(
             patient=self.patient,
             doctor=self.doctor,

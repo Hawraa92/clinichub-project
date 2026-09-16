@@ -1,0 +1,267 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Pharmacy Report {{ filters.date_from }} - {{ filters.date_to }}</title>
+    <style>
+        :root {
+            color-scheme: light;
+            --ink: #102a43;
+            --muted: #627d98;
+            --line: #d9e2ec;
+            --primary: #11698e;
+            --soft: #f4f8fb;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            padding: 28px;
+            color: var(--ink);
+            background: #eef4f8;
+            font-family: Arial, Tahoma, sans-serif;
+            font-size: 13px;
+        }
+
+        .toolbar {
+            width: min(1100px, 100%);
+            margin: 0 auto 12px;
+            text-align: right;
+        }
+
+        .toolbar button {
+            border: 0;
+            border-radius: 6px;
+            padding: 9px 16px;
+            color: #fff;
+            background: var(--primary);
+            cursor: pointer;
+        }
+
+        .report {
+            width: min(1100px, 100%);
+            margin: auto;
+            padding: 30px;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 8px 25px rgba(16, 42, 67, .08);
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+            padding-bottom: 18px;
+            border-bottom: 3px solid var(--primary);
+        }
+
+        h1, h2, p { margin-top: 0; }
+        h1 { margin-bottom: 7px; font-size: 25px; }
+        h2 { margin: 26px 0 10px; font-size: 17px; }
+        .muted { color: var(--muted); }
+        .text-end { text-align: right; }
+
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+            margin-top: 22px;
+        }
+
+        .metric {
+            min-height: 90px;
+            padding: 14px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: var(--soft);
+        }
+
+        .metric span {
+            display: block;
+            color: var(--muted);
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+
+        .metric strong {
+            display: block;
+            margin-top: 12px;
+            font-size: 19px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            page-break-inside: auto;
+        }
+
+        th, td {
+            padding: 9px 8px;
+            border: 1px solid var(--line);
+            vertical-align: top;
+        }
+
+        th {
+            text-align: left;
+            background: #eaf2f8;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+
+        tr { page-break-inside: avoid; }
+
+        .footer {
+            margin-top: 28px;
+            padding-top: 12px;
+            border-top: 1px dashed var(--line);
+            color: var(--muted);
+            text-align: center;
+            font-size: 11px;
+        }
+
+        @media print {
+            @page { size: A4 landscape; margin: 10mm; }
+            body { padding: 0; background: #fff; }
+            .toolbar { display: none; }
+            .report {
+                width: 100%;
+                padding: 0;
+                border-radius: 0;
+                box-shadow: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <button type="button" onclick="window.print()">Print / Save PDF</button>
+    </div>
+
+    <article class="report">
+        <header class="header">
+            <div>
+                <h1>ClinicHub Pharmacy Report</h1>
+                <p class="muted mb-0">
+                    Period: {{ filters.date_from }} to {{ filters.date_to }}
+                </p>
+                <p class="muted mb-0">
+                    Pharmacy:
+                    {% if filters.pharmacy and selected_pharmacies.0 %}
+                        {{ selected_pharmacies.0.name }}
+                    {% else %}
+                        All accessible pharmacies
+                    {% endif %}
+                </p>
+            </div>
+            <div class="text-end">
+                <strong>Generated</strong>
+                <div>{{ printed_at|date:"Y-m-d H:i" }}</div>
+                <div>{{ request.user }}</div>
+            </div>
+        </header>
+
+        <section class="metrics">
+            <div class="metric">
+                <span>Transactions</span>
+                <strong>{{ summary.transaction_count }}</strong>
+            </div>
+            <div class="metric">
+                <span>Revenue</span>
+                <strong>{{ summary.total_revenue|floatformat:2 }} IQD</strong>
+            </div>
+            <div class="metric">
+                <span>Collected</span>
+                <strong>{{ summary.total_collected|floatformat:2 }} IQD</strong>
+            </div>
+            <div class="metric">
+                <span>Outstanding</span>
+                <strong>{{ summary.outstanding|floatformat:2 }} IQD</strong>
+            </div>
+            <div class="metric">
+                <span>Gross profit</span>
+                <strong>{{ summary.gross_profit|floatformat:2 }} IQD</strong>
+            </div>
+        </section>
+
+        <h2>Top medicines</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Medicine</th>
+                    <th class="text-end">Quantity</th>
+                    <th class="text-end">Revenue</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in top_medicines %}
+                    <tr>
+                        <td>{{ item.medicine }}</td>
+                        <td class="text-end">{{ item.quantity }}</td>
+                        <td class="text-end">{{ item.revenue|floatformat:2 }} IQD</td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="3">No completed sales in this period.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <h2>Low stock</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Medicine</th>
+                    <th>Pharmacy</th>
+                    <th class="text-end">Available</th>
+                    <th class="text-end">Reorder level</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in low_stock %}
+                    <tr>
+                        <td>{{ item.medicine.display_name }}</td>
+                        <td>{{ item.pharmacy.name }}</td>
+                        <td class="text-end">{{ item.available_quantity }}</td>
+                        <td class="text-end">{{ item.reorder_level }}</td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="4">No low-stock items.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <h2>Batches expiring within 90 days</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Medicine</th>
+                    <th>Pharmacy</th>
+                    <th>Batch</th>
+                    <th>Expiry</th>
+                    <th class="text-end">On hand</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for batch in expiring_batches %}
+                    <tr>
+                        <td>{{ batch.inventory.medicine.display_name }}</td>
+                        <td>{{ batch.inventory.pharmacy.name }}</td>
+                        <td>{{ batch.batch_number }}</td>
+                        <td>{{ batch.expiry_date }}</td>
+                        <td class="text-end">{{ batch.quantity_on_hand }}</td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="5">No batches expiring within 90 days.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <footer class="footer">
+            Profit is an estimate based on recorded purchase prices.
+            Generated electronically by ClinicHub.
+        </footer>
+    </article>
+</body>
+</html>

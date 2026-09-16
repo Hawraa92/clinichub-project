@@ -1,0 +1,142 @@
+{# doctor/templates/doctor/report_patient_pdf.html #}
+{% load static i18n tz %}
+
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <title>{% trans "Patient Report" %}</title>
+
+  {# تگدرين تربطين نفس CSS أو تسوين واحد خاص بالـPDF #}
+  <link rel="stylesheet" href="{% static 'css/doctor/report_patient.css' %}">
+
+  <style>
+    @page { size: A4; margin: 1.5cm; }
+    body { font-family: Arial, sans-serif; }
+    .no-print { display:none !important; }
+
+    /* تحسينات بسيطة للـPDF */
+    .pdf-header{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; }
+    .pdf-header .brand{ display:flex; align-items:center; gap:10px; }
+    .pdf-header img{ height:46px; }
+    .pdf-box{ border:1px solid #ddd; border-radius:10px; padding:10px; margin:10px 0; }
+    table{ width:100%; border-collapse:collapse; }
+    th, td{ border:1px solid #ddd; padding:6px; font-size:12px; vertical-align:top; }
+    th{ background:#f5f5f5; }
+    .muted{ color:#666; font-size:12px; }
+  </style>
+</head>
+
+<body>
+
+  <div class="pdf-header">
+    <div class="brand">
+      {# عدّلي اسم اللوجو حسب ملفج #}
+      <img src="{% static 'img/logo.png' %}" alt="Logo">
+      <div>
+        <div><b>ClinicHub</b></div>
+        <div class="muted">
+          {% trans "Generated at" %}: {{ now|localtime|date:"Y-m-d H:i" }}
+        </div>
+      </div>
+    </div>
+
+    <div class="muted" style="text-align:left;">
+      <div><b>{% trans "Doctor" %}:</b> {{ doctor.user.get_full_name|default:doctor.user.username }}</div>
+      <div>
+        <b>{% trans "Period" %}:</b>
+        {{ date_from|default:"—" }} → {{ date_to|default:"—" }}
+      </div>
+    </div>
+  </div>
+
+  <div class="pdf-box">
+    <div><b>{% trans "Patient" %}:</b> {{ patient.full_name }}</div>
+    {% if patient.phone %}<div><b>{% trans "Phone" %}:</b> {{ patient.phone }}</div>{% endif %}
+    {% if patient.age %}<div><b>{% trans "Age" %}:</b> {{ patient.age }}</div>{% endif %}
+    {% if primary_diagnosis %}<div><b>{% trans "Primary Diagnosis" %}:</b> {{ primary_diagnosis }}</div>{% endif %}
+  </div>
+
+  <div class="pdf-box">
+    <div style="margin-bottom:8px;"><b>{% trans "Archives" %}</b></div>
+    <table>
+      <thead>
+        <tr>
+          <th>{% trans "Date" %}</th>
+          <th>{% trans "Diagnosis / Notes" %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in archives %}
+          <tr>
+            <td>
+              {% if a.created_at %}{{ a.created_at|localtime|date:"Y-m-d H:i" }}
+              {% elif a.date %}{{ a.date|date:"Y-m-d" }}
+              {% else %}—{% endif %}
+            </td>
+            <td>
+              {{ a.diagnosis|default:a.title|default:a.summary|default:a.notes|default:"—" }}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="2" class="muted">{% trans "No archives." %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="pdf-box">
+    <div style="margin-bottom:8px;"><b>{% trans "Prescriptions" %}</b></div>
+    <table>
+      <thead>
+        <tr>
+          <th>{% trans "Date" %}</th>
+          <th>{% trans "Details" %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in prescriptions %}
+          <tr>
+            <td>
+              {% if p.date_issued %}{{ p.date_issued|localtime|date:"Y-m-d H:i" }}
+              {% elif p.issued_at %}{{ p.issued_at|localtime|date:"Y-m-d H:i" }}
+              {% elif p.created_at %}{{ p.created_at|localtime|date:"Y-m-d H:i" }}
+              {% else %}—{% endif %}
+            </td>
+            <td>{{ p.medications|default:p.instructions|default:p.note|default:"—" }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="2" class="muted">{% trans "No prescriptions." %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="pdf-box">
+    <div style="margin-bottom:8px;"><b>{% trans "Appointments" %}</b></div>
+    <table>
+      <thead>
+        <tr>
+          <th>{% trans "Date/Time" %}</th>
+          <th>{% trans "Status" %}</th>
+          <th>{% trans "Queue" %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ap in appointments %}
+          <tr>
+            <td>
+              {% if ap.scheduled_time %}{{ ap.scheduled_time|localtime|date:"Y-m-d H:i" }}{% else %}—{% endif %}
+            </td>
+            <td>{% if ap.get_status_display %}{{ ap.get_status_display }}{% else %}{{ ap.status|default:"—" }}{% endif %}</td>
+            <td>{{ ap.queue_number|default:"—" }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="3" class="muted">{% trans "No appointments." %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</body>
+</html>
