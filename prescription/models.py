@@ -19,6 +19,7 @@ from django.utils import timezone
 from django.utils.html import escape
 
 from appointments.models import Appointment
+from core.private_storage import private_clinical_storage
 from doctor.models import Doctor
 from patient.models import Patient  # ✅ direct patient link
 
@@ -268,6 +269,7 @@ class Prescription(models.Model):
     )
     voice_note = models.FileField(
         upload_to=voice_upload_to,
+        storage=private_clinical_storage,
         blank=True,
         null=True,
         verbose_name="Doctor's Voice Note",
@@ -276,6 +278,7 @@ class Prescription(models.Model):
 
     doctor_signature = models.ImageField(
         upload_to=sign_upload_to,
+        storage=private_clinical_storage,
         blank=True,
         null=True,
         verbose_name="Doctor Signature",
@@ -291,6 +294,7 @@ class Prescription(models.Model):
 
     pdf_file = models.FileField(
         upload_to=pdf_upload_to,
+        storage=private_clinical_storage,
         blank=True,
         null=True,
         verbose_name="Prescription PDF",
@@ -303,6 +307,7 @@ class Prescription(models.Model):
     )
     qr_code = models.ImageField(
         upload_to=qrcode_upload_to,
+        storage=private_clinical_storage,
         blank=True,
         null=True,
         verbose_name="QR Code",

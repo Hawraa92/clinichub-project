@@ -22,6 +22,7 @@ from django.db.models import Avg, Count
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+from core.private_storage import private_clinical_storage
 
 logger: Final[logging.Logger] = logging.getLogger(__name__)
 
@@ -470,6 +471,7 @@ class Doctor(models.Model):
 
     signature_image = models.ImageField(
         upload_to=doctor_brand_upload_to,
+        storage=private_clinical_storage,
         blank=True,
         null=True,
         validators=[FileExtensionValidator(["png", "jpg", "jpeg", "webp"])],

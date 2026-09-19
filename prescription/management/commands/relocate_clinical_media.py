@@ -52,6 +52,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         execute = bool(options["execute"])
         source_root = Path(settings.MEDIA_ROOT).resolve()
+        destination_root = Path(settings.PRIVATE_MEDIA_ROOT).resolve()
         records = []
 
         for model, field_name in FIELD_SPECS:
@@ -70,8 +71,8 @@ class Command(BaseCommand):
                 }
 
                 try:
-                    source_path = Path(field.storage.path(name)).resolve()
-                except (AttributeError, NotImplementedError, ValueError) as exc:
+                    source_path = (source_root / name).resolve()
+                except (OSError, RuntimeError, ValueError) as exc:
                     record.update(status="invalid_source", error=str(exc))
                     records.append(record)
                     continue
@@ -88,7 +89,14 @@ class Command(BaseCommand):
                     records.append(record)
                     continue
 
-                destination_path = Path(private_clinical_storage.path(name)).resolve()
+                try:
+                    destination_path = (destination_root / name).resolve()
+                    destination_path.relative_to(destination_root)
+                except (OSError, RuntimeError, ValueError) as exc:
+                    record.update(status="invalid_destination", error=str(exc))
+                    records.append(record)
+                    continue
+
                 record.update(
                     source_size=source_path.stat().st_size,
                     source_sha256=_sha256(source_path),
@@ -140,7 +148,7 @@ class Command(BaseCommand):
         payload = {
             "execute": execute,
             "source_root": str(source_root),
-            "destination_root": str(Path(settings.PRIVATE_MEDIA_ROOT).resolve()),
+            "destination_root": str(destination_root),
             "records": records,
         }
         self.stdout.write(json.dumps(payload, indent=2, sort_keys=True))

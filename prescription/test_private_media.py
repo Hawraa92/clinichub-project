@@ -7,6 +7,7 @@ import tempfile
 from datetime import timedelta
 from pathlib import Path
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -125,6 +126,18 @@ class PrescriptionPrivateMediaTests(TestCase):
         )
         return prescription
 
+    def _prepare_legacy_source(self, field):
+        name = field.name
+        private_path = Path(field.storage.path(name))
+        data = private_path.read_bytes()
+
+        source_path = Path(settings.MEDIA_ROOT) / name
+        source_path.parent.mkdir(parents=True, exist_ok=True)
+        source_path.write_bytes(data)
+
+        private_path.unlink()
+        return source_path, private_path
+
     @staticmethod
     def _clear_permission_cache(user):
         for name in ("_perm_cache", "_user_perm_cache", "_group_perm_cache"):
@@ -195,7 +208,8 @@ class PrescriptionPrivateMediaTests(TestCase):
 
     def test_relocation_without_flags_is_report_only(self):
         source_name = self.prescription_a.voice_note.name
-        destination = Path(private_clinical_storage.path(source_name))
+        self._prepare_legacy_source(self.prescription_a.voice_note)
+        destination = Path(settings.PRIVATE_MEDIA_ROOT) / source_name
         self.assertFalse(destination.exists())
         call_command("relocate_clinical_media")
         self.assertFalse(destination.exists())
@@ -204,10 +218,12 @@ class PrescriptionPrivateMediaTests(TestCase):
 
     def test_execute_copies_without_changing_database_name_and_is_idempotent(self):
         source_name = self.prescription_a.voice_note.name
-        source_path = Path(self.prescription_a.voice_note.path)
+        source_path, _private_path = self._prepare_legacy_source(
+            self.prescription_a.voice_note
+        )
         expected_hash = hashlib.sha256(source_path.read_bytes()).hexdigest()
         call_command("relocate_clinical_media", "--execute")
-        destination = Path(private_clinical_storage.path(source_name))
+        destination = Path(settings.PRIVATE_MEDIA_ROOT) / source_name
         self.assertTrue(destination.exists())
         self.assertEqual(hashlib.sha256(destination.read_bytes()).hexdigest(), expected_hash)
         self.prescription_a.refresh_from_db()
@@ -217,7 +233,8 @@ class PrescriptionPrivateMediaTests(TestCase):
 
     def test_missing_source_is_reported(self):
         source_name = self.prescription_a.voice_note.name
-        Path(self.prescription_a.voice_note.path).unlink()
+        private_path = Path(self.prescription_a.voice_note.storage.path(source_name))
+        private_path.unlink()
         output = __import__("io").StringIO()
         call_command("relocate_clinical_media", stdout=output)
         payload = json.loads(output.getvalue())
@@ -226,7 +243,8 @@ class PrescriptionPrivateMediaTests(TestCase):
 
     def test_conflict_is_not_overwritten(self):
         source_name = self.prescription_a.voice_note.name
-        destination = Path(private_clinical_storage.path(source_name))
+        self._prepare_legacy_source(self.prescription_a.voice_note)
+        destination = Path(settings.PRIVATE_MEDIA_ROOT) / source_name
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes(b"unexpected-destination")
         output = __import__("io").StringIO()

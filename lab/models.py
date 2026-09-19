@@ -6,6 +6,7 @@ from django.core.exceptions import ValidationError
 from django.core.validators import FileExtensionValidator
 from django.db import models, transaction
 from django.utils import timezone
+from core.private_storage import private_clinical_storage
 
 
 class LabSettings(models.Model):
@@ -118,6 +119,7 @@ class LabOrder(models.Model):
     # ✅ مرفق PDF من الطبيب (Referral / old report)
     doctor_attachment = models.FileField(
         upload_to=_doctor_attachment_upload_path,
+        storage=private_clinical_storage,
         null=True,
         blank=True,
         validators=[FileExtensionValidator(["pdf"])],
@@ -261,6 +263,7 @@ class LabResult(models.Model):
     # ملف نتيجة PDF/صورة (اختياري)
     attachment = models.FileField(
         upload_to=_lab_result_upload_path,
+        storage=private_clinical_storage,
         null=True,
         blank=True,
         validators=[FileExtensionValidator(["pdf", "jpg", "jpeg", "png", "webp"])],

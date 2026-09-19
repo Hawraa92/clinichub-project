@@ -14,6 +14,9 @@ class ClinicalClearableFileInput(forms.ClearableFileInput):
 
     template_name = "lab/widgets/clinical_clearable_file_input.html"
 
+    def is_initial(self, value):
+        return bool(value and getattr(value, "name", None))
+
 
 class LabOrderCreateForm(forms.ModelForm):
     """
