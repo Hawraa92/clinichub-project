@@ -181,6 +181,24 @@ def _apply_and_validate_location(form, cleaned):
             department = assignment.department
             cleaned["department"] = department
 
+    if hospital and not hospital.is_active:
+        form.add_error(
+            "hospital",
+            _("The selected hospital is inactive."),
+        )
+
+    if branch and not branch.is_active:
+        form.add_error(
+            "branch",
+            _("The selected branch is inactive."),
+        )
+
+    if department and not department.is_active:
+        form.add_error(
+            "department",
+            _("The selected department is inactive."),
+        )
+
     if branch and hospital and branch.hospital_id != hospital.id:
         form.add_error(
             "branch",
