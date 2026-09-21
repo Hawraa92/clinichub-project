@@ -1,0 +1,305 @@
+{% extends "base.html" %}
+
+{% block title %}ECG Record #{{ record.pk }} | ClinicHub{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h1 class="fw-bold mb-1">
+        <i class="bi bi-heart-pulse"></i>
+        ECG Record #{{ record.pk }}
+      </h1>
+
+      <p class="text-muted mb-0">
+        Electrocardiogram record details
+      </p>
+    </div>
+
+    <a
+      href="{% url 'ecg:dashboard' %}"
+      class="btn btn-outline-secondary"
+    >
+      <i class="bi bi-arrow-left"></i>
+      Back to Dashboard
+    </a>
+  </div>
+
+  <div class="row g-4">
+
+    <div class="col-lg-8">
+
+      <div class="card shadow-sm mb-4">
+        <div class="card-body">
+
+          <h5 class="mb-4">
+            <i class="bi bi-person-vcard"></i>
+            Clinical Information
+          </h5>
+
+          <div class="row g-3">
+
+            <div class="col-md-6">
+              <div class="text-muted small">
+                Patient
+              </div>
+
+              <div class="fw-semibold">
+                {{ record.patient.full_name }}
+              </div>
+            </div>
+
+            <div class="col-md-6">
+              <div class="text-muted small">
+                Doctor
+              </div>
+
+              <div class="fw-semibold">
+                {{ record.doctor }}
+              </div>
+            </div>
+
+            <div class="col-md-6">
+              <div class="text-muted small">
+                Recorded At
+              </div>
+
+              <div>
+                {{ record.recorded_at|date:"Y-m-d H:i" }}
+              </div>
+            </div>
+
+            <div class="col-md-6">
+              <div class="text-muted small">
+                Workflow Status
+              </div>
+
+              <div>
+                <span class="badge bg-light text-dark border">
+                  {{ record.get_workflow_status_display }}
+                </span>
+              </div>
+            </div>
+
+            <div class="col-md-6">
+              <div class="text-muted small">
+                Appointment
+              </div>
+
+              <div>
+                {% if record.appointment %}
+                  #{{ record.appointment.pk }}
+                {% else %}
+                  —
+                {% endif %}
+              </div>
+            </div>
+
+            <div class="col-md-6">
+              <div class="text-muted small">
+                Hospital
+              </div>
+
+              <div>
+                {% if record.hospital %}
+                  {{ record.hospital }}
+                {% else %}
+                  —
+                {% endif %}
+              </div>
+            </div>
+
+            <div class="col-md-6">
+              <div class="text-muted small">
+                Branch
+              </div>
+
+              <div>
+                {% if record.branch %}
+                  {{ record.branch }}
+                {% else %}
+                  —
+                {% endif %}
+              </div>
+            </div>
+
+            <div class="col-md-6">
+              <div class="text-muted small">
+                Department
+              </div>
+
+              <div>
+                {% if record.department %}
+                  {{ record.department }}
+                {% else %}
+                  —
+                {% endif %}
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+      </div>
+
+      <div class="card shadow-sm">
+        <div class="card-body">
+
+          <h5 class="mb-4">
+            <i class="bi bi-activity"></i>
+            ECG Technical Information
+          </h5>
+
+          <div class="row g-3">
+
+            <div class="col-md-6">
+              <div class="text-muted small">
+                Device Manufacturer
+              </div>
+
+              <div>
+                {{ record.device_manufacturer|default:"—" }}
+              </div>
+            </div>
+
+            <div class="col-md-6">
+              <div class="text-muted small">
+                Device Model
+              </div>
+
+              <div>
+                {{ record.device_model|default:"—" }}
+              </div>
+            </div>
+
+            <div class="col-md-4">
+              <div class="text-muted small">
+                Sampling Frequency
+              </div>
+
+              <div>
+                {% if record.sampling_frequency_hz %}
+                  {{ record.sampling_frequency_hz }} Hz
+                {% else %}
+                  —
+                {% endif %}
+              </div>
+            </div>
+
+            <div class="col-md-4">
+              <div class="text-muted small">
+                Lead Count
+              </div>
+
+              <div>
+                {{ record.lead_count|default:"—" }}
+              </div>
+            </div>
+
+            <div class="col-md-4">
+              <div class="text-muted small">
+                Duration
+              </div>
+
+              <div>
+                {% if record.duration_seconds %}
+                  {{ record.duration_seconds }} seconds
+                {% else %}
+                  —
+                {% endif %}
+              </div>
+            </div>
+
+            <div class="col-12">
+              <div class="text-muted small">
+                Notes
+              </div>
+
+              <div class="mt-1">
+                {% if record.notes %}
+                  {{ record.notes|linebreaksbr }}
+                {% else %}
+                  —
+                {% endif %}
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+
+    <div class="col-lg-4">
+
+      <div class="card shadow-sm mb-4">
+        <div class="card-body">
+
+          <h5 class="mb-3">
+            <i class="bi bi-files"></i>
+            ECG Files
+          </h5>
+
+          {% if record.files.all %}
+
+            <div class="list-group list-group-flush">
+
+              {% for ecg_file in record.files.all %}
+                <div class="list-group-item px-0">
+
+                  <div class="fw-semibold">
+                    {{ ecg_file.get_kind_display }}
+                  </div>
+
+                  <div class="text-muted small">
+                    Added {{ ecg_file.created_at|date:"Y-m-d H:i" }}
+                  </div>
+
+                </div>
+              {% empty %}
+                <div class="text-muted">
+                  No ECG files uploaded yet.
+                </div>
+              {% endfor %}
+
+            </div>
+
+          {% else %}
+
+            <div class="alert alert-light border mb-0">
+              No ECG files uploaded yet.
+            </div>
+
+          {% endif %}
+
+        </div>
+      </div>
+
+      <div class="card shadow-sm">
+        <div class="card-body">
+
+          <h5 class="mb-3">
+            <i class="bi bi-cpu"></i>
+            AI-Assisted Analysis
+          </h5>
+
+          <p class="text-muted mb-3">
+            Preliminary AI assessment and explainable results
+            will be displayed here in a later stage.
+          </p>
+
+          <span class="badge bg-secondary">
+            Not analyzed yet
+          </span>
+
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+{% endblock %}

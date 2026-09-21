@@ -117,7 +117,12 @@
                 <tr>
 
                   <td>
-                    #{{ record.pk }}
+                    <a
+                      href="{% url 'ecg:record_detail' record.pk %}"
+                      class="text-decoration-none fw-semibold"
+                    >
+                      #{{ record.pk }}
+                    </a>
                   </td>
 
                   <td>

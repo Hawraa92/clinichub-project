@@ -587,3 +587,95 @@ class ECGDashboardSecurityTests(TestCase):
             foreign_record.pk,
             record_ids,
         )
+
+
+class ECGRecordDetailSecurityTests(TestCase):
+    def test_authorized_doctor_can_view_own_record(self):
+        doctor = DoctorFactory()
+
+        patient = PatientFactory(
+            doctor=doctor,
+        )
+
+        appointment = AppointmentFactory(
+            doctor=doctor,
+            patient=patient,
+        )
+
+        record = ECGRecord.objects.create(
+            patient=patient,
+            doctor=doctor,
+            appointment=appointment,
+            hospital=appointment.hospital,
+            branch=appointment.branch,
+            department=appointment.department,
+        )
+
+        grant_view_ecg_permission(
+            doctor.user
+        )
+        self.client.force_login(
+            doctor.user
+        )
+
+        response = self.client.get(
+            reverse(
+                "ecg:record_detail",
+                kwargs={
+                    "record_id": record.pk,
+                },
+            )
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        self.assertEqual(
+            response.context["record"].pk,
+            record.pk,
+        )
+
+    def test_doctor_cannot_view_foreign_record_by_id(self):
+        doctor = DoctorFactory()
+        foreign_doctor = DoctorFactory()
+
+        foreign_patient = PatientFactory(
+            doctor=foreign_doctor,
+        )
+
+        foreign_appointment = AppointmentFactory(
+            doctor=foreign_doctor,
+            patient=foreign_patient,
+        )
+
+        foreign_record = ECGRecord.objects.create(
+            patient=foreign_patient,
+            doctor=foreign_doctor,
+            appointment=foreign_appointment,
+            hospital=foreign_appointment.hospital,
+            branch=foreign_appointment.branch,
+            department=foreign_appointment.department,
+        )
+
+        grant_view_ecg_permission(
+            doctor.user
+        )
+        self.client.force_login(
+            doctor.user
+        )
+
+        response = self.client.get(
+            reverse(
+                "ecg:record_detail",
+                kwargs={
+                    "record_id": foreign_record.pk,
+                },
+            )
+        )
+
+        self.assertEqual(
+            response.status_code,
+            404,
+        )

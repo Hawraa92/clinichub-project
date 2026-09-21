@@ -17,4 +17,9 @@ urlpatterns = [
         views.create_record,
         name="create_record",
     ),
+    path(
+        "record/<int:record_id>/",
+        views.record_detail,
+        name="record_detail",
+    ),
 ]

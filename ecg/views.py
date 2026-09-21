@@ -1,7 +1,7 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 
 from .access import (
     ecg_form_querysets_for_user,
@@ -61,12 +61,50 @@ def create_record(request):
             "ECG record created successfully.",
         )
 
-        return redirect("ecg:dashboard")
+        return redirect(
+            "ecg:record_detail",
+            record_id=record.pk,
+        )
 
     return render(
         request,
         "ecg/create_record.html",
         {
             "form": form,
+        },
+    )
+
+
+@login_required
+def record_detail(request, record_id):
+    if not request.user.has_perm("ecg.view_ecgrecord"):
+        raise PermissionDenied
+
+    queryset = filter_ecg_records_for_user(
+        ECGRecord.objects.select_related(
+            "patient",
+            "doctor",
+            "doctor__user",
+            "appointment",
+            "hospital",
+            "branch",
+            "department",
+            "created_by",
+        ).prefetch_related(
+            "files",
+        ),
+        request.user,
+    )
+
+    record = get_object_or_404(
+        queryset,
+        pk=record_id,
+    )
+
+    return render(
+        request,
+        "ecg/record_detail.html",
+        {
+            "record": record,
         },
     )
