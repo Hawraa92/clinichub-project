@@ -109,6 +109,7 @@ INSTALLED_APPS = [
     "pharmacy",
     "licensing.apps.LicensingConfig",
     "analytics.apps.AnalyticsConfig",
+    "ecg.apps.EcgConfig",
 ]
 
 # -----------------------------------

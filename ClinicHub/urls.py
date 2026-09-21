@@ -117,6 +117,15 @@ urlpatterns = [
         ),
     ),
 
+    # ECG
+    path(
+        "ecg/",
+        include(
+            ("ecg.urls", "ecg"),
+            namespace="ecg",
+        ),
+    ),
+
     # Home — يجب أن يبقى أخيرًا لأن مساره فارغ
     path(
         "",
