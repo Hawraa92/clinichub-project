@@ -12,4 +12,9 @@ urlpatterns = [
         views.dashboard,
         name="dashboard",
     ),
+    path(
+        "create/",
+        views.create_record,
+        name="create_record",
+    ),
 ]

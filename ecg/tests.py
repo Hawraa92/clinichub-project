@@ -1,14 +1,27 @@
+from django.contrib.auth.models import Permission
 from django.core.exceptions import ValidationError
 from django.test import TestCase
+from django.urls import reverse
+from django.utils import timezone
 
 from appointments.tests.factories import (
     AppointmentFactory,
     BranchFactory,
     DepartmentFactory,
+    DoctorFactory,
     HospitalFactory,
     PatientFactory,
+    UserFactory,
 )
 from ecg.models import ECGRecord
+
+
+def grant_add_ecg_permission(user):
+    permission = Permission.objects.get(
+        content_type__app_label="ecg",
+        codename="add_ecgrecord",
+    )
+    user.user_permissions.add(permission)
 
 
 class ECGRecordValidationTests(TestCase):
@@ -42,7 +55,10 @@ class ECGRecordValidationTests(TestCase):
         with self.assertRaises(ValidationError) as context:
             record.full_clean()
 
-        self.assertIn("patient", context.exception.message_dict)
+        self.assertIn(
+            "patient",
+            context.exception.message_dict,
+        )
 
     def test_rejects_doctor_different_from_appointment(self):
         appointment = AppointmentFactory()
@@ -60,7 +76,10 @@ class ECGRecordValidationTests(TestCase):
         with self.assertRaises(ValidationError) as context:
             record.full_clean()
 
-        self.assertIn("doctor", context.exception.message_dict)
+        self.assertIn(
+            "doctor",
+            context.exception.message_dict,
+        )
 
     def test_rejects_location_different_from_appointment(self):
         appointment = AppointmentFactory()
@@ -97,6 +116,306 @@ class ECGRecordValidationTests(TestCase):
         self.assertTrue(
             any(
                 field in errors
-                for field in ("hospital", "branch", "department")
+                for field in (
+                    "hospital",
+                    "branch",
+                    "department",
+                )
             )
+        )
+
+
+class ECGCreateRecordSecurityTests(TestCase):
+    def setUp(self):
+        self.url = reverse("ecg:create_record")
+
+    def test_anonymous_user_is_redirected_to_login(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(
+            "/accounts/login/",
+            response.url,
+        )
+
+    def test_user_without_add_permission_gets_403(self):
+        doctor = DoctorFactory()
+
+        self.client.force_login(doctor.user)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_doctor_form_is_scoped_to_own_data(self):
+        doctor = DoctorFactory()
+        foreign_doctor = DoctorFactory()
+
+        own_patient = PatientFactory(
+            doctor=doctor,
+        )
+        foreign_patient = PatientFactory(
+            doctor=foreign_doctor,
+        )
+
+        own_appointment = AppointmentFactory(
+            doctor=doctor,
+            patient=own_patient,
+        )
+        foreign_appointment = AppointmentFactory(
+            doctor=foreign_doctor,
+            patient=foreign_patient,
+        )
+
+        grant_add_ecg_permission(doctor.user)
+        self.client.force_login(doctor.user)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+
+        form = response.context["form"]
+
+        self.assertEqual(
+            set(
+                form.fields["doctor"]
+                .queryset
+                .values_list("pk", flat=True)
+            ),
+            {doctor.pk},
+        )
+
+        self.assertIn(
+            own_patient.pk,
+            set(
+                form.fields["patient"]
+                .queryset
+                .values_list("pk", flat=True)
+            ),
+        )
+
+        self.assertNotIn(
+            foreign_patient.pk,
+            set(
+                form.fields["patient"]
+                .queryset
+                .values_list("pk", flat=True)
+            ),
+        )
+
+        appointment_ids = set(
+            form.fields["appointment"]
+            .queryset
+            .values_list("pk", flat=True)
+        )
+
+        self.assertIn(
+            own_appointment.pk,
+            appointment_ids,
+        )
+
+        self.assertNotIn(
+            foreign_appointment.pk,
+            appointment_ids,
+        )
+
+    def test_secretary_form_is_scoped_to_assigned_doctor(self):
+        doctor = DoctorFactory()
+        foreign_doctor = DoctorFactory()
+
+        secretary = UserFactory(
+            role="secretary",
+            assigned_doctor=doctor,
+        )
+
+        own_patient = PatientFactory(
+            doctor=doctor,
+        )
+        foreign_patient = PatientFactory(
+            doctor=foreign_doctor,
+        )
+
+        own_appointment = AppointmentFactory(
+            doctor=doctor,
+            patient=own_patient,
+        )
+        foreign_appointment = AppointmentFactory(
+            doctor=foreign_doctor,
+            patient=foreign_patient,
+        )
+
+        grant_add_ecg_permission(secretary)
+        self.client.force_login(secretary)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+
+        form = response.context["form"]
+
+        self.assertEqual(
+            set(
+                form.fields["doctor"]
+                .queryset
+                .values_list("pk", flat=True)
+            ),
+            {doctor.pk},
+        )
+
+        patient_ids = set(
+            form.fields["patient"]
+            .queryset
+            .values_list("pk", flat=True)
+        )
+
+        self.assertIn(
+            own_patient.pk,
+            patient_ids,
+        )
+
+        self.assertNotIn(
+            foreign_patient.pk,
+            patient_ids,
+        )
+
+        appointment_ids = set(
+            form.fields["appointment"]
+            .queryset
+            .values_list("pk", flat=True)
+        )
+
+        self.assertIn(
+            own_appointment.pk,
+            appointment_ids,
+        )
+
+        self.assertNotIn(
+            foreign_appointment.pk,
+            appointment_ids,
+        )
+
+    def test_valid_post_creates_ecg_record(self):
+        doctor = DoctorFactory()
+
+        patient = PatientFactory(
+            doctor=doctor,
+        )
+
+        appointment = AppointmentFactory(
+            doctor=doctor,
+            patient=patient,
+        )
+
+        grant_add_ecg_permission(doctor.user)
+        self.client.force_login(doctor.user)
+
+        recorded_at = timezone.localtime(
+            timezone.now()
+        ).strftime(
+            "%Y-%m-%dT%H:%M"
+        )
+
+        response = self.client.post(
+            self.url,
+            {
+                "patient": patient.pk,
+                "doctor": doctor.pk,
+                "appointment": appointment.pk,
+                "hospital": appointment.hospital_id,
+                "branch": appointment.branch_id,
+                "department": appointment.department_id,
+                "recorded_at": recorded_at,
+                "device_manufacturer": "Test Manufacturer",
+                "device_model": "Test ECG Device",
+                "sampling_frequency_hz": 500,
+                "lead_count": 12,
+                "duration_seconds": "10.00",
+                "notes": "Test ECG record",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            ECGRecord.objects.count(),
+            1,
+        )
+
+        record = ECGRecord.objects.get()
+
+        self.assertEqual(
+            record.patient_id,
+            patient.pk,
+        )
+        self.assertEqual(
+            record.doctor_id,
+            doctor.pk,
+        )
+        self.assertEqual(
+            record.appointment_id,
+            appointment.pk,
+        )
+        self.assertEqual(
+            record.created_by_id,
+            doctor.user_id,
+        )
+
+    def test_foreign_appointment_post_is_rejected(self):
+        doctor = DoctorFactory()
+        foreign_doctor = DoctorFactory()
+
+        patient = PatientFactory(
+            doctor=doctor,
+        )
+        foreign_patient = PatientFactory(
+            doctor=foreign_doctor,
+        )
+
+        appointment = AppointmentFactory(
+            doctor=doctor,
+            patient=patient,
+        )
+        foreign_appointment = AppointmentFactory(
+            doctor=foreign_doctor,
+            patient=foreign_patient,
+        )
+
+        grant_add_ecg_permission(doctor.user)
+        self.client.force_login(doctor.user)
+
+        recorded_at = timezone.localtime(
+            timezone.now()
+        ).strftime(
+            "%Y-%m-%dT%H:%M"
+        )
+
+        response = self.client.post(
+            self.url,
+            {
+                "patient": patient.pk,
+                "doctor": doctor.pk,
+                "appointment": foreign_appointment.pk,
+                "hospital": appointment.hospital_id,
+                "branch": appointment.branch_id,
+                "department": appointment.department_id,
+                "recorded_at": recorded_at,
+                "device_manufacturer": "Test Manufacturer",
+                "device_model": "Test ECG Device",
+                "sampling_frequency_hz": 500,
+                "lead_count": 12,
+                "duration_seconds": "10.00",
+                "notes": "Spoofed ECG attempt",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            ECGRecord.objects.count(),
+            0,
+        )
+
+        form = response.context["form"]
+
+        self.assertIn(
+            "appointment",
+            form.errors,
         )
