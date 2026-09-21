@@ -3,13 +3,42 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import redirect, render
 
-from .access import ecg_form_querysets_for_user
+from .access import (
+    ecg_form_querysets_for_user,
+    filter_ecg_records_for_user,
+)
 from .forms import ECGRecordForm
+from .models import ECGRecord
 
 
 @login_required
 def dashboard(request):
-    return render(request, "ecg/dashboard.html")
+    if not request.user.has_perm("ecg.view_ecgrecord"):
+        raise PermissionDenied
+
+    records = filter_ecg_records_for_user(
+        ECGRecord.objects.select_related(
+            "patient",
+            "doctor",
+            "doctor__user",
+            "appointment",
+            "hospital",
+            "branch",
+            "department",
+        ),
+        request.user,
+    )[:10]
+
+    return render(
+        request,
+        "ecg/dashboard.html",
+        {
+            "records": records,
+            "can_add_record": request.user.has_perm(
+                "ecg.add_ecgrecord"
+            ),
+        },
+    )
 
 
 @login_required

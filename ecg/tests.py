@@ -24,6 +24,14 @@ def grant_add_ecg_permission(user):
     user.user_permissions.add(permission)
 
 
+def grant_view_ecg_permission(user):
+    permission = Permission.objects.get(
+        content_type__app_label="ecg",
+        codename="view_ecgrecord",
+    )
+    user.user_permissions.add(permission)
+
+
 class ECGRecordValidationTests(TestCase):
     def test_valid_record_matches_appointment(self):
         appointment = AppointmentFactory()
@@ -418,4 +426,164 @@ class ECGCreateRecordSecurityTests(TestCase):
         self.assertIn(
             "appointment",
             form.errors,
+        )
+
+
+class ECGDashboardSecurityTests(TestCase):
+    def setUp(self):
+        self.url = reverse("ecg:dashboard")
+
+    def test_user_without_view_permission_gets_403(self):
+        doctor = DoctorFactory()
+
+        self.client.force_login(doctor.user)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(
+            response.status_code,
+            403,
+        )
+
+    def test_doctor_dashboard_shows_only_own_records(self):
+        doctor = DoctorFactory()
+        foreign_doctor = DoctorFactory()
+
+        patient = PatientFactory(
+            doctor=doctor,
+        )
+        foreign_patient = PatientFactory(
+            doctor=foreign_doctor,
+        )
+
+        appointment = AppointmentFactory(
+            doctor=doctor,
+            patient=patient,
+        )
+        foreign_appointment = AppointmentFactory(
+            doctor=foreign_doctor,
+            patient=foreign_patient,
+        )
+
+        own_record = ECGRecord.objects.create(
+            patient=patient,
+            doctor=doctor,
+            appointment=appointment,
+            hospital=appointment.hospital,
+            branch=appointment.branch,
+            department=appointment.department,
+        )
+
+        foreign_record = ECGRecord.objects.create(
+            patient=foreign_patient,
+            doctor=foreign_doctor,
+            appointment=foreign_appointment,
+            hospital=foreign_appointment.hospital,
+            branch=foreign_appointment.branch,
+            department=foreign_appointment.department,
+        )
+
+        grant_view_ecg_permission(
+            doctor.user
+        )
+        self.client.force_login(
+            doctor.user
+        )
+
+        response = self.client.get(
+            self.url
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        record_ids = {
+            record.pk
+            for record in response.context["records"]
+        }
+
+        self.assertIn(
+            own_record.pk,
+            record_ids,
+        )
+
+        self.assertNotIn(
+            foreign_record.pk,
+            record_ids,
+        )
+
+    def test_secretary_dashboard_is_scoped_to_assigned_doctor(self):
+        doctor = DoctorFactory()
+        foreign_doctor = DoctorFactory()
+
+        secretary = UserFactory(
+            role="secretary",
+            assigned_doctor=doctor,
+        )
+
+        patient = PatientFactory(
+            doctor=doctor,
+        )
+        foreign_patient = PatientFactory(
+            doctor=foreign_doctor,
+        )
+
+        appointment = AppointmentFactory(
+            doctor=doctor,
+            patient=patient,
+        )
+        foreign_appointment = AppointmentFactory(
+            doctor=foreign_doctor,
+            patient=foreign_patient,
+        )
+
+        own_record = ECGRecord.objects.create(
+            patient=patient,
+            doctor=doctor,
+            appointment=appointment,
+            hospital=appointment.hospital,
+            branch=appointment.branch,
+            department=appointment.department,
+        )
+
+        foreign_record = ECGRecord.objects.create(
+            patient=foreign_patient,
+            doctor=foreign_doctor,
+            appointment=foreign_appointment,
+            hospital=foreign_appointment.hospital,
+            branch=foreign_appointment.branch,
+            department=foreign_appointment.department,
+        )
+
+        grant_view_ecg_permission(
+            secretary
+        )
+        self.client.force_login(
+            secretary
+        )
+
+        response = self.client.get(
+            self.url
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        record_ids = {
+            record.pk
+            for record in response.context["records"]
+        }
+
+        self.assertIn(
+            own_record.pk,
+            record_ids,
+        )
+
+        self.assertNotIn(
+            foreign_record.pk,
+            record_ids,
         )

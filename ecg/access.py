@@ -122,6 +122,55 @@ def _build_location_scope(assignments):
     return scope
 
 
+def _build_ecg_location_scope(assignments):
+    scope = None
+
+    for assignment in assignments:
+        if assignment.department_id:
+            current_scope = (
+                Q(
+                    department_id=assignment.department_id
+                )
+                | Q(
+                    appointment__department_id=(
+                        assignment.department_id
+                    )
+                )
+            )
+
+        elif assignment.branch_id:
+            current_scope = (
+                Q(
+                    branch_id=assignment.branch_id
+                )
+                | Q(
+                    appointment__branch_id=(
+                        assignment.branch_id
+                    )
+                )
+            )
+
+        else:
+            current_scope = (
+                Q(
+                    hospital_id=assignment.hospital_id
+                )
+                | Q(
+                    appointment__hospital_id=(
+                        assignment.hospital_id
+                    )
+                )
+            )
+
+        scope = (
+            current_scope
+            if scope is None
+            else scope | current_scope
+        )
+
+    return scope
+
+
 def filter_appointments_for_user(queryset, user):
     if not _is_authenticated(user):
         return queryset.none()
@@ -279,6 +328,57 @@ def filter_patients_for_user(queryset, user):
     return queryset.filter(
         appointments__in=appointments
     ).distinct()
+
+
+def filter_ecg_records_for_user(queryset, user):
+    if not _is_authenticated(user):
+        return queryset.none()
+
+    if getattr(user, "is_superuser", False):
+        return queryset
+
+    role = _user_role(user)
+
+    if role == "patient":
+        return queryset.filter(
+            patient__user=user
+        ).distinct()
+
+    assigned_doctor = assigned_doctor_for(user)
+
+    assignments = list(
+        active_location_assignments(user)
+    )
+
+    if role in ("doctor", "secretary"):
+        if assigned_doctor is None:
+            return queryset.none()
+
+        queryset = queryset.filter(
+            doctor=assigned_doctor
+        )
+
+        if assignments:
+            location_scope = _build_ecg_location_scope(
+                assignments
+            )
+
+            queryset = queryset.filter(
+                location_scope
+            )
+
+        return queryset.distinct()
+
+    if assignments:
+        location_scope = _build_ecg_location_scope(
+            assignments
+        )
+
+        return queryset.filter(
+            location_scope
+        ).distinct()
+
+    return queryset.none()
 
 
 def location_querysets_for_user(user):
