@@ -1,6 +1,9 @@
+import os
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
+from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .access import (
@@ -8,7 +11,7 @@ from .access import (
     filter_ecg_records_for_user,
 )
 from .forms import ECGFileForm, ECGRecordForm
-from .models import ECGRecord
+from .models import ECGFile, ECGRecord
 
 
 @login_required
@@ -111,6 +114,11 @@ def record_detail(request, record_id):
                     "ecg.add_ecgfile"
                 )
             ),
+            "can_download_file": (
+                request.user.has_perm(
+                    "ecg.view_ecgfile"
+                )
+            ),
         },
     )
 
@@ -175,3 +183,77 @@ def upload_file(request, record_id):
             "record": record,
         },
     )
+
+
+@login_required
+def download_file(
+    request,
+    record_id,
+    file_id,
+):
+    if not request.user.has_perm(
+        "ecg.view_ecgrecord"
+    ):
+        raise PermissionDenied
+
+    if not request.user.has_perm(
+        "ecg.view_ecgfile"
+    ):
+        raise PermissionDenied
+
+    record_queryset = filter_ecg_records_for_user(
+        ECGRecord.objects.all(),
+        request.user,
+    )
+
+    record = get_object_or_404(
+        record_queryset,
+        pk=record_id,
+    )
+
+    ecg_file = get_object_or_404(
+        ECGFile.objects.select_related(
+            "record",
+        ),
+        pk=file_id,
+        record=record,
+    )
+
+    extension = os.path.splitext(
+        os.path.basename(
+            ecg_file.file.name
+        )
+    )[1].lower()
+
+    if len(extension) > 10:
+        extension = ""
+
+    download_name = (
+        f"ecg-record-{record.pk}"
+        f"-file-{ecg_file.pk}"
+        f"{extension}"
+    )
+
+    try:
+        file_handle = ecg_file.file.open("rb")
+    except (FileNotFoundError, ValueError):
+        raise Http404(
+            "ECG file not found."
+        )
+
+    response = FileResponse(
+        file_handle,
+        as_attachment=True,
+        filename=download_name,
+        content_type="application/octet-stream",
+    )
+
+    response["Cache-Control"] = (
+        "private, no-store"
+    )
+    response["Pragma"] = "no-cache"
+    response["X-Content-Type-Options"] = (
+        "nosniff"
+    )
+
+    return response

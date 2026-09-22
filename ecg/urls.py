@@ -27,4 +27,9 @@ urlpatterns = [
         views.upload_file,
         name="upload_file",
     ),
+    path(
+        "record/<int:record_id>/file/<int:file_id>/download/",
+        views.download_file,
+        name="download_file",
+    ),
 ]

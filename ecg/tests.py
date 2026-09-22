@@ -43,6 +43,14 @@ def grant_add_ecg_file_permission(user):
     user.user_permissions.add(permission)
 
 
+def grant_view_ecg_file_permission(user):
+    permission = Permission.objects.get(
+        content_type__app_label="ecg",
+        codename="view_ecgfile",
+    )
+    user.user_permissions.add(permission)
+
+
 class ECGRecordValidationTests(TestCase):
     def test_valid_record_matches_appointment(self):
         appointment = AppointmentFactory()
@@ -951,4 +959,229 @@ class ECGFileUploadSecurityTests(TestCase):
         self.assertIn(
             "file",
             response.context["form"].errors,
+        )
+
+class ECGFileDownloadSecurityTests(TestCase):
+    def setUp(self):
+        self.private_media = tempfile.TemporaryDirectory()
+
+        self.settings_override = override_settings(
+            PRIVATE_MEDIA_ROOT=self.private_media.name,
+        )
+        self.settings_override.enable()
+
+    def tearDown(self):
+        self.settings_override.disable()
+        self.private_media.cleanup()
+
+    def test_user_without_view_file_permission_gets_403(self):
+        doctor = DoctorFactory()
+
+        patient = PatientFactory(
+            doctor=doctor,
+        )
+
+        appointment = AppointmentFactory(
+            doctor=doctor,
+            patient=patient,
+        )
+
+        record = ECGRecord.objects.create(
+            patient=patient,
+            doctor=doctor,
+            appointment=appointment,
+            hospital=appointment.hospital,
+            branch=appointment.branch,
+            department=appointment.department,
+        )
+
+        ecg_file = ECGFile.objects.create(
+            record=record,
+            kind=ECGFile.FileKind.CSV,
+            file=SimpleUploadedFile(
+                "sample.csv",
+                b"time,value\n0,1\n",
+                content_type="text/csv",
+            ),
+        )
+
+        grant_view_ecg_permission(
+            doctor.user
+        )
+
+        self.client.force_login(
+            doctor.user
+        )
+
+        response = self.client.get(
+            reverse(
+                "ecg:download_file",
+                kwargs={
+                    "record_id": record.pk,
+                    "file_id": ecg_file.pk,
+                },
+            )
+        )
+
+        self.assertEqual(
+            response.status_code,
+            403,
+        )
+
+    def test_doctor_cannot_download_foreign_file_by_id(self):
+        doctor = DoctorFactory()
+        foreign_doctor = DoctorFactory()
+
+        foreign_patient = PatientFactory(
+            doctor=foreign_doctor,
+        )
+
+        foreign_appointment = AppointmentFactory(
+            doctor=foreign_doctor,
+            patient=foreign_patient,
+        )
+
+        foreign_record = ECGRecord.objects.create(
+            patient=foreign_patient,
+            doctor=foreign_doctor,
+            appointment=foreign_appointment,
+            hospital=foreign_appointment.hospital,
+            branch=foreign_appointment.branch,
+            department=foreign_appointment.department,
+        )
+
+        foreign_file = ECGFile.objects.create(
+            record=foreign_record,
+            kind=ECGFile.FileKind.CSV,
+            file=SimpleUploadedFile(
+                "foreign.csv",
+                b"time,value\n0,99\n",
+                content_type="text/csv",
+            ),
+        )
+
+        grant_view_ecg_permission(
+            doctor.user
+        )
+
+        grant_view_ecg_file_permission(
+            doctor.user
+        )
+
+        self.client.force_login(
+            doctor.user
+        )
+
+        response = self.client.get(
+            reverse(
+                "ecg:download_file",
+                kwargs={
+                    "record_id": foreign_record.pk,
+                    "file_id": foreign_file.pk,
+                },
+            )
+        )
+
+        self.assertEqual(
+            response.status_code,
+            404,
+        )
+
+    def test_authorized_download_returns_private_attachment(self):
+        doctor = DoctorFactory()
+
+        patient = PatientFactory(
+            doctor=doctor,
+        )
+
+        appointment = AppointmentFactory(
+            doctor=doctor,
+            patient=patient,
+        )
+
+        record = ECGRecord.objects.create(
+            patient=patient,
+            doctor=doctor,
+            appointment=appointment,
+            hospital=appointment.hospital,
+            branch=appointment.branch,
+            department=appointment.department,
+        )
+
+        file_content = b"time,value\n0,1\n1,2\n"
+
+        ecg_file = ECGFile.objects.create(
+            record=record,
+            kind=ECGFile.FileKind.CSV,
+            file=SimpleUploadedFile(
+                "sample.csv",
+                file_content,
+                content_type="text/csv",
+            ),
+        )
+
+        grant_view_ecg_permission(
+            doctor.user
+        )
+
+        grant_view_ecg_file_permission(
+            doctor.user
+        )
+
+        self.client.force_login(
+            doctor.user
+        )
+
+        response = self.client.get(
+            reverse(
+                "ecg:download_file",
+                kwargs={
+                    "record_id": record.pk,
+                    "file_id": ecg_file.pk,
+                },
+            )
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        self.assertEqual(
+            response["Content-Type"],
+            "application/octet-stream",
+        )
+
+        self.assertEqual(
+            response["Cache-Control"],
+            "private, no-store",
+        )
+
+        self.assertEqual(
+            response["Pragma"],
+            "no-cache",
+        )
+
+        self.assertEqual(
+            response["X-Content-Type-Options"],
+            "nosniff",
+        )
+
+        self.assertIn(
+            "attachment;",
+            response["Content-Disposition"],
+        )
+
+        self.assertIn(
+            f"ecg-record-{record.pk}-file-{ecg_file.pk}.csv",
+            response["Content-Disposition"],
+        )
+
+        downloaded_content = b"".join(
+            response.streaming_content
+        )
+
+        self.assertEqual(
+            downloaded_content,
+            file_content,
         )
