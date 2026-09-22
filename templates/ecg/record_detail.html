@@ -143,7 +143,7 @@
         </div>
       </div>
 
-      <div class="card shadow-sm">
+      <div class="card shadow-sm mb-4">
         <div class="card-body">
 
           <h5 class="mb-4">
@@ -230,6 +230,137 @@
         </div>
       </div>
 
+      <div class="card shadow-sm mb-4">
+        <div class="card-body">
+
+          <div
+            class="d-flex justify-content-between align-items-start gap-3 mb-3"
+          >
+            <div>
+              <h5 class="mb-1">
+                <i class="bi bi-graph-up"></i>
+                ECG Waveform Preview
+              </h5>
+
+              <div class="text-muted small">
+                Signal preview generated from an uploaded ECG CSV file.
+              </div>
+            </div>
+
+            {% if waveform_preview %}
+              <span class="badge bg-success-subtle text-success border">
+                Preview available
+              </span>
+            {% endif %}
+          </div>
+
+          {% if waveform_preview and waveform_chart_data %}
+
+            <div class="row g-3 mb-3">
+
+              <div class="col-sm-4">
+                <div class="border rounded p-3 h-100">
+                  <div class="text-muted small">
+                    Leads
+                  </div>
+
+                  <div class="fw-semibold">
+                    {{ waveform_preview.leads|length }}
+                  </div>
+                </div>
+              </div>
+
+              <div class="col-sm-4">
+                <div class="border rounded p-3 h-100">
+                  <div class="text-muted small">
+                    Source Samples
+                  </div>
+
+                  <div class="fw-semibold">
+                    {{ waveform_preview.source_sample_count }}
+                  </div>
+                </div>
+              </div>
+
+              <div class="col-sm-4">
+                <div class="border rounded p-3 h-100">
+                  <div class="text-muted small">
+                    Displayed Samples
+                  </div>
+
+                  <div class="fw-semibold">
+                    {{ waveform_preview.displayed_sample_count }}
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            {% if waveform_preview.downsampled %}
+              <div class="alert alert-info py-2 small">
+                The waveform preview has been reduced to
+                {{ waveform_preview.displayed_sample_count }}
+                display points for efficient rendering.
+                The original ECG signal remains unchanged.
+              </div>
+            {% endif %}
+
+            <div
+              id="ecg-waveform-container"
+              class="border rounded overflow-hidden bg-white"
+              style="min-height: 320px;"
+            >
+              <canvas
+                id="ecg-waveform-canvas"
+                style="
+                  display: block;
+                  width: 100%;
+                  min-height: 320px;
+                "
+                aria-label="ECG waveform preview"
+              ></canvas>
+            </div>
+
+            <div
+              id="ecg-waveform-status"
+              class="text-muted small mt-2"
+            ></div>
+
+            <div class="alert alert-warning mt-3 mb-0 small">
+              <strong>Preview only:</strong>
+              this visualization is not a calibrated diagnostic ECG
+              display and must not be used for clinical measurement
+              or interpretation.
+            </div>
+
+            {{ waveform_chart_data|json_script:"ecg-waveform-data" }}
+
+          {% elif waveform_error %}
+
+            <div class="alert alert-warning mb-0">
+              <i class="bi bi-exclamation-triangle me-1"></i>
+              The ECG CSV file could not be prepared for waveform
+              preview.
+            </div>
+
+          {% elif waveform_file %}
+
+            <div class="alert alert-light border mb-0">
+              ECG waveform preview is not available for this file.
+            </div>
+
+          {% else %}
+
+            <div class="alert alert-light border mb-0">
+              No supported ECG CSV signal file is available for
+              waveform preview.
+            </div>
+
+          {% endif %}
+
+        </div>
+      </div>
+
     </div>
 
     <div class="col-lg-4">
@@ -261,7 +392,9 @@
               {% for ecg_file in record.files.all %}
                 <div class="list-group-item px-0">
 
-                  <div class="d-flex justify-content-between align-items-center gap-3">
+                  <div
+                    class="d-flex justify-content-between align-items-center gap-3"
+                  >
 
                     <div>
                       <div class="fw-semibold">
@@ -286,6 +419,7 @@
                   </div>
 
                 </div>
+
               {% empty %}
                 <div class="text-muted">
                   No ECG files uploaded yet.
@@ -330,4 +464,446 @@
   </div>
 
 </div>
+
+{% if waveform_preview and waveform_chart_data %}
+<script>
+(function () {
+  "use strict";
+
+  const dataElement = document.getElementById(
+    "ecg-waveform-data"
+  );
+
+  const canvas = document.getElementById(
+    "ecg-waveform-canvas"
+  );
+
+  const container = document.getElementById(
+    "ecg-waveform-container"
+  );
+
+  const statusElement = document.getElementById(
+    "ecg-waveform-status"
+  );
+
+  if (
+    !dataElement ||
+    !canvas ||
+    !container
+  ) {
+    return;
+  }
+
+  let waveformData;
+
+  try {
+    waveformData = JSON.parse(
+      dataElement.textContent
+    );
+  } catch (error) {
+    if (statusElement) {
+      statusElement.textContent =
+        "Waveform preview could not be displayed.";
+    }
+
+    return;
+  }
+
+  const xValues = waveformData.x_values || [];
+  const leads = waveformData.leads || [];
+
+  if (
+    xValues.length < 2 ||
+    leads.length === 0
+  ) {
+    if (statusElement) {
+      statusElement.textContent =
+        "Waveform preview contains insufficient data.";
+    }
+
+    return;
+  }
+
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    return;
+  }
+
+  function drawWaveform() {
+    const devicePixelRatio =
+      window.devicePixelRatio || 1;
+
+    const width = Math.max(
+      container.clientWidth,
+      320
+    );
+
+    const leadHeight = 150;
+    const topPadding = 30;
+    const bottomPadding = 35;
+
+    const height = Math.max(
+      320,
+      topPadding +
+        bottomPadding +
+        leads.length * leadHeight
+    );
+
+    canvas.style.height =
+      height + "px";
+
+    canvas.width =
+      Math.floor(
+        width * devicePixelRatio
+      );
+
+    canvas.height =
+      Math.floor(
+        height * devicePixelRatio
+      );
+
+    context.setTransform(
+      devicePixelRatio,
+      0,
+      0,
+      devicePixelRatio,
+      0,
+      0
+    );
+
+    context.clearRect(
+      0,
+      0,
+      width,
+      height
+    );
+
+    context.fillStyle = "#ffffff";
+    context.fillRect(
+      0,
+      0,
+      width,
+      height
+    );
+
+    const plotLeft = 60;
+    const plotRight = 20;
+
+    const plotWidth = Math.max(
+      width - plotLeft - plotRight,
+      1
+    );
+
+    const xMin = Number(
+      xValues[0]
+    );
+
+    const xMax = Number(
+      xValues[
+        xValues.length - 1
+      ]
+    );
+
+    const xRange =
+      xMax > xMin
+        ? xMax - xMin
+        : 1;
+
+    context.lineWidth = 1;
+
+    for (
+      let leadIndex = 0;
+      leadIndex < leads.length;
+      leadIndex += 1
+    ) {
+      const lead = leads[leadIndex];
+
+      const values = (
+        lead.values || []
+      ).map(Number);
+
+      if (
+        values.length !==
+        xValues.length
+      ) {
+        continue;
+      }
+
+      const sectionTop =
+        topPadding +
+        leadIndex * leadHeight;
+
+      const sectionBottom =
+        sectionTop +
+        leadHeight;
+
+      const graphTop =
+        sectionTop + 25;
+
+      const graphBottom =
+        sectionBottom - 20;
+
+      const graphHeight =
+        graphBottom - graphTop;
+
+      let yMin = Math.min(
+        ...values
+      );
+
+      let yMax = Math.max(
+        ...values
+      );
+
+      if (
+        !Number.isFinite(yMin) ||
+        !Number.isFinite(yMax)
+      ) {
+        continue;
+      }
+
+      if (yMax === yMin) {
+        yMax += 1;
+        yMin -= 1;
+      }
+
+      const padding =
+        (yMax - yMin) * 0.1;
+
+      yMax += padding;
+      yMin -= padding;
+
+      const yRange =
+        yMax - yMin;
+
+      context.strokeStyle =
+        "#f3d6d6";
+
+      for (
+        let x = plotLeft;
+        x <= width - plotRight;
+        x += 10
+      ) {
+        context.beginPath();
+        context.moveTo(
+          x,
+          graphTop
+        );
+        context.lineTo(
+          x,
+          graphBottom
+        );
+        context.stroke();
+      }
+
+      for (
+        let y = graphTop;
+        y <= graphBottom;
+        y += 10
+      ) {
+        context.beginPath();
+        context.moveTo(
+          plotLeft,
+          y
+        );
+        context.lineTo(
+          width - plotRight,
+          y
+        );
+        context.stroke();
+      }
+
+      context.strokeStyle =
+        "#e7baba";
+
+      for (
+        let x = plotLeft;
+        x <= width - plotRight;
+        x += 50
+      ) {
+        context.beginPath();
+        context.moveTo(
+          x,
+          graphTop
+        );
+        context.lineTo(
+          x,
+          graphBottom
+        );
+        context.stroke();
+      }
+
+      for (
+        let y = graphTop;
+        y <= graphBottom;
+        y += 50
+      ) {
+        context.beginPath();
+        context.moveTo(
+          plotLeft,
+          y
+        );
+        context.lineTo(
+          width - plotRight,
+          y
+        );
+        context.stroke();
+      }
+
+      context.fillStyle =
+        "#212529";
+
+      context.font =
+        "600 13px sans-serif";
+
+      context.fillText(
+        String(lead.name),
+        12,
+        sectionTop + 18
+      );
+
+      context.strokeStyle =
+        "#198754";
+
+      context.lineWidth = 1.5;
+
+      context.beginPath();
+
+      let started = false;
+
+      for (
+        let index = 0;
+        index < values.length;
+        index += 1
+      ) {
+        const xValue = Number(
+          xValues[index]
+        );
+
+        const yValue =
+          values[index];
+
+        if (
+          !Number.isFinite(xValue) ||
+          !Number.isFinite(yValue)
+        ) {
+          continue;
+        }
+
+        const xPosition =
+          plotLeft +
+          (
+            (xValue - xMin) /
+            xRange
+          ) *
+            plotWidth;
+
+        const yPosition =
+          graphBottom -
+          (
+            (yValue - yMin) /
+            yRange
+          ) *
+            graphHeight;
+
+        if (!started) {
+          context.moveTo(
+            xPosition,
+            yPosition
+          );
+
+          started = true;
+        } else {
+          context.lineTo(
+            xPosition,
+            yPosition
+          );
+        }
+      }
+
+      context.stroke();
+
+      if (
+        leadIndex <
+        leads.length - 1
+      ) {
+        context.strokeStyle =
+          "#dee2e6";
+
+        context.lineWidth = 1;
+
+        context.beginPath();
+
+        context.moveTo(
+          0,
+          sectionBottom
+        );
+
+        context.lineTo(
+          width,
+          sectionBottom
+        );
+
+        context.stroke();
+      }
+    }
+
+    context.fillStyle =
+      "#6c757d";
+
+    context.font =
+      "12px sans-serif";
+
+    const axisLabel =
+      waveformData.x_unit ===
+      "seconds"
+        ? "Time (seconds)"
+        : "Sample";
+
+    context.fillText(
+      axisLabel,
+      plotLeft,
+      height - 10
+    );
+
+    if (statusElement) {
+      statusElement.textContent =
+        waveformData.downsampled
+          ? (
+              "Preview uses " +
+              waveformData.displayed_sample_count +
+              " of " +
+              waveformData.source_sample_count +
+              " source samples."
+            )
+          : (
+              "Preview uses all " +
+              waveformData.source_sample_count +
+              " source samples."
+            );
+    }
+  }
+
+  drawWaveform();
+
+  let resizeTimer = null;
+
+  window.addEventListener(
+    "resize",
+    function () {
+      window.clearTimeout(
+        resizeTimer
+      );
+
+      resizeTimer =
+        window.setTimeout(
+          drawWaveform,
+          150
+        );
+    }
+  );
+})();
+</script>
+{% endif %}
+
 {% endblock %}

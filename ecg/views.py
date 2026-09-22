@@ -12,6 +12,14 @@ from .access import (
 )
 from .forms import ECGFileForm, ECGRecordForm
 from .models import ECGFile, ECGRecord
+from .services.parser import (
+    ECGParseError,
+    parse_csv_ecg,
+)
+from .services.waveform import (
+    ECGWaveformError,
+    build_waveform_preview,
+)
 
 
 @login_required
@@ -104,6 +112,73 @@ def record_detail(request, record_id):
         pk=record_id,
     )
 
+    can_download_file = request.user.has_perm(
+        "ecg.view_ecgfile"
+    )
+
+    waveform_preview = None
+    waveform_file = None
+    waveform_error = False
+    waveform_chart_data = None
+
+    if can_download_file:
+        waveform_file = next(
+            (
+                ecg_file
+                for ecg_file in record.files.all()
+                if ecg_file.kind
+                == ECGFile.FileKind.CSV
+            ),
+            None,
+        )
+
+        if waveform_file is not None:
+            try:
+                parsed_ecg = parse_csv_ecg(
+                    waveform_file
+                )
+
+                waveform_preview = (
+                    build_waveform_preview(
+                        parsed_ecg
+                    )
+                )
+
+                waveform_chart_data = {
+                    "x_values": list(
+                        waveform_preview.x_values
+                    ),
+                    "x_unit": (
+                        waveform_preview.x_unit
+                    ),
+                    "leads": [
+                        {
+                            "name": lead.name,
+                            "values": list(
+                                lead.values
+                            ),
+                        }
+                        for lead in waveform_preview.leads
+                    ],
+                    "source_sample_count": (
+                        waveform_preview.source_sample_count
+                    ),
+                    "displayed_sample_count": (
+                        waveform_preview.displayed_sample_count
+                    ),
+                    "downsampled": (
+                        waveform_preview.downsampled
+                    ),
+                }
+
+            except (
+                ECGParseError,
+                ECGWaveformError,
+            ):
+                waveform_preview = None
+                waveform_chart_data = None
+                waveform_error = True
+
     return render(
         request,
         "ecg/record_detail.html",
@@ -115,9 +190,15 @@ def record_detail(request, record_id):
                 )
             ),
             "can_download_file": (
-                request.user.has_perm(
-                    "ecg.view_ecgfile"
-                )
+                can_download_file
+            ),
+            "waveform_preview": (
+                waveform_preview
+            ),
+            "waveform_file": waveform_file,
+            "waveform_error": waveform_error,
+            "waveform_chart_data": (
+                waveform_chart_data
             ),
         },
     )
