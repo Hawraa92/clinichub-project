@@ -961,6 +961,211 @@ class ECGFileUploadSecurityTests(TestCase):
             response.context["form"].errors,
         )
 
+
+    def test_fake_pdf_content_is_rejected(self):
+        doctor = DoctorFactory()
+
+        patient = PatientFactory(
+            doctor=doctor,
+        )
+
+        appointment = AppointmentFactory(
+            doctor=doctor,
+            patient=patient,
+        )
+
+        record = ECGRecord.objects.create(
+            patient=patient,
+            doctor=doctor,
+            appointment=appointment,
+            hospital=appointment.hospital,
+            branch=appointment.branch,
+            department=appointment.department,
+        )
+
+        grant_view_ecg_permission(
+            doctor.user
+        )
+        grant_add_ecg_file_permission(
+            doctor.user
+        )
+
+        self.client.force_login(
+            doctor.user
+        )
+
+        fake_pdf = SimpleUploadedFile(
+            "fake-report.pdf",
+            b"MZThis is not a real PDF file",
+            content_type="application/pdf",
+        )
+
+        response = self.client.post(
+            reverse(
+                "ecg:upload_file",
+                kwargs={
+                    "record_id": record.pk,
+                },
+            ),
+            {
+                "kind": ECGFile.FileKind.REPORT_PDF,
+                "file": fake_pdf,
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        self.assertEqual(
+            ECGFile.objects.count(),
+            0,
+        )
+
+        self.assertIn(
+            "file",
+            response.context["form"].errors,
+        )
+
+    def test_fake_png_content_is_rejected(self):
+        doctor = DoctorFactory()
+
+        patient = PatientFactory(
+            doctor=doctor,
+        )
+
+        appointment = AppointmentFactory(
+            doctor=doctor,
+            patient=patient,
+        )
+
+        record = ECGRecord.objects.create(
+            patient=patient,
+            doctor=doctor,
+            appointment=appointment,
+            hospital=appointment.hospital,
+            branch=appointment.branch,
+            department=appointment.department,
+        )
+
+        grant_view_ecg_permission(
+            doctor.user
+        )
+        grant_add_ecg_file_permission(
+            doctor.user
+        )
+
+        self.client.force_login(
+            doctor.user
+        )
+
+        fake_png = SimpleUploadedFile(
+            "fake-image.png",
+            b"This is not a PNG image",
+            content_type="image/png",
+        )
+
+        response = self.client.post(
+            reverse(
+                "ecg:upload_file",
+                kwargs={
+                    "record_id": record.pk,
+                },
+            ),
+            {
+                "kind": ECGFile.FileKind.IMAGE,
+                "file": fake_png,
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        self.assertEqual(
+            ECGFile.objects.count(),
+            0,
+        )
+
+        self.assertIn(
+            "file",
+            response.context["form"].errors,
+        )
+
+    def test_xml_with_doctype_is_rejected(self):
+        doctor = DoctorFactory()
+
+        patient = PatientFactory(
+            doctor=doctor,
+        )
+
+        appointment = AppointmentFactory(
+            doctor=doctor,
+            patient=patient,
+        )
+
+        record = ECGRecord.objects.create(
+            patient=patient,
+            doctor=doctor,
+            appointment=appointment,
+            hospital=appointment.hospital,
+            branch=appointment.branch,
+            department=appointment.department,
+        )
+
+        grant_view_ecg_permission(
+            doctor.user
+        )
+        grant_add_ecg_file_permission(
+            doctor.user
+        )
+
+        self.client.force_login(
+            doctor.user
+        )
+
+        unsafe_xml = SimpleUploadedFile(
+            "unsafe.xml",
+            (
+                b'<?xml version="1.0"?>'
+                b'<!DOCTYPE ecg ['
+                b'<!ENTITY test "unsafe">'
+                b']>'
+                b'<ecg>&test;</ecg>'
+            ),
+            content_type="application/xml",
+        )
+
+        response = self.client.post(
+            reverse(
+                "ecg:upload_file",
+                kwargs={
+                    "record_id": record.pk,
+                },
+            ),
+            {
+                "kind": ECGFile.FileKind.XML,
+                "file": unsafe_xml,
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        self.assertEqual(
+            ECGFile.objects.count(),
+            0,
+        )
+
+        self.assertIn(
+            "file",
+            response.context["form"].errors,
+        )
+
 class ECGFileDownloadSecurityTests(TestCase):
     def setUp(self):
         self.private_media = tempfile.TemporaryDirectory()
