@@ -22,4 +22,9 @@ urlpatterns = [
         views.record_detail,
         name="record_detail",
     ),
+    path(
+        "record/<int:record_id>/upload/",
+        views.upload_file,
+        name="upload_file",
+    ),
 ]

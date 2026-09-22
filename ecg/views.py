@@ -7,7 +7,7 @@ from .access import (
     ecg_form_querysets_for_user,
     filter_ecg_records_for_user,
 )
-from .forms import ECGRecordForm
+from .forms import ECGFileForm, ECGRecordForm
 from .models import ECGRecord
 
 
@@ -105,6 +105,73 @@ def record_detail(request, record_id):
         request,
         "ecg/record_detail.html",
         {
+            "record": record,
+            "can_upload_file": (
+                request.user.has_perm(
+                    "ecg.add_ecgfile"
+                )
+            ),
+        },
+    )
+
+
+@login_required
+def upload_file(request, record_id):
+    if not request.user.has_perm(
+        "ecg.view_ecgrecord"
+    ):
+        raise PermissionDenied
+
+    if not request.user.has_perm(
+        "ecg.add_ecgfile"
+    ):
+        raise PermissionDenied
+
+    queryset = filter_ecg_records_for_user(
+        ECGRecord.objects.select_related(
+            "patient",
+            "doctor",
+            "appointment",
+            "hospital",
+            "branch",
+            "department",
+        ),
+        request.user,
+    )
+
+    record = get_object_or_404(
+        queryset,
+        pk=record_id,
+    )
+
+    form = ECGFileForm(
+        request.POST or None,
+        request.FILES or None,
+    )
+
+    if request.method == "POST" and form.is_valid():
+        ecg_file = form.save(
+            commit=False
+        )
+
+        ecg_file.record = record
+        ecg_file.save()
+
+        messages.success(
+            request,
+            "ECG file uploaded successfully.",
+        )
+
+        return redirect(
+            "ecg:record_detail",
+            record_id=record.pk,
+        )
+
+    return render(
+        request,
+        "ecg/upload_file.html",
+        {
+            "form": form,
             "record": record,
         },
     )

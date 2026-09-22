@@ -1,6 +1,9 @@
+import tempfile
+
 from django.contrib.auth.models import Permission
 from django.core.exceptions import ValidationError
-from django.test import TestCase
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -13,7 +16,7 @@ from appointments.tests.factories import (
     PatientFactory,
     UserFactory,
 )
-from ecg.models import ECGRecord
+from ecg.models import ECGFile, ECGRecord
 
 
 def grant_add_ecg_permission(user):
@@ -28,6 +31,14 @@ def grant_view_ecg_permission(user):
     permission = Permission.objects.get(
         content_type__app_label="ecg",
         codename="view_ecgrecord",
+    )
+    user.user_permissions.add(permission)
+
+
+def grant_add_ecg_file_permission(user):
+    permission = Permission.objects.get(
+        content_type__app_label="ecg",
+        codename="add_ecgfile",
     )
     user.user_permissions.add(permission)
 
@@ -678,4 +689,266 @@ class ECGRecordDetailSecurityTests(TestCase):
         self.assertEqual(
             response.status_code,
             404,
+        )
+
+class ECGFileUploadSecurityTests(TestCase):
+    def setUp(self):
+        self.private_media = tempfile.TemporaryDirectory()
+        self.settings_override = override_settings(
+            PRIVATE_MEDIA_ROOT=self.private_media.name,
+        )
+        self.settings_override.enable()
+
+    def tearDown(self):
+        self.settings_override.disable()
+        self.private_media.cleanup()
+
+    def test_user_without_add_file_permission_gets_403(self):
+        doctor = DoctorFactory()
+
+        patient = PatientFactory(
+            doctor=doctor,
+        )
+
+        appointment = AppointmentFactory(
+            doctor=doctor,
+            patient=patient,
+        )
+
+        record = ECGRecord.objects.create(
+            patient=patient,
+            doctor=doctor,
+            appointment=appointment,
+            hospital=appointment.hospital,
+            branch=appointment.branch,
+            department=appointment.department,
+        )
+
+        grant_view_ecg_permission(
+            doctor.user
+        )
+        self.client.force_login(
+            doctor.user
+        )
+
+        response = self.client.get(
+            reverse(
+                "ecg:upload_file",
+                kwargs={
+                    "record_id": record.pk,
+                },
+            )
+        )
+
+        self.assertEqual(
+            response.status_code,
+            403,
+        )
+
+    def test_doctor_cannot_upload_to_foreign_record_by_id(self):
+        doctor = DoctorFactory()
+        foreign_doctor = DoctorFactory()
+
+        foreign_patient = PatientFactory(
+            doctor=foreign_doctor,
+        )
+
+        foreign_appointment = AppointmentFactory(
+            doctor=foreign_doctor,
+            patient=foreign_patient,
+        )
+
+        foreign_record = ECGRecord.objects.create(
+            patient=foreign_patient,
+            doctor=foreign_doctor,
+            appointment=foreign_appointment,
+            hospital=foreign_appointment.hospital,
+            branch=foreign_appointment.branch,
+            department=foreign_appointment.department,
+        )
+
+        grant_view_ecg_permission(
+            doctor.user
+        )
+        grant_add_ecg_file_permission(
+            doctor.user
+        )
+        self.client.force_login(
+            doctor.user
+        )
+
+        test_file = SimpleUploadedFile(
+            "foreign.csv",
+            b"time,value\n0,1\n",
+            content_type="text/csv",
+        )
+
+        response = self.client.post(
+            reverse(
+                "ecg:upload_file",
+                kwargs={
+                    "record_id": foreign_record.pk,
+                },
+            ),
+            {
+                "kind": ECGFile.FileKind.CSV,
+                "file": test_file,
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            404,
+        )
+        self.assertEqual(
+            ECGFile.objects.count(),
+            0,
+        )
+
+    def test_valid_upload_creates_private_ecg_file_for_record(self):
+        doctor = DoctorFactory()
+
+        patient = PatientFactory(
+            doctor=doctor,
+        )
+
+        appointment = AppointmentFactory(
+            doctor=doctor,
+            patient=patient,
+        )
+
+        record = ECGRecord.objects.create(
+            patient=patient,
+            doctor=doctor,
+            appointment=appointment,
+            hospital=appointment.hospital,
+            branch=appointment.branch,
+            department=appointment.department,
+        )
+
+        grant_view_ecg_permission(
+            doctor.user
+        )
+        grant_add_ecg_file_permission(
+            doctor.user
+        )
+        self.client.force_login(
+            doctor.user
+        )
+
+        test_file = SimpleUploadedFile(
+            "sample.csv",
+            b"time,value\n0,1\n",
+            content_type="text/csv",
+        )
+
+        response = self.client.post(
+            reverse(
+                "ecg:upload_file",
+                kwargs={
+                    "record_id": record.pk,
+                },
+            ),
+            {
+                "kind": ECGFile.FileKind.CSV,
+                "file": test_file,
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            302,
+        )
+        self.assertEqual(
+            ECGFile.objects.count(),
+            1,
+        )
+
+        ecg_file = ECGFile.objects.get()
+
+        self.assertEqual(
+            ecg_file.record_id,
+            record.pk,
+        )
+        self.assertEqual(
+            ecg_file.kind,
+            ECGFile.FileKind.CSV,
+        )
+        self.assertTrue(
+            ecg_file.file.name.startswith(
+                f"ecg/{record.pk}/"
+            )
+        )
+        self.assertTrue(
+            ecg_file.file.name.endswith(
+                ".csv"
+            )
+        )
+        self.assertTrue(
+            ecg_file.file.storage.exists(
+                ecg_file.file.name
+            )
+        )
+
+    def test_mismatched_extension_is_rejected(self):
+        doctor = DoctorFactory()
+
+        patient = PatientFactory(
+            doctor=doctor,
+        )
+
+        appointment = AppointmentFactory(
+            doctor=doctor,
+            patient=patient,
+        )
+
+        record = ECGRecord.objects.create(
+            patient=patient,
+            doctor=doctor,
+            appointment=appointment,
+            hospital=appointment.hospital,
+            branch=appointment.branch,
+            department=appointment.department,
+        )
+
+        grant_view_ecg_permission(
+            doctor.user
+        )
+        grant_add_ecg_file_permission(
+            doctor.user
+        )
+        self.client.force_login(
+            doctor.user
+        )
+
+        test_file = SimpleUploadedFile(
+            "not-a-report.csv",
+            b"time,value\n0,1\n",
+            content_type="text/csv",
+        )
+
+        response = self.client.post(
+            reverse(
+                "ecg:upload_file",
+                kwargs={
+                    "record_id": record.pk,
+                },
+            ),
+            {
+                "kind": ECGFile.FileKind.REPORT_PDF,
+                "file": test_file,
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+        self.assertEqual(
+            ECGFile.objects.count(),
+            0,
+        )
+        self.assertIn(
+            "file",
+            response.context["form"].errors,
         )

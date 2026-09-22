@@ -1,6 +1,41 @@
-from django import forms
+import os
 
-from .models import ECGRecord
+from django import forms
+from django.conf import settings
+
+from .models import ECGFile, ECGRecord
+
+
+DEFAULT_ECG_MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+
+ECG_ALLOWED_EXTENSIONS = {
+    ECGFile.FileKind.RAW_SIGNAL: {
+        ".dat",
+        ".edf",
+    },
+    ECGFile.FileKind.REPORT_PDF: {
+        ".pdf",
+    },
+    ECGFile.FileKind.IMAGE: {
+        ".jpg",
+        ".jpeg",
+        ".png",
+    },
+    ECGFile.FileKind.XML: {
+        ".xml",
+    },
+    ECGFile.FileKind.DICOM: {
+        ".dcm",
+        ".dicom",
+    },
+    ECGFile.FileKind.WFDB: {
+        ".hea",
+        ".dat",
+    },
+    ECGFile.FileKind.CSV: {
+        ".csv",
+    },
+}
 
 
 class ECGRecordForm(forms.ModelForm):
@@ -141,3 +176,141 @@ class ECGRecordForm(forms.ModelForm):
         self.fields["hospital"].required = False
         self.fields["branch"].required = False
         self.fields["department"].required = False
+
+
+class ECGFileForm(forms.ModelForm):
+    class Meta:
+        model = ECGFile
+
+        fields = [
+            "kind",
+            "file",
+        ]
+
+        widgets = {
+            "kind": forms.Select(
+                attrs={
+                    "class": "form-select",
+                }
+            ),
+            "file": forms.FileInput(
+                attrs={
+                    "class": "form-control",
+                }
+            ),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        supported_kinds = {
+            ECGFile.FileKind.RAW_SIGNAL,
+            ECGFile.FileKind.REPORT_PDF,
+            ECGFile.FileKind.IMAGE,
+            ECGFile.FileKind.XML,
+            ECGFile.FileKind.DICOM,
+            ECGFile.FileKind.WFDB,
+            ECGFile.FileKind.CSV,
+        }
+
+        self.fields["kind"].choices = [
+            choice
+            for choice in ECGFile.FileKind.choices
+            if choice[0] in supported_kinds
+        ]
+
+        max_upload_bytes = getattr(
+            settings,
+            "ECG_MAX_UPLOAD_BYTES",
+            DEFAULT_ECG_MAX_UPLOAD_BYTES,
+        )
+
+        max_upload_mb = max_upload_bytes // (
+            1024 * 1024
+        )
+
+        self.fields["file"].help_text = (
+            f"Maximum file size: {max_upload_mb} MB."
+        )
+
+    def clean_file(self):
+        uploaded_file = self.cleaned_data.get("file")
+
+        if uploaded_file is None:
+            return uploaded_file
+
+        if uploaded_file.size <= 0:
+            raise forms.ValidationError(
+                "The uploaded ECG file is empty."
+            )
+
+        max_upload_bytes = getattr(
+            settings,
+            "ECG_MAX_UPLOAD_BYTES",
+            DEFAULT_ECG_MAX_UPLOAD_BYTES,
+        )
+
+        if uploaded_file.size > max_upload_bytes:
+            max_upload_mb = max_upload_bytes // (
+                1024 * 1024
+            )
+
+            raise forms.ValidationError(
+                f"The ECG file must not exceed "
+                f"{max_upload_mb} MB."
+            )
+
+        filename = os.path.basename(
+            uploaded_file.name
+        )
+
+        if not filename:
+            raise forms.ValidationError(
+                "The uploaded file must have a valid name."
+            )
+
+        extension = os.path.splitext(
+            filename
+        )[1].lower()
+
+        if not extension:
+            raise forms.ValidationError(
+                "The uploaded ECG file must have "
+                "a recognized file extension."
+            )
+
+        return uploaded_file
+
+    def clean(self):
+        cleaned_data = super().clean()
+
+        uploaded_file = cleaned_data.get("file")
+        kind = cleaned_data.get("kind")
+
+        if uploaded_file is None or not kind:
+            return cleaned_data
+
+        extension = os.path.splitext(
+            os.path.basename(uploaded_file.name)
+        )[1].lower()
+
+        allowed_extensions = ECG_ALLOWED_EXTENSIONS.get(
+            kind,
+            set(),
+        )
+
+        if extension not in allowed_extensions:
+            allowed_text = ", ".join(
+                sorted(allowed_extensions)
+            )
+
+            self.add_error(
+                "file",
+                (
+                    "This file type does not match the "
+                    f"selected ECG file kind. Allowed: "
+                    f"{allowed_text}."
+                ),
+            )
+
+        return cleaned_data
