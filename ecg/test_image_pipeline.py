@@ -99,6 +99,105 @@ class ECGImagePipelineTests(TestCase):
 
         return buffer.getvalue()
 
+    def create_two_region_trace_png_bytes(self):
+        width = 20
+        height = 24
+
+        image = Image.new(
+            "RGB",
+            (width, height),
+            color=(
+                255,
+                255,
+                255,
+            ),
+        )
+
+        first_trace_rows = [
+            5,
+            4,
+            3,
+            4,
+            5,
+            6,
+            5,
+            4,
+            3,
+            4,
+            5,
+            6,
+            5,
+            4,
+            3,
+            4,
+            5,
+            6,
+            5,
+            4,
+        ]
+
+        second_trace_rows = [
+            18,
+            17,
+            16,
+            17,
+            18,
+            19,
+            18,
+            17,
+            16,
+            17,
+            18,
+            19,
+            18,
+            17,
+            16,
+            17,
+            18,
+            19,
+            18,
+            17,
+        ]
+
+        for x_position, y_position in enumerate(
+            first_trace_rows
+        ):
+            image.putpixel(
+                (
+                    x_position,
+                    y_position,
+                ),
+                (
+                    0,
+                    0,
+                    0,
+                ),
+            )
+
+        for x_position, y_position in enumerate(
+            second_trace_rows
+        ):
+            image.putpixel(
+                (
+                    x_position,
+                    y_position,
+                ),
+                (
+                    0,
+                    0,
+                    0,
+                ),
+            )
+
+        buffer = io.BytesIO()
+
+        image.save(
+            buffer,
+            format="PNG",
+        )
+
+        return buffer.getvalue()
+
     def create_blank_png_bytes(self):
         image = Image.new(
             "RGB",
@@ -205,6 +304,11 @@ class ECGImagePipelineTests(TestCase):
         )
 
         self.assertEqual(
+            result.lead_segmentation.width,
+            20,
+        )
+
+        self.assertEqual(
             result.reconstructed_signal.width,
             20,
         )
@@ -215,8 +319,127 @@ class ECGImagePipelineTests(TestCase):
         )
 
         self.assertGreater(
+            result.lead_segmentation.region_count,
+            0,
+        )
+
+        self.assertGreater(
+            len(
+                result.lead_signals
+            ),
+            0,
+        )
+
+        self.assertGreater(
             result.reconstructed_signal.sample_count,
             0,
+        )
+
+    def test_pipeline_reconstructs_detected_lead_region_signal(self):
+        ecg_file = self.create_image_file(
+            self.create_trace_png_bytes()
+        )
+
+        result = run_ecg_image_pipeline(
+            ecg_file
+        )
+
+        self.assertEqual(
+            result.region_count,
+            1,
+        )
+
+        self.assertEqual(
+            len(
+                result.lead_signals
+            ),
+            1,
+        )
+
+        lead_signal = result.lead_signals[0]
+
+        self.assertEqual(
+            lead_signal.index,
+            1,
+        )
+
+        self.assertEqual(
+            lead_signal.reconstructed_signal.sample_count,
+            20,
+        )
+
+        self.assertEqual(
+            lead_signal.reconstructed_signal.missing_count,
+            0,
+        )
+
+        self.assertEqual(
+            lead_signal.coverage_ratio,
+            1.0,
+        )
+
+    @override_settings(
+        ECG_LEAD_SEGMENTATION_MAX_GAP_ROWS=1,
+        ECG_LEAD_SEGMENTATION_PADDING_ROWS=1,
+    )
+    def test_pipeline_reconstructs_multiple_detected_regions(self):
+        ecg_file = self.create_image_file(
+            self.create_two_region_trace_png_bytes(),
+            filename="two-regions.png",
+        )
+
+        result = run_ecg_image_pipeline(
+            ecg_file
+        )
+
+        self.assertEqual(
+            result.region_count,
+            2,
+        )
+
+        self.assertEqual(
+            len(
+                result.lead_signals
+            ),
+            2,
+        )
+
+        first = result.lead_signals[0]
+        second = result.lead_signals[1]
+
+        self.assertEqual(
+            first.index,
+            1,
+        )
+
+        self.assertEqual(
+            second.index,
+            2,
+        )
+
+        self.assertEqual(
+            first.reconstructed_signal.sample_count,
+            20,
+        )
+
+        self.assertEqual(
+            second.reconstructed_signal.sample_count,
+            20,
+        )
+
+        self.assertEqual(
+            first.reconstructed_signal.missing_count,
+            0,
+        )
+
+        self.assertEqual(
+            second.reconstructed_signal.missing_count,
+            0,
+        )
+
+        self.assertLess(
+            first.region.bottom,
+            second.region.top,
         )
 
     def test_invalid_image_is_wrapped_as_pipeline_error(self):
