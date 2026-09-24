@@ -11,6 +11,12 @@ from ecg.services.lead_segmentation import (
     ECGLeadSegmentationResult,
     segment_ecg_lead_regions,
 )
+from ecg.services.perspective import (
+    ECGImageQuadrilateral,
+    ECGPerspectiveCorrectionError,
+    RectifiedECGImage,
+    correct_ecg_perspective,
+)
 from ecg.services.signal_reconstruction import (
     ECGSignalReconstructionError,
     ReconstructedECGSignal,
@@ -56,6 +62,7 @@ class ECGImagePipelineResult:
     lead_segmentation: ECGLeadSegmentationResult
     lead_signals: tuple[ECGImageLeadSignal, ...]
     reconstructed_signal: ReconstructedECGSignal
+    perspective_correction: RectifiedECGImage | None = None
 
     @property
     def width(self):
@@ -87,6 +94,44 @@ class ECGImagePipelineResult:
     @property
     def x_positions(self):
         return self.reconstructed_signal.x_positions
+
+    @property
+    def perspective_corrected(self):
+        return self.perspective_correction is not None
+
+
+def _prepare_pipeline_image(
+    processed_image,
+    *,
+    perspective_corners,
+):
+    if perspective_corners is None:
+        return (
+            processed_image,
+            None,
+        )
+
+    try:
+        perspective_correction = correct_ecg_perspective(
+            processed_image,
+            corners=perspective_corners,
+        )
+    except ECGPerspectiveCorrectionError as exc:
+        raise ECGImagePipelineError(
+            "The ECG image perspective could not be corrected safely."
+        ) from exc
+
+    corrected_processed_image = ProcessedECGImage(
+        width=perspective_correction.width,
+        height=perspective_correction.height,
+        source_mode=processed_image.source_mode,
+        grayscale=perspective_correction.grayscale,
+    )
+
+    return (
+        corrected_processed_image,
+        perspective_correction,
+    )
 
 
 def _reconstruct_lead_signals(
@@ -127,6 +172,7 @@ def run_ecg_image_pipeline(
     ecg_file,
     region_top=0,
     region_bottom=None,
+    perspective_corners: ECGImageQuadrilateral | None = None,
 ):
     try:
         processed_image = process_ecg_image(
@@ -136,6 +182,14 @@ def run_ecg_image_pipeline(
         raise ECGImagePipelineError(
             "The ECG image could not be prepared for analysis."
         ) from exc
+
+    (
+        processed_image,
+        perspective_correction,
+    ) = _prepare_pipeline_image(
+        processed_image,
+        perspective_corners=perspective_corners,
+    )
 
     try:
         trace_candidates = extract_trace_candidates(
@@ -180,4 +234,5 @@ def run_ecg_image_pipeline(
         lead_segmentation=lead_segmentation,
         lead_signals=lead_signals,
         reconstructed_signal=reconstructed_signal,
+        perspective_correction=perspective_correction,
     )

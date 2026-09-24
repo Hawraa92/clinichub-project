@@ -12,6 +12,9 @@ from ecg.services.image_pipeline import (
     ECGImagePipelineError,
     run_ecg_image_pipeline,
 )
+from ecg.services.perspective import (
+    ECGImageQuadrilateral,
+)
 
 
 class ECGImagePipelineTests(TestCase):
@@ -479,3 +482,86 @@ class ECGImagePipelineTests(TestCase):
                 region_top=0,
                 region_bottom=3,
             )
+
+    def test_pipeline_skips_perspective_when_corners_are_not_supplied(
+        self,
+    ):
+        ecg_file = self.create_image_file(
+            self.create_trace_png_bytes()
+        )
+
+        result = run_ecg_image_pipeline(
+            ecg_file
+        )
+
+        self.assertFalse(
+            result.perspective_corrected
+        )
+
+        self.assertIsNone(
+            result.perspective_correction
+        )
+
+        self.assertEqual(
+            result.width,
+            20,
+        )
+
+        self.assertEqual(
+            result.height,
+            12,
+        )
+
+    def test_pipeline_applies_perspective_when_corners_are_supplied(
+        self,
+    ):
+        ecg_file = self.create_image_file(
+            self.create_trace_png_bytes()
+        )
+
+        corners = ECGImageQuadrilateral(
+            top_left=(
+                0,
+                0,
+            ),
+            top_right=(
+                19,
+                0,
+            ),
+            bottom_right=(
+                19,
+                11,
+            ),
+            bottom_left=(
+                0,
+                11,
+            ),
+        )
+
+        result = run_ecg_image_pipeline(
+            ecg_file,
+            perspective_corners=corners,
+        )
+
+        self.assertTrue(
+            result.perspective_corrected
+        )
+
+        self.assertIsNotNone(
+            result.perspective_correction
+        )
+
+        self.assertEqual(
+            result.width,
+            20,
+        )
+
+        self.assertEqual(
+            result.height,
+            12,
+        )
+
+        self.assertEqual(
+            result.reconstructed_signal.sample_count,
+            20,
+        )
