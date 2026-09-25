@@ -1,5 +1,6 @@
 import io
 import tempfile
+from unittest.mock import patch
 
 from PIL import Image
 
@@ -11,6 +12,10 @@ from ecg.models import ECGFile, ECGRecord
 from ecg.services.image_pipeline import (
     ECGImagePipelineError,
     run_ecg_image_pipeline,
+)
+from ecg.services.paper_detection import (
+    ECGPaperDetectionError,
+    ECGPaperDetectionResult,
 )
 from ecg.services.perspective import (
     ECGImageQuadrilateral,
@@ -502,6 +507,14 @@ class ECGImagePipelineTests(TestCase):
             result.perspective_correction
         )
 
+        self.assertFalse(
+            result.paper_detected
+        )
+
+        self.assertIsNone(
+            result.paper_detection
+        )
+
         self.assertEqual(
             result.width,
             20,
@@ -551,6 +564,14 @@ class ECGImagePipelineTests(TestCase):
             result.perspective_correction
         )
 
+        self.assertFalse(
+            result.paper_detected
+        )
+
+        self.assertIsNone(
+            result.paper_detection
+        )
+
         self.assertEqual(
             result.width,
             20,
@@ -564,4 +585,161 @@ class ECGImagePipelineTests(TestCase):
         self.assertEqual(
             result.reconstructed_signal.sample_count,
             20,
+        )
+
+    def test_pipeline_auto_detects_paper_and_applies_perspective(
+        self,
+    ):
+        ecg_file = self.create_image_file(
+            self.create_trace_png_bytes()
+        )
+
+        corners = ECGImageQuadrilateral(
+            top_left=(
+                0,
+                0,
+            ),
+            top_right=(
+                19,
+                0,
+            ),
+            bottom_right=(
+                19,
+                11,
+            ),
+            bottom_left=(
+                0,
+                11,
+            ),
+        )
+
+        detection_result = ECGPaperDetectionResult(
+            corners=corners,
+            contour_area=209.0,
+            image_area=240,
+            area_ratio=209.0 / 240.0,
+            candidate_count=1,
+        )
+
+        with patch(
+            "ecg.services.image_pipeline.detect_ecg_paper_corners",
+            return_value=detection_result,
+        ) as detect_mock:
+            result = run_ecg_image_pipeline(
+                ecg_file,
+                auto_detect_paper=True,
+            )
+
+        detect_mock.assert_called_once()
+
+        self.assertTrue(
+            result.paper_detected
+        )
+
+        self.assertIs(
+            result.paper_detection,
+            detection_result,
+        )
+
+        self.assertTrue(
+            result.perspective_corrected
+        )
+
+        self.assertIsNotNone(
+            result.perspective_correction
+        )
+
+        self.assertEqual(
+            result.width,
+            20,
+        )
+
+        self.assertEqual(
+            result.height,
+            12,
+        )
+
+        self.assertEqual(
+            result.reconstructed_signal.sample_count,
+            20,
+        )
+
+    def test_pipeline_wraps_automatic_paper_detection_failure(
+        self,
+    ):
+        ecg_file = self.create_image_file(
+            self.create_trace_png_bytes()
+        )
+
+        with patch(
+            "ecg.services.image_pipeline.detect_ecg_paper_corners",
+            side_effect=ECGPaperDetectionError(
+                "No reliable paper boundary."
+            ),
+        ):
+            with self.assertRaises(
+                ECGImagePipelineError
+            ):
+                run_ecg_image_pipeline(
+                    ecg_file,
+                    auto_detect_paper=True,
+                )
+
+    def test_manual_corners_take_priority_over_automatic_detection(
+        self,
+    ):
+        ecg_file = self.create_image_file(
+            self.create_trace_png_bytes()
+        )
+
+        corners = ECGImageQuadrilateral(
+            top_left=(
+                0,
+                0,
+            ),
+            top_right=(
+                19,
+                0,
+            ),
+            bottom_right=(
+                19,
+                11,
+            ),
+            bottom_left=(
+                0,
+                11,
+            ),
+        )
+
+        with patch(
+            "ecg.services.image_pipeline.detect_ecg_paper_corners"
+        ) as detect_mock:
+            result = run_ecg_image_pipeline(
+                ecg_file,
+                perspective_corners=corners,
+                auto_detect_paper=True,
+            )
+
+        detect_mock.assert_not_called()
+
+        self.assertTrue(
+            result.perspective_corrected
+        )
+
+        self.assertFalse(
+            result.paper_detected
+        )
+
+        self.assertIsNone(
+            result.paper_detection
+        )
+
+        self.assertEqual(
+            result.width,
+            20,
+        )
+
+        self.assertEqual(
+            result.height,
+            12,
         )

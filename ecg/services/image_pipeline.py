@@ -11,6 +11,11 @@ from ecg.services.lead_segmentation import (
     ECGLeadSegmentationResult,
     segment_ecg_lead_regions,
 )
+from ecg.services.paper_detection import (
+    ECGPaperDetectionError,
+    ECGPaperDetectionResult,
+    detect_ecg_paper_corners,
+)
 from ecg.services.perspective import (
     ECGImageQuadrilateral,
     ECGPerspectiveCorrectionError,
@@ -63,6 +68,7 @@ class ECGImagePipelineResult:
     lead_signals: tuple[ECGImageLeadSignal, ...]
     reconstructed_signal: ReconstructedECGSignal
     perspective_correction: RectifiedECGImage | None = None
+    paper_detection: ECGPaperDetectionResult | None = None
 
     @property
     def width(self):
@@ -99,22 +105,46 @@ class ECGImagePipelineResult:
     def perspective_corrected(self):
         return self.perspective_correction is not None
 
+    @property
+    def paper_detected(self):
+        return self.paper_detection is not None
+
 
 def _prepare_pipeline_image(
     processed_image,
     *,
     perspective_corners,
+    auto_detect_paper,
 ):
-    if perspective_corners is None:
+    paper_detection = None
+    corners = perspective_corners
+
+    if (
+        corners is None
+        and auto_detect_paper
+    ):
+        try:
+            paper_detection = detect_ecg_paper_corners(
+                processed_image
+            )
+        except ECGPaperDetectionError as exc:
+            raise ECGImagePipelineError(
+                "The ECG paper boundary could not be detected safely."
+            ) from exc
+
+        corners = paper_detection.corners
+
+    if corners is None:
         return (
             processed_image,
+            None,
             None,
         )
 
     try:
         perspective_correction = correct_ecg_perspective(
             processed_image,
-            corners=perspective_corners,
+            corners=corners,
         )
     except ECGPerspectiveCorrectionError as exc:
         raise ECGImagePipelineError(
@@ -131,6 +161,7 @@ def _prepare_pipeline_image(
     return (
         corrected_processed_image,
         perspective_correction,
+        paper_detection,
     )
 
 
@@ -173,6 +204,7 @@ def run_ecg_image_pipeline(
     region_top=0,
     region_bottom=None,
     perspective_corners: ECGImageQuadrilateral | None = None,
+    auto_detect_paper=False,
 ):
     try:
         processed_image = process_ecg_image(
@@ -186,9 +218,11 @@ def run_ecg_image_pipeline(
     (
         processed_image,
         perspective_correction,
+        paper_detection,
     ) = _prepare_pipeline_image(
         processed_image,
         perspective_corners=perspective_corners,
+        auto_detect_paper=auto_detect_paper,
     )
 
     try:
@@ -235,4 +269,5 @@ def run_ecg_image_pipeline(
         lead_signals=lead_signals,
         reconstructed_signal=reconstructed_signal,
         perspective_correction=perspective_correction,
+        paper_detection=paper_detection,
     )
