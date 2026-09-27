@@ -1,6 +1,6 @@
 import io
 import tempfile
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 from PIL import Image
 
@@ -826,6 +826,15 @@ class ECGImagePipelineTests(TestCase):
             result.calibrated
         )
 
+        for lead_signal in result.lead_signals:
+            self.assertIsNone(
+                lead_signal.calibrated_signal
+            )
+
+            self.assertFalse(
+                lead_signal.calibrated
+            )
+
     def test_pipeline_automatically_detects_grid_and_calibrates_signal(
         self,
     ):
@@ -837,7 +846,11 @@ class ECGImagePipelineTests(TestCase):
             self.create_grid_detection_result()
         )
 
-        calibrated_signal = (
+        overall_calibrated_signal = (
+            self.create_calibrated_signal()
+        )
+
+        lead_calibrated_signal = (
             self.create_calibrated_signal()
         )
 
@@ -848,7 +861,10 @@ class ECGImagePipelineTests(TestCase):
             ) as grid_mock,
             patch(
                 "ecg.services.image_pipeline.calibrate_reconstructed_signal",
-                return_value=calibrated_signal,
+                side_effect=(
+                    overall_calibrated_signal,
+                    lead_calibrated_signal,
+                ),
             ) as calibration_mock,
         ):
             result = run_ecg_image_pipeline(
@@ -860,9 +876,23 @@ class ECGImagePipelineTests(TestCase):
             result.processed_image
         )
 
-        calibration_mock.assert_called_once_with(
-            result.reconstructed_signal,
-            pixels_per_mm=grid_detection.pixels_per_mm,
+        self.assertEqual(
+            calibration_mock.call_count,
+            2,
+        )
+
+        self.assertEqual(
+            calibration_mock.call_args_list,
+            [
+                call(
+                    result.reconstructed_signal,
+                    pixels_per_mm=grid_detection.pixels_per_mm,
+                ),
+                call(
+                    result.lead_signals[0].reconstructed_signal,
+                    pixels_per_mm=grid_detection.pixels_per_mm,
+                ),
+            ],
         )
 
         self.assertIs(
@@ -872,7 +902,7 @@ class ECGImagePipelineTests(TestCase):
 
         self.assertIs(
             result.calibrated_signal,
-            calibrated_signal,
+            overall_calibrated_signal,
         )
 
         self.assertTrue(
@@ -882,6 +912,124 @@ class ECGImagePipelineTests(TestCase):
         self.assertEqual(
             result.pixels_per_mm,
             5.0,
+        )
+
+        self.assertEqual(
+            len(
+                result.lead_signals
+            ),
+            1,
+        )
+
+        self.assertTrue(
+            result.lead_signals[0].calibrated
+        )
+
+        self.assertIs(
+            result.lead_signals[0].calibrated_signal,
+            lead_calibrated_signal,
+        )
+
+    @override_settings(
+        ECG_LEAD_SEGMENTATION_MAX_GAP_ROWS=1,
+        ECG_LEAD_SEGMENTATION_PADDING_ROWS=1,
+    )
+    def test_pipeline_calibrates_each_detected_lead_with_same_grid_scale(
+        self,
+    ):
+        ecg_file = self.create_image_file(
+            self.create_two_region_trace_png_bytes(),
+            filename="two-regions-calibrated.png",
+        )
+
+        grid_detection = (
+            self.create_grid_detection_result()
+        )
+
+        overall_calibrated_signal = (
+            self.create_calibrated_signal()
+        )
+
+        first_lead_calibrated_signal = (
+            self.create_calibrated_signal()
+        )
+
+        second_lead_calibrated_signal = (
+            self.create_calibrated_signal()
+        )
+
+        with (
+            patch(
+                "ecg.services.image_pipeline.detect_ecg_grid_scale",
+                return_value=grid_detection,
+            ) as grid_mock,
+            patch(
+                "ecg.services.image_pipeline.calibrate_reconstructed_signal",
+                side_effect=(
+                    overall_calibrated_signal,
+                    first_lead_calibrated_signal,
+                    second_lead_calibrated_signal,
+                ),
+            ) as calibration_mock,
+        ):
+            result = run_ecg_image_pipeline(
+                ecg_file,
+                auto_calibrate=True,
+            )
+
+        grid_mock.assert_called_once_with(
+            result.processed_image
+        )
+
+        self.assertEqual(
+            result.region_count,
+            2,
+        )
+
+        self.assertEqual(
+            calibration_mock.call_count,
+            3,
+        )
+
+        self.assertEqual(
+            calibration_mock.call_args_list,
+            [
+                call(
+                    result.reconstructed_signal,
+                    pixels_per_mm=grid_detection.pixels_per_mm,
+                ),
+                call(
+                    result.lead_signals[0].reconstructed_signal,
+                    pixels_per_mm=grid_detection.pixels_per_mm,
+                ),
+                call(
+                    result.lead_signals[1].reconstructed_signal,
+                    pixels_per_mm=grid_detection.pixels_per_mm,
+                ),
+            ],
+        )
+
+        self.assertIs(
+            result.calibrated_signal,
+            overall_calibrated_signal,
+        )
+
+        self.assertIs(
+            result.lead_signals[0].calibrated_signal,
+            first_lead_calibrated_signal,
+        )
+
+        self.assertIs(
+            result.lead_signals[1].calibrated_signal,
+            second_lead_calibrated_signal,
+        )
+
+        self.assertTrue(
+            result.lead_signals[0].calibrated
+        )
+
+        self.assertTrue(
+            result.lead_signals[1].calibrated
         )
 
     def test_pipeline_wraps_grid_detection_failure_during_auto_calibration(
@@ -948,4 +1096,52 @@ class ECGImagePipelineTests(TestCase):
                 context.exception
             ),
             "The reconstructed ECG signal could not be calibrated safely.",
+        )
+
+    def test_pipeline_wraps_lead_calibration_failure_safely(
+        self,
+    ):
+        ecg_file = self.create_image_file(
+            self.create_trace_png_bytes()
+        )
+
+        grid_detection = (
+            self.create_grid_detection_result()
+        )
+
+        overall_calibrated_signal = (
+            self.create_calibrated_signal()
+        )
+
+        with (
+            patch(
+                "ecg.services.image_pipeline.detect_ecg_grid_scale",
+                return_value=grid_detection,
+            ),
+            patch(
+                "ecg.services.image_pipeline.calibrate_reconstructed_signal",
+                side_effect=(
+                    overall_calibrated_signal,
+                    ECGCalibrationError(
+                        "Lead calibration failed."
+                    ),
+                ),
+            ),
+        ):
+            with self.assertRaises(
+                ECGImagePipelineError
+            ) as context:
+                run_ecg_image_pipeline(
+                    ecg_file,
+                    auto_calibrate=True,
+                )
+
+        self.assertEqual(
+            str(
+                context.exception
+            ),
+            (
+                "The reconstructed ECG signal for detected "
+                "region 1 could not be calibrated safely."
+            ),
         )

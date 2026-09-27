@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from ecg.services.calibration import (
     CalibratedECGSignal,
@@ -52,6 +52,7 @@ class ECGImagePipelineError(ValueError):
 class ECGImageLeadSignal:
     region: ECGLeadRegion
     reconstructed_signal: ReconstructedECGSignal
+    calibrated_signal: CalibratedECGSignal | None = None
 
     @property
     def index(self):
@@ -68,6 +69,10 @@ class ECGImageLeadSignal:
     @property
     def x_positions(self):
         return self.reconstructed_signal.x_positions
+
+    @property
+    def calibrated(self):
+        return self.calibrated_signal is not None
 
 
 @dataclass
@@ -222,9 +227,10 @@ def _reconstruct_lead_signals(
     return tuple(lead_signals)
 
 
-def _automatically_calibrate_signal(
+def _automatically_calibrate_signals(
     processed_image,
     reconstructed_signal,
+    lead_signals,
 ):
     try:
         grid_detection = detect_ecg_grid_scale(
@@ -235,19 +241,45 @@ def _automatically_calibrate_signal(
             "The ECG grid scale could not be detected safely."
         ) from exc
 
+    pixels_per_mm = grid_detection.pixels_per_mm
+
     try:
         calibrated_signal = calibrate_reconstructed_signal(
             reconstructed_signal,
-            pixels_per_mm=grid_detection.pixels_per_mm,
+            pixels_per_mm=pixels_per_mm,
         )
     except ECGCalibrationError as exc:
         raise ECGImagePipelineError(
             "The reconstructed ECG signal could not be calibrated safely."
         ) from exc
 
+    calibrated_lead_signals = []
+
+    for lead_signal in lead_signals:
+        try:
+            lead_calibrated_signal = calibrate_reconstructed_signal(
+                lead_signal.reconstructed_signal,
+                pixels_per_mm=pixels_per_mm,
+            )
+        except ECGCalibrationError as exc:
+            raise ECGImagePipelineError(
+                "The reconstructed ECG signal for detected "
+                f"region {lead_signal.index} could not be calibrated safely."
+            ) from exc
+
+        calibrated_lead_signals.append(
+            replace(
+                lead_signal,
+                calibrated_signal=lead_calibrated_signal,
+            )
+        )
+
     return (
         grid_detection,
         calibrated_signal,
+        tuple(
+            calibrated_lead_signals
+        ),
     )
 
 
@@ -322,9 +354,11 @@ def run_ecg_image_pipeline(
         (
             grid_detection,
             calibrated_signal,
-        ) = _automatically_calibrate_signal(
+            lead_signals,
+        ) = _automatically_calibrate_signals(
             processed_image,
             reconstructed_signal,
+            lead_signals,
         )
 
     return ECGImagePipelineResult(
