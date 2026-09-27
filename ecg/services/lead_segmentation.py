@@ -11,6 +11,12 @@ DEFAULT_ECG_LEAD_SEGMENTATION_MAX_GAP_ROWS = 2
 DEFAULT_ECG_LEAD_SEGMENTATION_PADDING_ROWS = 2
 DEFAULT_ECG_LEAD_SEGMENTATION_MAX_REGIONS = 16
 
+DEFAULT_ECG_LEAD_LAYOUT_MIN_ACTIVE_PIXELS_PER_COLUMN = 1
+DEFAULT_ECG_LEAD_LAYOUT_MAX_GAP_COLUMNS = 2
+DEFAULT_ECG_LEAD_LAYOUT_PADDING_COLUMNS = 2
+DEFAULT_ECG_LEAD_LAYOUT_MAX_COLUMNS_PER_ROW = 8
+DEFAULT_ECG_LEAD_LAYOUT_MAX_CELLS = 24
+
 
 class ECGLeadSegmentationError(ValueError):
     """Raised when ECG lead-region segmentation cannot be completed safely."""
@@ -45,6 +51,83 @@ class ECGLeadSegmentationResult:
         return len(self.regions)
 
 
+@dataclass(frozen=True)
+class ECGLeadLayoutCell:
+    index: int
+    row_index: int
+    column_index: int
+    left: int
+    right: int
+    top: int
+    bottom: int
+    active_left: int
+    active_right: int
+    active_top: int
+    active_bottom: int
+    candidate_pixel_count: int
+
+    @property
+    def width(self):
+        return self.right - self.left
+
+    @property
+    def height(self):
+        return self.bottom - self.top
+
+    @property
+    def active_width(self):
+        return self.active_right - self.active_left
+
+    @property
+    def active_height(self):
+        return self.active_bottom - self.active_top
+
+
+@dataclass(frozen=True)
+class ECGLeadLayoutResult:
+    width: int
+    height: int
+    rows: tuple[ECGLeadRegion, ...]
+    cells: tuple[ECGLeadLayoutCell, ...]
+
+    @property
+    def row_count(self):
+        return len(self.rows)
+
+    @property
+    def cell_count(self):
+        return len(self.cells)
+
+    @property
+    def columns_per_row(self):
+        counts = []
+
+        for row in self.rows:
+            count = sum(
+                1
+                for cell in self.cells
+                if cell.row_index == row.index
+            )
+
+            counts.append(
+                count
+            )
+
+        return tuple(
+            counts
+        )
+
+    @property
+    def max_column_count(self):
+        if not self.cells:
+            return 0
+
+        return max(
+            cell.column_index
+            for cell in self.cells
+        )
+
+
 def _validate_candidates(candidates):
     if not isinstance(
         candidates,
@@ -56,7 +139,10 @@ def _validate_candidates(candidates):
 
     mask = candidates.candidate_mask
 
-    if not isinstance(mask, np.ndarray):
+    if not isinstance(
+        mask,
+        np.ndarray,
+    ):
         raise ECGLeadSegmentationError(
             "Candidate mask must be a NumPy array."
         )
@@ -163,24 +249,131 @@ def _get_max_regions():
     return value
 
 
-def _group_active_rows(
-    active_rows,
-    max_gap_rows,
+def _get_layout_min_active_pixels_per_column():
+    value = getattr(
+        settings,
+        "ECG_LEAD_LAYOUT_MIN_ACTIVE_PIXELS_PER_COLUMN",
+        DEFAULT_ECG_LEAD_LAYOUT_MIN_ACTIVE_PIXELS_PER_COLUMN,
+    )
+
+    if (
+        not isinstance(value, int)
+        or isinstance(value, bool)
+        or value < 1
+    ):
+        raise ECGLeadSegmentationError(
+            "Minimum active pixels per layout column "
+            "must be a positive integer."
+        )
+
+    return value
+
+
+def _get_layout_max_gap_columns():
+    value = getattr(
+        settings,
+        "ECG_LEAD_LAYOUT_MAX_GAP_COLUMNS",
+        DEFAULT_ECG_LEAD_LAYOUT_MAX_GAP_COLUMNS,
+    )
+
+    if (
+        not isinstance(value, int)
+        or isinstance(value, bool)
+        or value < 0
+    ):
+        raise ECGLeadSegmentationError(
+            "Maximum layout column gap must be "
+            "a non-negative integer."
+        )
+
+    return value
+
+
+def _get_layout_padding_columns():
+    value = getattr(
+        settings,
+        "ECG_LEAD_LAYOUT_PADDING_COLUMNS",
+        DEFAULT_ECG_LEAD_LAYOUT_PADDING_COLUMNS,
+    )
+
+    if (
+        not isinstance(value, int)
+        or isinstance(value, bool)
+        or value < 0
+    ):
+        raise ECGLeadSegmentationError(
+            "Layout column padding must be "
+            "a non-negative integer."
+        )
+
+    return value
+
+
+def _get_layout_max_columns_per_row():
+    value = getattr(
+        settings,
+        "ECG_LEAD_LAYOUT_MAX_COLUMNS_PER_ROW",
+        DEFAULT_ECG_LEAD_LAYOUT_MAX_COLUMNS_PER_ROW,
+    )
+
+    if (
+        not isinstance(value, int)
+        or isinstance(value, bool)
+        or value < 1
+    ):
+        raise ECGLeadSegmentationError(
+            "Maximum layout columns per row "
+            "must be a positive integer."
+        )
+
+    return value
+
+
+def _get_layout_max_cells():
+    value = getattr(
+        settings,
+        "ECG_LEAD_LAYOUT_MAX_CELLS",
+        DEFAULT_ECG_LEAD_LAYOUT_MAX_CELLS,
+    )
+
+    if (
+        not isinstance(value, int)
+        or isinstance(value, bool)
+        or value < 1
+    ):
+        raise ECGLeadSegmentationError(
+            "Maximum ECG lead-layout cell count "
+            "must be a positive integer."
+        )
+
+    return value
+
+
+def _group_active_positions(
+    active_positions,
+    max_gap,
 ):
     groups = []
 
     start = int(
-        active_rows[0]
+        active_positions[0]
     )
+
     previous = start
 
-    for row in active_rows[1:]:
-        row = int(row)
+    for position in active_positions[1:]:
+        position = int(
+            position
+        )
 
-        gap = row - previous - 1
+        gap = (
+            position
+            - previous
+            - 1
+        )
 
-        if gap <= max_gap_rows:
-            previous = row
+        if gap <= max_gap:
+            previous = position
             continue
 
         groups.append(
@@ -190,8 +383,8 @@ def _group_active_rows(
             )
         )
 
-        start = row
-        previous = row
+        start = position
+        previous = position
 
     groups.append(
         (
@@ -203,28 +396,48 @@ def _group_active_rows(
     return groups
 
 
-def _build_region_boundaries(
+def _group_active_rows(
+    active_rows,
+    max_gap_rows,
+):
+    return _group_active_positions(
+        active_rows,
+        max_gap_rows,
+    )
+
+
+def _group_active_columns(
+    active_columns,
+    max_gap_columns,
+):
+    return _group_active_positions(
+        active_columns,
+        max_gap_columns,
+    )
+
+
+def _build_boundaries(
     groups,
-    height,
-    padding_rows,
+    dimension_size,
+    padding,
 ):
     boundaries = []
 
     for start, end in groups:
-        top = max(
+        lower = max(
             0,
-            start - padding_rows,
+            start - padding,
         )
 
-        bottom = min(
-            height,
-            end + padding_rows + 1,
+        upper = min(
+            dimension_size,
+            end + padding + 1,
         )
 
         boundaries.append(
             [
-                top,
-                bottom,
+                lower,
+                upper,
             ]
         )
 
@@ -252,6 +465,30 @@ def _build_region_boundaries(
     return boundaries
 
 
+def _build_region_boundaries(
+    groups,
+    height,
+    padding_rows,
+):
+    return _build_boundaries(
+        groups,
+        height,
+        padding_rows,
+    )
+
+
+def _build_column_boundaries(
+    groups,
+    width,
+    padding_columns,
+):
+    return _build_boundaries(
+        groups,
+        width,
+        padding_columns,
+    )
+
+
 def segment_ecg_lead_regions(
     candidates,
 ):
@@ -259,10 +496,21 @@ def segment_ecg_lead_regions(
         candidates
     )
 
-    min_active_pixels = _get_min_active_pixels()
-    max_gap_rows = _get_max_gap_rows()
-    padding_rows = _get_padding_rows()
-    max_regions = _get_max_regions()
+    min_active_pixels = (
+        _get_min_active_pixels()
+    )
+
+    max_gap_rows = (
+        _get_max_gap_rows()
+    )
+
+    padding_rows = (
+        _get_padding_rows()
+    )
+
+    max_regions = (
+        _get_max_regions()
+    )
 
     row_counts = np.count_nonzero(
         mask,
@@ -270,7 +518,8 @@ def segment_ecg_lead_regions(
     )
 
     active_rows = np.flatnonzero(
-        row_counts >= min_active_pixels
+        row_counts
+        >= min_active_pixels
     )
 
     if active_rows.size == 0:
@@ -344,5 +593,206 @@ def segment_ecg_lead_regions(
         height=candidates.height,
         regions=tuple(
             regions
+        ),
+    )
+
+
+def _segment_layout_row(
+    mask,
+    row,
+    *,
+    width,
+    min_active_pixels_per_column,
+    max_gap_columns,
+    padding_columns,
+    max_columns_per_row,
+    starting_cell_index,
+):
+    row_mask = mask[
+        row.active_top:row.active_bottom,
+        :
+    ]
+
+    column_counts = np.count_nonzero(
+        row_mask,
+        axis=0,
+    )
+
+    active_columns = np.flatnonzero(
+        column_counts
+        >= min_active_pixels_per_column
+    )
+
+    if active_columns.size == 0:
+        raise ECGLeadSegmentationError(
+            f"No active ECG trace columns were detected "
+            f"for row {row.index}."
+        )
+
+    column_groups = _group_active_columns(
+        active_columns,
+        max_gap_columns,
+    )
+
+    if len(
+        column_groups
+    ) > max_columns_per_row:
+        raise ECGLeadSegmentationError(
+            f"Too many possible ECG lead columns were "
+            f"detected for row {row.index}."
+        )
+
+    column_boundaries = _build_column_boundaries(
+        column_groups,
+        width,
+        padding_columns,
+    )
+
+    cells = []
+
+    for column_index, (
+        group,
+        boundary,
+    ) in enumerate(
+        zip(
+            column_groups,
+            column_boundaries,
+        ),
+        start=1,
+    ):
+        (
+            active_left,
+            active_right_inclusive,
+        ) = group
+
+        left, right = boundary
+
+        if right <= left:
+            raise ECGLeadSegmentationError(
+                "An invalid ECG lead-layout cell was produced."
+            )
+
+        active_right = (
+            active_right_inclusive
+            + 1
+        )
+
+        candidate_pixel_count = int(
+            np.count_nonzero(
+                mask[
+                    row.active_top:row.active_bottom,
+                    active_left:active_right,
+                ]
+            )
+        )
+
+        if candidate_pixel_count <= 0:
+            raise ECGLeadSegmentationError(
+                "An ECG lead-layout cell contains "
+                "no trace candidates."
+            )
+
+        cell_index = (
+            starting_cell_index
+            + len(cells)
+        )
+
+        cells.append(
+            ECGLeadLayoutCell(
+                index=cell_index,
+                row_index=row.index,
+                column_index=column_index,
+                left=left,
+                right=right,
+                top=row.top,
+                bottom=row.bottom,
+                active_left=active_left,
+                active_right=active_right,
+                active_top=row.active_top,
+                active_bottom=row.active_bottom,
+                candidate_pixel_count=candidate_pixel_count,
+            )
+        )
+
+    return tuple(
+        cells
+    )
+
+
+def segment_ecg_lead_layout(
+    candidates,
+):
+    mask = _validate_candidates(
+        candidates
+    )
+
+    row_segmentation = (
+        segment_ecg_lead_regions(
+            candidates
+        )
+    )
+
+    min_active_pixels_per_column = (
+        _get_layout_min_active_pixels_per_column()
+    )
+
+    max_gap_columns = (
+        _get_layout_max_gap_columns()
+    )
+
+    padding_columns = (
+        _get_layout_padding_columns()
+    )
+
+    max_columns_per_row = (
+        _get_layout_max_columns_per_row()
+    )
+
+    max_cells = (
+        _get_layout_max_cells()
+    )
+
+    cells = []
+
+    for row in row_segmentation.regions:
+        row_cells = _segment_layout_row(
+            mask,
+            row,
+            width=candidates.width,
+            min_active_pixels_per_column=(
+                min_active_pixels_per_column
+            ),
+            max_gap_columns=max_gap_columns,
+            padding_columns=padding_columns,
+            max_columns_per_row=(
+                max_columns_per_row
+            ),
+            starting_cell_index=(
+                len(cells)
+                + 1
+            ),
+        )
+
+        cells.extend(
+            row_cells
+        )
+
+        if len(cells) > max_cells:
+            raise ECGLeadSegmentationError(
+                "Too many possible ECG lead-layout "
+                "cells were detected."
+            )
+
+    if not cells:
+        raise ECGLeadSegmentationError(
+            "No ECG lead-layout cells were detected."
+        )
+
+    return ECGLeadLayoutResult(
+        width=candidates.width,
+        height=candidates.height,
+        rows=row_segmentation.regions,
+        cells=tuple(
+            cells
         ),
     )
