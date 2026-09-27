@@ -9,6 +9,15 @@ from django.test import TestCase, override_settings
 
 from appointments.tests.factories import AppointmentFactory
 from ecg.models import ECGFile, ECGRecord
+from ecg.services.calibration import (
+    CalibratedECGSignal,
+    ECGCalibrationError,
+    ECGCalibrationParameters,
+)
+from ecg.services.grid_detection import (
+    ECGGridDetectionError,
+    ECGGridDetectionResult,
+)
 from ecg.services.image_pipeline import (
     ECGImagePipelineError,
     run_ecg_image_pipeline,
@@ -242,6 +251,45 @@ class ECGImagePipelineTests(TestCase):
                 content,
                 content_type="image/png",
             ),
+        )
+
+    def create_grid_detection_result(self):
+        return ECGGridDetectionResult(
+            pixels_per_mm=5.0,
+            x_spacing_pixels=5.0,
+            y_spacing_pixels=5.0,
+            x_grid_line_positions=(
+                0.0,
+                5.0,
+                10.0,
+                15.0,
+            ),
+            y_grid_line_positions=(
+                0.0,
+                5.0,
+                10.0,
+                15.0,
+            ),
+            axis_difference_ratio=0.0,
+        )
+
+    def create_calibrated_signal(self):
+        parameters = ECGCalibrationParameters(
+            pixels_per_mm=5.0,
+            paper_speed_mm_per_s=25.0,
+            gain_mm_per_mv=10.0,
+        )
+
+        return CalibratedECGSignal(
+            time_seconds=(
+                0.0,
+                0.008,
+            ),
+            amplitude_mv=(
+                0.0,
+                0.02,
+            ),
+            parameters=parameters,
         )
 
     def test_pipeline_reconstructs_signal_from_ecg_image(self):
@@ -742,4 +790,162 @@ class ECGImagePipelineTests(TestCase):
         self.assertEqual(
             result.height,
             12,
+        )
+
+    def test_pipeline_skips_grid_detection_and_calibration_by_default(
+        self,
+    ):
+        ecg_file = self.create_image_file(
+            self.create_trace_png_bytes()
+        )
+
+        with (
+            patch(
+                "ecg.services.image_pipeline.detect_ecg_grid_scale"
+            ) as grid_mock,
+            patch(
+                "ecg.services.image_pipeline.calibrate_reconstructed_signal"
+            ) as calibration_mock,
+        ):
+            result = run_ecg_image_pipeline(
+                ecg_file
+            )
+
+        grid_mock.assert_not_called()
+        calibration_mock.assert_not_called()
+
+        self.assertIsNone(
+            result.grid_detection
+        )
+
+        self.assertIsNone(
+            result.calibrated_signal
+        )
+
+        self.assertFalse(
+            result.calibrated
+        )
+
+    def test_pipeline_automatically_detects_grid_and_calibrates_signal(
+        self,
+    ):
+        ecg_file = self.create_image_file(
+            self.create_trace_png_bytes()
+        )
+
+        grid_detection = (
+            self.create_grid_detection_result()
+        )
+
+        calibrated_signal = (
+            self.create_calibrated_signal()
+        )
+
+        with (
+            patch(
+                "ecg.services.image_pipeline.detect_ecg_grid_scale",
+                return_value=grid_detection,
+            ) as grid_mock,
+            patch(
+                "ecg.services.image_pipeline.calibrate_reconstructed_signal",
+                return_value=calibrated_signal,
+            ) as calibration_mock,
+        ):
+            result = run_ecg_image_pipeline(
+                ecg_file,
+                auto_calibrate=True,
+            )
+
+        grid_mock.assert_called_once_with(
+            result.processed_image
+        )
+
+        calibration_mock.assert_called_once_with(
+            result.reconstructed_signal,
+            pixels_per_mm=grid_detection.pixels_per_mm,
+        )
+
+        self.assertIs(
+            result.grid_detection,
+            grid_detection,
+        )
+
+        self.assertIs(
+            result.calibrated_signal,
+            calibrated_signal,
+        )
+
+        self.assertTrue(
+            result.calibrated
+        )
+
+        self.assertEqual(
+            result.pixels_per_mm,
+            5.0,
+        )
+
+    def test_pipeline_wraps_grid_detection_failure_during_auto_calibration(
+        self,
+    ):
+        ecg_file = self.create_image_file(
+            self.create_trace_png_bytes()
+        )
+
+        with patch(
+            "ecg.services.image_pipeline.detect_ecg_grid_scale",
+            side_effect=ECGGridDetectionError(
+                "No reliable ECG grid scale."
+            ),
+        ):
+            with self.assertRaises(
+                ECGImagePipelineError
+            ) as context:
+                run_ecg_image_pipeline(
+                    ecg_file,
+                    auto_calibrate=True,
+                )
+
+        self.assertEqual(
+            str(
+                context.exception
+            ),
+            "The ECG grid scale could not be detected safely.",
+        )
+
+    def test_pipeline_wraps_calibration_failure_after_grid_detection(
+        self,
+    ):
+        ecg_file = self.create_image_file(
+            self.create_trace_png_bytes()
+        )
+
+        grid_detection = (
+            self.create_grid_detection_result()
+        )
+
+        with (
+            patch(
+                "ecg.services.image_pipeline.detect_ecg_grid_scale",
+                return_value=grid_detection,
+            ),
+            patch(
+                "ecg.services.image_pipeline.calibrate_reconstructed_signal",
+                side_effect=ECGCalibrationError(
+                    "Calibration failed."
+                ),
+            ),
+        ):
+            with self.assertRaises(
+                ECGImagePipelineError
+            ) as context:
+                run_ecg_image_pipeline(
+                    ecg_file,
+                    auto_calibrate=True,
+                )
+
+        self.assertEqual(
+            str(
+                context.exception
+            ),
+            "The reconstructed ECG signal could not be calibrated safely.",
         )

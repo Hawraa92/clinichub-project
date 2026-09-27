@@ -1,5 +1,15 @@
 from dataclasses import dataclass
 
+from ecg.services.calibration import (
+    CalibratedECGSignal,
+    ECGCalibrationError,
+    calibrate_reconstructed_signal,
+)
+from ecg.services.grid_detection import (
+    ECGGridDetectionError,
+    ECGGridDetectionResult,
+    detect_ecg_grid_scale,
+)
 from ecg.services.image_processing import (
     ECGImageProcessingError,
     ProcessedECGImage,
@@ -69,6 +79,8 @@ class ECGImagePipelineResult:
     reconstructed_signal: ReconstructedECGSignal
     perspective_correction: RectifiedECGImage | None = None
     paper_detection: ECGPaperDetectionResult | None = None
+    grid_detection: ECGGridDetectionResult | None = None
+    calibrated_signal: CalibratedECGSignal | None = None
 
     @property
     def width(self):
@@ -108,6 +120,17 @@ class ECGImagePipelineResult:
     @property
     def paper_detected(self):
         return self.paper_detection is not None
+
+    @property
+    def calibrated(self):
+        return self.calibrated_signal is not None
+
+    @property
+    def pixels_per_mm(self):
+        if self.grid_detection is None:
+            return None
+
+        return self.grid_detection.pixels_per_mm
 
 
 def _prepare_pipeline_image(
@@ -199,12 +222,42 @@ def _reconstruct_lead_signals(
     return tuple(lead_signals)
 
 
+def _automatically_calibrate_signal(
+    processed_image,
+    reconstructed_signal,
+):
+    try:
+        grid_detection = detect_ecg_grid_scale(
+            processed_image
+        )
+    except ECGGridDetectionError as exc:
+        raise ECGImagePipelineError(
+            "The ECG grid scale could not be detected safely."
+        ) from exc
+
+    try:
+        calibrated_signal = calibrate_reconstructed_signal(
+            reconstructed_signal,
+            pixels_per_mm=grid_detection.pixels_per_mm,
+        )
+    except ECGCalibrationError as exc:
+        raise ECGImagePipelineError(
+            "The reconstructed ECG signal could not be calibrated safely."
+        ) from exc
+
+    return (
+        grid_detection,
+        calibrated_signal,
+    )
+
+
 def run_ecg_image_pipeline(
     ecg_file,
     region_top=0,
     region_bottom=None,
     perspective_corners: ECGImageQuadrilateral | None = None,
     auto_detect_paper=False,
+    auto_calibrate=False,
 ):
     try:
         processed_image = process_ecg_image(
@@ -262,6 +315,18 @@ def run_ecg_image_pipeline(
         lead_segmentation,
     )
 
+    grid_detection = None
+    calibrated_signal = None
+
+    if auto_calibrate:
+        (
+            grid_detection,
+            calibrated_signal,
+        ) = _automatically_calibrate_signal(
+            processed_image,
+            reconstructed_signal,
+        )
+
     return ECGImagePipelineResult(
         processed_image=processed_image,
         trace_candidates=trace_candidates,
@@ -270,4 +335,6 @@ def run_ecg_image_pipeline(
         reconstructed_signal=reconstructed_signal,
         perspective_correction=perspective_correction,
         paper_detection=paper_detection,
+        grid_detection=grid_detection,
+        calibrated_signal=calibrated_signal,
     )
