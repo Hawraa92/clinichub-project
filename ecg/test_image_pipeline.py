@@ -1,6 +1,7 @@
 import io
 import tempfile
 from dataclasses import replace
+from types import SimpleNamespace
 from unittest.mock import call, patch
 from PIL import Image
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -23,6 +24,10 @@ from ecg.services.image_pipeline import (
 from ecg.services.lead_identification import (
     ECGLeadIdentificationError,
     identify_ecg_leads,
+)
+from ecg.services.lead_quality_assessment import (
+    ECGLeadQualityAssessmentError,
+    assess_ecg_lead_quality,
 )
 from ecg.services.lead_signal_extraction import (
     ECGLeadSignalExtractionError,
@@ -1841,3 +1846,375 @@ class ECGImagePipelineTests(TestCase):
         self.assertEqual(result.per_lead_signal_count, 12)
         # Current calibration is still global + vertical regions only.
         # Per-cell calibration and per-cell quality are future stages.
+
+    # =========================================================
+    # NEW: Independent Per-Lead Quality / Pipeline Integration
+    # =========================================================
+
+    def test_pipeline_skips_per_lead_quality_when_only_extraction_enabled(self):
+        """Named cell extraction alone must not run the new quality service."""
+        ecg_file = self.create_image_file(
+            self.create_twelve_cell_trace_png_bytes(),
+            filename="twelve-cells-no-lead-quality.png",
+        )
+        layout = self.create_twelve_cell_layout_result()
+
+        with (
+            patch(
+                "ecg.services.image_pipeline.segment_ecg_lead_layout",
+                return_value=layout,
+            ),
+            patch(
+                "ecg.services.image_pipeline.assess_ecg_lead_quality"
+            ) as quality_mock,
+        ):
+            result = run_ecg_image_pipeline(
+                ecg_file,
+                auto_detect_layout=True,
+                lead_layout_format="standard_3x4",
+                auto_extract_lead_signals=True,
+            )
+
+        quality_mock.assert_not_called()
+        self.assertTrue(result.per_lead_extracted)
+        self.assertEqual(result.per_lead_signal_count, 12)
+        self.assertIsNone(result.lead_quality_assessment)
+        self.assertFalse(result.per_lead_quality_assessed)
+        self.assertIsNone(result.per_lead_quality_level)
+        self.assertIsNone(result.per_lead_all_usable)
+        self.assertIsNone(result.per_lead_all_high_quality)
+        self.assertEqual(result.per_lead_unusable_names, ())
+        self.assertEqual(result.per_lead_quality_count, 0)
+
+    def test_global_quality_alone_does_not_assess_individual_leads(self):
+        """The old global assessment remains independent and opt-in."""
+        ecg_file = self.create_image_file(self.create_trace_png_bytes())
+
+        with (
+            patch(
+                "ecg.services.image_pipeline.extract_ecg_lead_signals"
+            ) as extraction_mock,
+            patch(
+                "ecg.services.image_pipeline.assess_ecg_lead_quality"
+            ) as lead_quality_mock,
+        ):
+            result = run_ecg_image_pipeline(
+                ecg_file,
+                auto_assess_quality=True,
+            )
+
+        extraction_mock.assert_not_called()
+        lead_quality_mock.assert_not_called()
+        self.assertTrue(result.quality_assessed)
+        self.assertTrue(result.processing_usable)
+        self.assertFalse(result.per_lead_extracted)
+        self.assertFalse(result.per_lead_quality_assessed)
+        self.assertIsNone(result.per_lead_all_usable)
+
+    def test_per_lead_quality_requires_extraction_before_image_processing(self):
+        ecg_file = self.create_image_file(self.create_trace_png_bytes())
+
+        with patch(
+            "ecg.services.image_pipeline.process_ecg_image"
+        ) as image_mock:
+            with self.assertRaises(ECGImagePipelineError) as context:
+                run_ecg_image_pipeline(
+                    ecg_file,
+                    auto_assess_lead_quality=True,
+                )
+
+        image_mock.assert_not_called()
+        self.assertEqual(
+            str(context.exception),
+            "Per-lead ECG quality assessment requires "
+            "auto_extract_lead_signals=True.",
+        )
+
+    def test_per_lead_quality_requires_explicit_format_before_processing(self):
+        ecg_file = self.create_image_file(self.create_trace_png_bytes())
+
+        with patch(
+            "ecg.services.image_pipeline.process_ecg_image"
+        ) as image_mock:
+            with self.assertRaises(ECGImagePipelineError) as context:
+                run_ecg_image_pipeline(
+                    ecg_file,
+                    auto_detect_layout=True,
+                    auto_extract_lead_signals=True,
+                    auto_assess_lead_quality=True,
+                )
+
+        image_mock.assert_not_called()
+        self.assertEqual(
+            str(context.exception),
+            "Independent ECG lead signal extraction requires "
+            "an explicit lead_layout_format.",
+        )
+
+    def test_pipeline_actually_assesses_twelve_independently_extracted_leads(self):
+        """Use a real synthetic image, not a mocked quality result."""
+        ecg_file = self.create_image_file(
+            self.create_twelve_cell_trace_png_bytes(),
+            filename="twelve-cells-quality.png",
+        )
+        layout = self.create_twelve_cell_layout_result()
+
+        with patch(
+            "ecg.services.image_pipeline.segment_ecg_lead_layout",
+            return_value=layout,
+        ) as layout_mock:
+            result = run_ecg_image_pipeline(
+                ecg_file,
+                auto_detect_layout=True,
+                lead_layout_format="standard_3x4",
+                auto_extract_lead_signals=True,
+                auto_assess_lead_quality=True,
+            )
+
+        layout_mock.assert_called_once_with(result.trace_candidates)
+        self.assertTrue(result.per_lead_extracted)
+        self.assertTrue(result.per_lead_quality_assessed)
+        self.assertEqual(result.per_lead_quality_count, 12)
+        self.assertEqual(result.per_lead_quality_level, "high")
+        self.assertTrue(result.per_lead_all_usable)
+        self.assertTrue(result.per_lead_all_high_quality)
+        self.assertEqual(result.per_lead_unusable_names, ())
+        self.assertTrue(result.lead_quality_assessment.complete_12_lead)
+        self.assertEqual(
+            result.lead_quality_assessment.lead_names,
+            result.per_lead_signal_names,
+        )
+        self.assertEqual(
+            result.lead_quality_assessment.high_quality_count,
+            12,
+        )
+        for assessed, extracted in zip(
+            result.lead_quality_assessment.leads,
+            result.per_lead_signals,
+        ):
+            with self.subTest(lead=assessed.name):
+                self.assertIs(assessed.extracted_lead, extracted)
+                self.assertTrue(assessed.usable)
+                self.assertEqual(assessed.sample_count, 20)
+                self.assertEqual(assessed.missing_count, 0)
+                self.assertEqual(assessed.coverage_ratio, 1.0)
+        # Per-cell assessment must not silently enable the global assessor.
+        self.assertFalse(result.quality_assessed)
+        self.assertIsNone(result.grid_detection)
+        self.assertIsNone(result.calibrated_signal)
+
+    def test_pipeline_passes_exact_extraction_result_to_lead_quality(self):
+        ecg_file = self.create_image_file(
+            self.create_twelve_cell_trace_png_bytes(),
+            filename="twelve-cells-quality-call.png",
+        )
+        layout = self.create_twelve_cell_layout_result()
+
+        with (
+            patch(
+                "ecg.services.image_pipeline.segment_ecg_lead_layout",
+                return_value=layout,
+            ),
+            patch(
+                "ecg.services.image_pipeline.assess_ecg_lead_quality",
+                wraps=assess_ecg_lead_quality,
+            ) as quality_mock,
+        ):
+            result = run_ecg_image_pipeline(
+                ecg_file,
+                auto_detect_layout=True,
+                lead_layout_format="standard_3x4",
+                auto_extract_lead_signals=True,
+                auto_assess_lead_quality=True,
+            )
+
+        quality_mock.assert_called_once_with(result.lead_signal_extraction)
+        self.assertEqual(result.per_lead_quality_count, 12)
+        self.assertIs(
+            result.lead_quality_assessment.get_lead("V6").extracted_lead,
+            result.lead_signal_extraction.get_lead("V6"),
+        )
+
+    def test_one_insufficient_lead_does_not_hide_behind_global_quality(self):
+        """Simulate one weak lead while retaining all twelve named results."""
+        ecg_file = self.create_image_file(
+            self.create_twelve_cell_trace_png_bytes(),
+            filename="twelve-cells-one-weak-lead.png",
+        )
+        layout = self.create_twelve_cell_layout_result()
+
+        def assess_with_one_weak_lead(extraction):
+            # This substitutes V6 quality metrics only; the remaining eleven
+            # signals and their real reconstruction results are unchanged.
+            modified_leads = tuple(
+                replace(
+                    lead,
+                    reconstructed_signal=SimpleNamespace(
+                        coverage_ratio=0.80,
+                        sample_count=20,
+                        missing_count=4,
+                    ),
+                ) if lead.name == "V6" else lead
+                for lead in extraction.leads
+            )
+            return assess_ecg_lead_quality(
+                replace(extraction, leads=modified_leads)
+            )
+
+        with (
+            patch(
+                "ecg.services.image_pipeline.segment_ecg_lead_layout",
+                return_value=layout,
+            ),
+            patch(
+                "ecg.services.image_pipeline.assess_ecg_lead_quality",
+                side_effect=assess_with_one_weak_lead,
+            ) as quality_mock,
+        ):
+            result = run_ecg_image_pipeline(
+                ecg_file,
+                auto_detect_layout=True,
+                lead_layout_format="standard_3x4",
+                auto_extract_lead_signals=True,
+                auto_assess_quality=True,
+                auto_assess_lead_quality=True,
+            )
+
+        quality_mock.assert_called_once_with(result.lead_signal_extraction)
+        self.assertTrue(result.quality_assessed)
+        self.assertTrue(result.processing_usable)
+        self.assertTrue(result.per_lead_quality_assessed)
+        self.assertEqual(result.per_lead_quality_count, 12)
+        self.assertFalse(result.per_lead_all_usable)
+        self.assertFalse(result.per_lead_all_high_quality)
+        self.assertEqual(result.per_lead_quality_level, "insufficient")
+        self.assertEqual(result.per_lead_unusable_names, ("V6",))
+        self.assertEqual(result.lead_quality_assessment.insufficient_count, 1)
+        self.assertEqual(result.lead_quality_assessment.high_quality_count, 11)
+        self.assertFalse(result.lead_quality_assessment.get_lead("V6").usable)
+        self.assertTrue(result.lead_quality_assessment.get_lead("I").usable)
+
+    def test_pipeline_wraps_per_lead_quality_failure_safely(self):
+        ecg_file = self.create_image_file(
+            self.create_twelve_cell_trace_png_bytes(),
+            filename="twelve-cells-quality-error.png",
+        )
+        layout = self.create_twelve_cell_layout_result()
+
+        with (
+            patch(
+                "ecg.services.image_pipeline.segment_ecg_lead_layout",
+                return_value=layout,
+            ),
+            patch(
+                "ecg.services.image_pipeline.assess_ecg_lead_quality",
+                side_effect=ECGLeadQualityAssessmentError(
+                    "Invalid per-lead metrics."
+                ),
+            ) as quality_mock,
+        ):
+            with self.assertRaises(ECGImagePipelineError) as context:
+                run_ecg_image_pipeline(
+                    ecg_file,
+                    auto_detect_layout=True,
+                    lead_layout_format="standard_3x4",
+                    auto_extract_lead_signals=True,
+                    auto_assess_lead_quality=True,
+                )
+
+        quality_mock.assert_called_once()
+        self.assertEqual(
+            str(context.exception),
+            "The independent ECG lead quality could not be assessed safely.",
+        )
+        self.assertIsInstance(
+            context.exception.__cause__,
+            ECGLeadQualityAssessmentError,
+        )
+
+    def test_extraction_failure_prevents_per_lead_quality_assessment(self):
+        ecg_file = self.create_image_file(self.create_trace_png_bytes())
+        layout = self.create_lead_layout_result()
+
+        with (
+            patch(
+                "ecg.services.image_pipeline.segment_ecg_lead_layout",
+                return_value=layout,
+            ),
+            patch(
+                "ecg.services.image_pipeline.extract_ecg_lead_signals",
+                side_effect=ECGLeadSignalExtractionError(
+                    "Simulated extraction failure."
+                ),
+            ),
+            patch(
+                "ecg.services.image_pipeline.assess_ecg_lead_quality"
+            ) as quality_mock,
+        ):
+            with self.assertRaises(ECGImagePipelineError) as context:
+                run_ecg_image_pipeline(
+                    ecg_file,
+                    auto_detect_layout=True,
+                    lead_layout_format="standard_3x4",
+                    auto_extract_lead_signals=True,
+                    auto_assess_lead_quality=True,
+                )
+
+        quality_mock.assert_not_called()
+        self.assertEqual(
+            str(context.exception),
+            "The independent ECG lead signals could not be extracted safely.",
+        )
+        self.assertIsInstance(
+            context.exception.__cause__,
+            ECGLeadSignalExtractionError,
+        )
+
+    def test_global_and_per_lead_quality_coexist_with_calibration(self):
+        ecg_file = self.create_image_file(
+            self.create_twelve_cell_trace_png_bytes(),
+            filename="twelve-cells-both-quality-modes.png",
+        )
+        layout = self.create_twelve_cell_layout_result()
+        grid_detection = self.create_grid_detection_result()
+        calibrated_signal = self.create_calibrated_signal()
+
+        with (
+            patch(
+                "ecg.services.image_pipeline.segment_ecg_lead_layout",
+                return_value=layout,
+            ),
+            patch(
+                "ecg.services.image_pipeline.detect_ecg_grid_scale",
+                return_value=grid_detection,
+            ) as grid_mock,
+            patch(
+                "ecg.services.image_pipeline.calibrate_reconstructed_signal",
+                return_value=calibrated_signal,
+            ) as calibration_mock,
+        ):
+            result = run_ecg_image_pipeline(
+                ecg_file,
+                auto_detect_layout=True,
+                lead_layout_format="standard_3x4",
+                auto_extract_lead_signals=True,
+                auto_calibrate=True,
+                auto_assess_quality=True,
+                auto_assess_lead_quality=True,
+            )
+
+        grid_mock.assert_called_once_with(result.processed_image)
+        self.assertEqual(calibration_mock.call_count, result.region_count + 1)
+        self.assertTrue(result.calibrated)
+        self.assertTrue(result.quality_assessed)
+        self.assertTrue(result.processing_usable)
+        self.assertTrue(result.per_lead_extracted)
+        self.assertTrue(result.per_lead_quality_assessed)
+        self.assertEqual(result.per_lead_quality_count, 12)
+        self.assertTrue(result.per_lead_all_usable)
+        self.assertTrue(result.per_lead_all_high_quality)
+        self.assertEqual(result.per_lead_quality_level, "high")
+        self.assertIsNot(result.quality_assessment, result.lead_quality_assessment)
+        self.assertIs(result.grid_detection, grid_detection)
+        self.assertIs(result.calibrated_signal, calibrated_signal)
+        # Per-cell signals remain uncalibrated in the current foundation.

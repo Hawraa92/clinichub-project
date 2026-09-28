@@ -16,6 +16,11 @@ from ecg.services.image_processing import (
     ProcessedECGImage,
     process_ecg_image,
 )
+from ecg.services.lead_quality_assessment import (
+    ECGLeadQualityAssessmentError,
+    ECGLeadQualityAssessmentResult,
+    assess_ecg_lead_quality,
+)
 from ecg.services.lead_identification import (
     ECGLeadIdentificationError,
     ECGLeadIdentificationResult,
@@ -122,8 +127,11 @@ class ECGImagePipelineResult:
     quality_assessment: ECGQualityAssessmentResult | None = None
     lead_identification: ECGLeadIdentificationResult | None = None
 
-    # NEW: independently reconstructed, named ECG cell signals.
+    # Independently reconstructed, named ECG cell signals.
     lead_signal_extraction: ECGLeadSignalExtractionResult | None = None
+
+    # NEW: Independent processing-quality assessment for each lead.
+    lead_quality_assessment: ECGLeadQualityAssessmentResult | None = None
 
     @property
     def width(self):
@@ -205,7 +213,7 @@ class ECGImagePipelineResult:
         return self.lead_layout.columns_per_row
 
     # ---------------------------------------------------------
-    # Quality Assessment Properties
+    # Global Quality Assessment Properties
     # ---------------------------------------------------------
 
     @property
@@ -249,7 +257,7 @@ class ECGImagePipelineResult:
         return self.lead_identification.lead_names
 
     # ---------------------------------------------------------
-    # NEW: Independent Per-Lead Extraction Properties
+    # Independent Per-Lead Extraction Properties
     # ---------------------------------------------------------
 
     @property
@@ -291,6 +299,49 @@ class ECGImagePipelineResult:
             return ()
 
         return self.lead_signal_extraction.leads
+
+    # ---------------------------------------------------------
+    # NEW: Independent Per-Lead Processing Quality Properties
+    # ---------------------------------------------------------
+
+    @property
+    def per_lead_quality_assessed(self):
+        return self.lead_quality_assessment is not None
+
+    @property
+    def per_lead_quality_level(self):
+        if self.lead_quality_assessment is None:
+            return None
+
+        return self.lead_quality_assessment.quality_level
+
+    @property
+    def per_lead_all_usable(self):
+        if self.lead_quality_assessment is None:
+            return None
+
+        return self.lead_quality_assessment.all_usable
+
+    @property
+    def per_lead_all_high_quality(self):
+        if self.lead_quality_assessment is None:
+            return None
+
+        return self.lead_quality_assessment.all_high_quality
+
+    @property
+    def per_lead_unusable_names(self):
+        if self.lead_quality_assessment is None:
+            return ()
+
+        return self.lead_quality_assessment.unusable_lead_names
+
+    @property
+    def per_lead_quality_count(self):
+        if self.lead_quality_assessment is None:
+            return 0
+
+        return self.lead_quality_assessment.lead_count
 
 
 # =========================================================
@@ -435,7 +486,7 @@ def _identify_leads_from_layout(
 
 
 # =========================================================
-# 5. NEW: Independent Per-Lead Signal Extraction
+# 5. Independent Per-Lead Signal Extraction
 # =========================================================
 
 def _extract_independent_lead_signals(
@@ -523,7 +574,7 @@ def _automatically_calibrate_signals(
 
 
 # =========================================================
-# 7. Optional ECG Quality Assessment
+# 7. Optional Global ECG Quality Assessment
 # =========================================================
 
 def _assess_pipeline_quality(
@@ -557,7 +608,26 @@ def _assess_pipeline_quality(
 
 
 # =========================================================
-# 8. Main ECG Image Pipeline
+# 8. NEW: Independent Per-Lead Quality Assessment
+# =========================================================
+
+def _assess_independent_lead_quality(lead_signal_extraction):
+    """
+    Assess each extracted ECG lead without issuing a clinical score.
+    """
+
+    try:
+        return assess_ecg_lead_quality(
+            lead_signal_extraction
+        )
+    except ECGLeadQualityAssessmentError as exc:
+        raise ECGImagePipelineError(
+            "The independent ECG lead quality could not be assessed safely."
+        ) from exc
+
+
+# =========================================================
+# 9. Main ECG Image Pipeline
 # =========================================================
 
 def run_ecg_image_pipeline(
@@ -571,8 +641,11 @@ def run_ecg_image_pipeline(
     auto_assess_quality=False,
     lead_layout_format: str | None = None,
 
-    # NEW: Optional extraction of twelve independent cell signals.
+    # Optional extraction of twelve independent cell signals.
     auto_extract_lead_signals=False,
+
+    # NEW: Per-lead data-completeness assessment; independent of global QC.
+    auto_assess_lead_quality=False,
 ):
     """
     Run the complete ECG image-processing pipeline.
@@ -583,14 +656,19 @@ def run_ecg_image_pipeline(
         - 2D lead layout detection.
         - Explicit lead identification.
         - Grid detection and calibration.
-        - ECG processing quality assessment.
+        - Global ECG processing quality assessment.
         - Independent extraction of twelve named cell signals.
+        - Separate quality assessment of each extracted cell signal.
 
     Lead identification requires:
         auto_detect_layout=True
         lead_layout_format="standard_3x4"
 
     Independent extraction additionally requires:
+        auto_extract_lead_signals=True
+
+    Per-lead assessment additionally requires:
+        auto_assess_lead_quality=True
         auto_extract_lead_signals=True
 
     The lead layout format must be explicitly confirmed for the
@@ -605,7 +683,10 @@ def run_ecg_image_pipeline(
         establish the quality of every independent lead.
 
         Independent cell signals are not automatically calibrated
-        by this new extraction option.
+        by this extraction or quality-assessment option.
+
+        A per-lead 'usable' result means only that configured
+        processing-completeness checks passed, not clinical validity.
 
         No clinical ECG diagnosis or interpretation is performed.
     """
@@ -623,6 +704,12 @@ def run_ecg_image_pipeline(
         raise ECGImagePipelineError(
             "Independent ECG lead signal extraction requires "
             "an explicit lead_layout_format."
+        )
+
+    if auto_assess_lead_quality and not auto_extract_lead_signals:
+        raise ECGImagePipelineError(
+            "Per-lead ECG quality assessment requires "
+            "auto_extract_lead_signals=True."
         )
 
     # ---------------------------------------------------------
@@ -747,7 +834,7 @@ def run_ecg_image_pipeline(
         )
 
     # ---------------------------------------------------------
-    # 9. Optional ECG Processing Quality Assessment
+    # 9. Optional Global ECG Processing Quality Assessment
     # ---------------------------------------------------------
 
     quality_assessment = None
@@ -764,7 +851,7 @@ def run_ecg_image_pipeline(
         )
 
     # ---------------------------------------------------------
-    # 10. NEW: Optional Independent Per-Lead Signal Extraction
+    # 10. Optional Independent Per-Lead Signal Extraction
     # ---------------------------------------------------------
 
     lead_signal_extraction = None
@@ -776,7 +863,18 @@ def run_ecg_image_pipeline(
         )
 
     # ---------------------------------------------------------
-    # 11. Return the Complete Pipeline Result
+    # 11. NEW: Optional Per-Lead Processing Quality Assessment
+    # ---------------------------------------------------------
+
+    lead_quality_assessment = None
+
+    if auto_assess_lead_quality:
+        lead_quality_assessment = _assess_independent_lead_quality(
+            lead_signal_extraction
+        )
+
+    # ---------------------------------------------------------
+    # 12. Return the Complete Pipeline Result
     # ---------------------------------------------------------
 
     return ECGImagePipelineResult(
@@ -793,4 +891,5 @@ def run_ecg_image_pipeline(
         quality_assessment=quality_assessment,
         lead_identification=lead_identification,
         lead_signal_extraction=lead_signal_extraction,
+        lead_quality_assessment=lead_quality_assessment,
     )
