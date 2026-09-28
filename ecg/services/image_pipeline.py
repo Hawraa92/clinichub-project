@@ -21,6 +21,11 @@ from ecg.services.lead_identification import (
     ECGLeadIdentificationResult,
     identify_ecg_leads,
 )
+from ecg.services.lead_signal_extraction import (
+    ECGLeadSignalExtractionError,
+    ECGLeadSignalExtractionResult,
+    extract_ecg_lead_signals,
+)
 from ecg.services.lead_segmentation import (
     ECGLeadLayoutResult,
     ECGLeadRegion,
@@ -57,9 +62,17 @@ from ecg.services.trace_extraction import (
 )
 
 
+# =========================================================
+# Pipeline Exception
+# =========================================================
+
 class ECGImagePipelineError(ValueError):
     """Raised when the ECG image pipeline cannot complete safely."""
 
+
+# =========================================================
+# Existing Vertical Lead-Region Signal Model
+# =========================================================
 
 @dataclass(frozen=True)
 class ECGImageLeadSignal:
@@ -88,6 +101,10 @@ class ECGImageLeadSignal:
         return self.calibrated_signal is not None
 
 
+# =========================================================
+# Complete Pipeline Result
+# =========================================================
+
 @dataclass
 class ECGImagePipelineResult:
     processed_image: ProcessedECGImage
@@ -104,6 +121,9 @@ class ECGImagePipelineResult:
 
     quality_assessment: ECGQualityAssessmentResult | None = None
     lead_identification: ECGLeadIdentificationResult | None = None
+
+    # NEW: independently reconstructed, named ECG cell signals.
+    lead_signal_extraction: ECGLeadSignalExtractionResult | None = None
 
     @property
     def width(self):
@@ -155,6 +175,10 @@ class ECGImagePipelineResult:
 
         return self.grid_detection.pixels_per_mm
 
+    # ---------------------------------------------------------
+    # 2D Layout Properties
+    # ---------------------------------------------------------
+
     @property
     def layout_detected(self):
         return self.lead_layout is not None
@@ -180,6 +204,10 @@ class ECGImagePipelineResult:
 
         return self.lead_layout.columns_per_row
 
+    # ---------------------------------------------------------
+    # Quality Assessment Properties
+    # ---------------------------------------------------------
+
     @property
     def quality_assessed(self):
         return self.quality_assessment is not None
@@ -197,6 +225,10 @@ class ECGImagePipelineResult:
             return None
 
         return self.quality_assessment.quality_level
+
+    # ---------------------------------------------------------
+    # Lead Identification Properties
+    # ---------------------------------------------------------
 
     @property
     def leads_identified(self):
@@ -216,9 +248,54 @@ class ECGImagePipelineResult:
 
         return self.lead_identification.lead_names
 
+    # ---------------------------------------------------------
+    # NEW: Independent Per-Lead Extraction Properties
+    # ---------------------------------------------------------
 
-# These are cell labels, not independently reconstructed cell signals.
-# Existing lead_signals continues to represent detected vertical regions.
+    @property
+    def per_lead_extracted(self):
+        """
+        Whether independent extraction was successfully completed.
+        """
+        return self.lead_signal_extraction is not None
+
+    @property
+    def per_lead_signal_count(self):
+        """
+        Number of independently reconstructed named lead signals.
+        """
+        if self.lead_signal_extraction is None:
+            return 0
+
+        return self.lead_signal_extraction.lead_count
+
+    @property
+    def per_lead_signal_names(self):
+        """
+        Names belonging to the independent cell signals.
+        """
+        if self.lead_signal_extraction is None:
+            return ()
+
+        return self.lead_signal_extraction.lead_names
+
+    @property
+    def per_lead_signals(self):
+        """
+        Independently reconstructed ECG cell signals.
+
+        These are different from lead_signals, which represents
+        the legacy vertical lead-region reconstructions.
+        """
+        if self.lead_signal_extraction is None:
+            return ()
+
+        return self.lead_signal_extraction.leads
+
+
+# =========================================================
+# 1. Image Preparation and Perspective Correction
+# =========================================================
 
 def _prepare_pipeline_image(
     processed_image,
@@ -275,6 +352,10 @@ def _prepare_pipeline_image(
     )
 
 
+# =========================================================
+# 2. Existing Vertical Lead-Region Reconstruction
+# =========================================================
+
 def _reconstruct_lead_signals(
     trace_candidates,
     segmentation,
@@ -311,6 +392,10 @@ def _reconstruct_lead_signals(
     )
 
 
+# =========================================================
+# 3. Optional 2D Layout Detection
+# =========================================================
+
 def _detect_lead_layout(
     trace_candidates,
 ):
@@ -325,12 +410,19 @@ def _detect_lead_layout(
         ) from exc
 
 
+# =========================================================
+# 4. Optional Lead Identification
+# =========================================================
+
 def _identify_leads_from_layout(
     lead_layout,
     *,
     layout_format,
 ):
-    """Assign names only using an explicitly selected layout template."""
+    """
+    Assign lead names only using an explicitly selected template.
+    """
+
     try:
         return identify_ecg_leads(
             lead_layout,
@@ -341,6 +433,38 @@ def _identify_leads_from_layout(
             "The ECG lead names could not be assigned safely."
         ) from exc
 
+
+# =========================================================
+# 5. NEW: Independent Per-Lead Signal Extraction
+# =========================================================
+
+def _extract_independent_lead_signals(
+    processed_image,
+    lead_identification,
+):
+    """
+    Crop and reconstruct every explicitly identified ECG cell.
+
+    Each cell is processed independently using its horizontal
+    and vertical boundaries.
+
+    An extraction failure is wrapped as an ECGImagePipelineError.
+    """
+
+    try:
+        return extract_ecg_lead_signals(
+            processed_image,
+            lead_identification,
+        )
+    except ECGLeadSignalExtractionError as exc:
+        raise ECGImagePipelineError(
+            "The independent ECG lead signals could not be extracted safely."
+        ) from exc
+
+
+# =========================================================
+# 6. Optional Grid Detection and Calibration
+# =========================================================
 
 def _automatically_calibrate_signals(
     processed_image,
@@ -398,6 +522,10 @@ def _automatically_calibrate_signals(
     )
 
 
+# =========================================================
+# 7. Optional ECG Quality Assessment
+# =========================================================
+
 def _assess_pipeline_quality(
     reconstructed_signal,
     *,
@@ -428,6 +556,10 @@ def _assess_pipeline_quality(
         ) from exc
 
 
+# =========================================================
+# 8. Main ECG Image Pipeline
+# =========================================================
+
 def run_ecg_image_pipeline(
     ecg_file,
     region_top=0,
@@ -438,28 +570,63 @@ def run_ecg_image_pipeline(
     auto_detect_layout=False,
     auto_assess_quality=False,
     lead_layout_format: str | None = None,
+
+    # NEW: Optional extraction of twelve independent cell signals.
+    auto_extract_lead_signals=False,
 ):
     """
-    Run the ECG image-processing pipeline.
+    Run the complete ECG image-processing pipeline.
 
-    The optional quality assessment evaluates processing completeness
-    and availability of requested processing outputs. It does not
-    establish diagnostic accuracy or clinical confidence.
+    Optional processing:
+        - ECG paper boundary detection.
+        - Perspective correction.
+        - 2D lead layout detection.
+        - Explicit lead identification.
+        - Grid detection and calibration.
+        - ECG processing quality assessment.
+        - Independent extraction of twelve named cell signals.
 
-    To name ECG layout cells, pass BOTH auto_detect_layout=True and an
-    explicit lead_layout_format such as "standard_3x4". This template
-    must be confirmed by the caller for the source ECG printout. Cell
-    labels do not constitute independent per-cell signal extraction or
-    a clinical verification of the printed lead labels.
+    Lead identification requires:
+        auto_detect_layout=True
+        lead_layout_format="standard_3x4"
+
+    Independent extraction additionally requires:
+        auto_extract_lead_signals=True
+
+    The lead layout format must be explicitly confirmed for the
+    source ECG printout.
+
+    Existing lead_signals represents vertical-region reconstructions.
+
+    per_lead_signals represents independent named cell traces.
+
+    Important:
+        The current global quality assessment does not automatically
+        establish the quality of every independent lead.
+
+        Independent cell signals are not automatically calibrated
+        by this new extraction option.
+
+        No clinical ECG diagnosis or interpretation is performed.
     """
+
+    # ---------------------------------------------------------
+    # Validate Requested Options
+    # ---------------------------------------------------------
 
     if lead_layout_format is not None and not auto_detect_layout:
         raise ECGImagePipelineError(
             "ECG lead identification requires auto_detect_layout=True."
         )
 
+    if auto_extract_lead_signals and lead_layout_format is None:
+        raise ECGImagePipelineError(
+            "Independent ECG lead signal extraction requires "
+            "an explicit lead_layout_format."
+        )
+
     # ---------------------------------------------------------
-    # 1. Prepare the ECG image
+    # 1. Prepare the ECG Image
     # ---------------------------------------------------------
 
     try:
@@ -472,7 +639,7 @@ def run_ecg_image_pipeline(
         ) from exc
 
     # ---------------------------------------------------------
-    # 2. Optional paper detection and perspective correction
+    # 2. Optional Paper Detection and Perspective Correction
     # ---------------------------------------------------------
 
     (
@@ -486,7 +653,7 @@ def run_ecg_image_pipeline(
     )
 
     # ---------------------------------------------------------
-    # 3. Extract ECG trace candidates
+    # 3. Extract ECG Trace Candidates
     # ---------------------------------------------------------
 
     try:
@@ -500,7 +667,7 @@ def run_ecg_image_pipeline(
         ) from exc
 
     # ---------------------------------------------------------
-    # 4. Detect vertical lead regions
+    # 4. Detect Vertical Lead Regions
     # ---------------------------------------------------------
 
     try:
@@ -514,7 +681,7 @@ def run_ecg_image_pipeline(
         ) from exc
 
     # ---------------------------------------------------------
-    # 5. Optional 2D lead layout detection
+    # 5. Optional 2D Lead Layout Detection
     # ---------------------------------------------------------
 
     lead_layout = None
@@ -525,7 +692,7 @@ def run_ecg_image_pipeline(
         )
 
     # ---------------------------------------------------------
-    # 5A. Optional explicit lead-cell naming
+    # 5A. Optional Explicit Lead-Cell Naming
     # ---------------------------------------------------------
 
     lead_identification = None
@@ -537,7 +704,7 @@ def run_ecg_image_pipeline(
         )
 
     # ---------------------------------------------------------
-    # 6. Reconstruct the overall ECG signal
+    # 6. Reconstruct the Overall ECG Signal
     # ---------------------------------------------------------
 
     try:
@@ -553,7 +720,7 @@ def run_ecg_image_pipeline(
         ) from exc
 
     # ---------------------------------------------------------
-    # 7. Reconstruct individual detected lead-region signals
+    # 7. Reconstruct Existing Vertical Lead-Region Signals
     # ---------------------------------------------------------
 
     lead_signals = _reconstruct_lead_signals(
@@ -562,7 +729,7 @@ def run_ecg_image_pipeline(
     )
 
     # ---------------------------------------------------------
-    # 8. Optional grid detection and signal calibration
+    # 8. Optional Grid Detection and Signal Calibration
     # ---------------------------------------------------------
 
     grid_detection = None
@@ -580,7 +747,7 @@ def run_ecg_image_pipeline(
         )
 
     # ---------------------------------------------------------
-    # 9. Optional ECG processing quality assessment
+    # 9. Optional ECG Processing Quality Assessment
     # ---------------------------------------------------------
 
     quality_assessment = None
@@ -597,7 +764,19 @@ def run_ecg_image_pipeline(
         )
 
     # ---------------------------------------------------------
-    # 10. Return the complete pipeline result
+    # 10. NEW: Optional Independent Per-Lead Signal Extraction
+    # ---------------------------------------------------------
+
+    lead_signal_extraction = None
+
+    if auto_extract_lead_signals:
+        lead_signal_extraction = _extract_independent_lead_signals(
+            processed_image,
+            lead_identification,
+        )
+
+    # ---------------------------------------------------------
+    # 11. Return the Complete Pipeline Result
     # ---------------------------------------------------------
 
     return ECGImagePipelineResult(
@@ -613,4 +792,5 @@ def run_ecg_image_pipeline(
         calibrated_signal=calibrated_signal,
         quality_assessment=quality_assessment,
         lead_identification=lead_identification,
+        lead_signal_extraction=lead_signal_extraction,
     )
