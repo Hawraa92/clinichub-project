@@ -1,3 +1,4 @@
+
 import io
 import tempfile
 from unittest.mock import call, patch
@@ -9,6 +10,7 @@ from django.test import TestCase, override_settings
 
 from appointments.tests.factories import AppointmentFactory
 from ecg.models import ECGFile, ECGRecord
+
 from ecg.services.calibration import (
     CalibratedECGSignal,
     ECGCalibrationError,
@@ -18,24 +20,29 @@ from ecg.services.grid_detection import (
     ECGGridDetectionError,
     ECGGridDetectionResult,
 )
+from ecg.services.image_pipeline import (
+    ECGImagePipelineError,
+    run_ecg_image_pipeline,
+)
 from ecg.services.lead_segmentation import (
     ECGLeadLayoutCell,
     ECGLeadLayoutResult,
     ECGLeadRegion,
     ECGLeadSegmentationError,
 )
-from ecg.services.image_pipeline import (
-    ECGImagePipelineError,
-    run_ecg_image_pipeline,
-)
 from ecg.services.paper_detection import (
     ECGPaperDetectionError,
     ECGPaperDetectionResult,
 )
 from ecg.services.perspective import ECGImageQuadrilateral
+from ecg.services.quality_assessment import (
+    ECGQualityAssessmentError,
+    ECGQualityAssessmentResult,
+)
 
 
 class ECGImagePipelineTests(TestCase):
+
     def setUp(self):
         self.private_media = tempfile.TemporaryDirectory()
 
@@ -59,6 +66,10 @@ class ECGImagePipelineTests(TestCase):
         self.settings_override.disable()
         self.private_media.cleanup()
 
+    # ---------------------------------------------------------
+    # Test image helpers
+    # ---------------------------------------------------------
+
     def create_trace_png_bytes(self):
         width = 20
         height = 12
@@ -70,26 +81,10 @@ class ECGImagePipelineTests(TestCase):
         )
 
         trace_rows = [
-            6,
-            5,
-            4,
-            5,
-            6,
-            7,
-            6,
-            5,
-            4,
-            5,
-            6,
-            7,
-            6,
-            5,
-            4,
-            5,
-            6,
-            7,
-            6,
-            5,
+            6, 5, 4, 5, 6,
+            7, 6, 5, 4, 5,
+            6, 7, 6, 5, 4,
+            5, 6, 7, 6, 5,
         ]
 
         for x_position, y_position in enumerate(trace_rows):
@@ -114,49 +109,17 @@ class ECGImagePipelineTests(TestCase):
         )
 
         first_trace_rows = [
-            5,
-            4,
-            3,
-            4,
-            5,
-            6,
-            5,
-            4,
-            3,
-            4,
-            5,
-            6,
-            5,
-            4,
-            3,
-            4,
-            5,
-            6,
-            5,
-            4,
+            5, 4, 3, 4, 5,
+            6, 5, 4, 3, 4,
+            5, 6, 5, 4, 3,
+            4, 5, 6, 5, 4,
         ]
 
         second_trace_rows = [
-            18,
-            17,
-            16,
-            17,
-            18,
-            19,
-            18,
-            17,
-            16,
-            17,
-            18,
-            19,
-            18,
-            17,
-            16,
-            17,
-            18,
-            19,
-            18,
-            17,
+            18, 17, 16, 17, 18,
+            19, 18, 17, 16, 17,
+            18, 19, 18, 17, 16,
+            17, 18, 19, 18, 17,
         ]
 
         for x_position, y_position in enumerate(first_trace_rows):
@@ -202,6 +165,10 @@ class ECGImagePipelineTests(TestCase):
                 content_type="image/png",
             ),
         )
+
+    # ---------------------------------------------------------
+    # Calibration and layout helpers
+    # ---------------------------------------------------------
 
     def create_grid_detection_result(self):
         return ECGGridDetectionResult(
@@ -304,6 +271,10 @@ class ECGImagePipelineTests(TestCase):
             cells=tuple(cells),
         )
 
+    # ---------------------------------------------------------
+    # Original image pipeline tests
+    # ---------------------------------------------------------
+
     def test_pipeline_reconstructs_signal_from_ecg_image(self):
         ecg_file = self.create_image_file(
             self.create_trace_png_bytes()
@@ -311,15 +282,8 @@ class ECGImagePipelineTests(TestCase):
 
         result = run_ecg_image_pipeline(ecg_file)
 
-        self.assertEqual(
-            result.width,
-            20,
-        )
-
-        self.assertEqual(
-            result.height,
-            12,
-        )
+        self.assertEqual(result.width, 20)
+        self.assertEqual(result.height, 12)
 
         self.assertEqual(
             result.reconstructed_signal.sample_count,
@@ -331,15 +295,8 @@ class ECGImagePipelineTests(TestCase):
             0,
         )
 
-        self.assertEqual(
-            result.coverage_ratio,
-            1.0,
-        )
-
-        self.assertEqual(
-            len(result.signal_values),
-            20,
-        )
+        self.assertEqual(result.coverage_ratio, 1.0)
+        self.assertEqual(len(result.signal_values), 20)
 
         self.assertEqual(
             result.x_positions,
@@ -353,25 +310,10 @@ class ECGImagePipelineTests(TestCase):
 
         result = run_ecg_image_pipeline(ecg_file)
 
-        self.assertEqual(
-            result.processed_image.width,
-            20,
-        )
-
-        self.assertEqual(
-            result.trace_candidates.width,
-            20,
-        )
-
-        self.assertEqual(
-            result.lead_segmentation.width,
-            20,
-        )
-
-        self.assertEqual(
-            result.reconstructed_signal.width,
-            20,
-        )
+        self.assertEqual(result.processed_image.width, 20)
+        self.assertEqual(result.trace_candidates.width, 20)
+        self.assertEqual(result.lead_segmentation.width, 20)
+        self.assertEqual(result.reconstructed_signal.width, 20)
 
         self.assertGreater(
             result.trace_candidates.candidate_pixel_count,
@@ -383,10 +325,7 @@ class ECGImagePipelineTests(TestCase):
             0,
         )
 
-        self.assertGreater(
-            len(result.lead_signals),
-            0,
-        )
+        self.assertGreater(len(result.lead_signals), 0)
 
         self.assertGreater(
             result.reconstructed_signal.sample_count,
@@ -400,22 +339,12 @@ class ECGImagePipelineTests(TestCase):
 
         result = run_ecg_image_pipeline(ecg_file)
 
-        self.assertEqual(
-            result.region_count,
-            1,
-        )
-
-        self.assertEqual(
-            len(result.lead_signals),
-            1,
-        )
+        self.assertEqual(result.region_count, 1)
+        self.assertEqual(len(result.lead_signals), 1)
 
         lead_signal = result.lead_signals[0]
 
-        self.assertEqual(
-            lead_signal.index,
-            1,
-        )
+        self.assertEqual(lead_signal.index, 1)
 
         self.assertEqual(
             lead_signal.reconstructed_signal.sample_count,
@@ -427,10 +356,7 @@ class ECGImagePipelineTests(TestCase):
             0,
         )
 
-        self.assertEqual(
-            lead_signal.coverage_ratio,
-            1.0,
-        )
+        self.assertEqual(lead_signal.coverage_ratio, 1.0)
 
     @override_settings(
         ECG_LEAD_SEGMENTATION_MAX_GAP_ROWS=1,
@@ -444,28 +370,14 @@ class ECGImagePipelineTests(TestCase):
 
         result = run_ecg_image_pipeline(ecg_file)
 
-        self.assertEqual(
-            result.region_count,
-            2,
-        )
-
-        self.assertEqual(
-            len(result.lead_signals),
-            2,
-        )
+        self.assertEqual(result.region_count, 2)
+        self.assertEqual(len(result.lead_signals), 2)
 
         first = result.lead_signals[0]
         second = result.lead_signals[1]
 
-        self.assertEqual(
-            first.index,
-            1,
-        )
-
-        self.assertEqual(
-            second.index,
-            2,
-        )
+        self.assertEqual(first.index, 1)
+        self.assertEqual(second.index, 2)
 
         self.assertEqual(
             first.reconstructed_signal.sample_count,
@@ -497,9 +409,7 @@ class ECGImagePipelineTests(TestCase):
             b"This is not a real image."
         )
 
-        with self.assertRaises(
-            ECGImagePipelineError
-        ):
+        with self.assertRaises(ECGImagePipelineError):
             run_ecg_image_pipeline(ecg_file)
 
     def test_blank_image_is_wrapped_as_pipeline_error(self):
@@ -507,9 +417,7 @@ class ECGImagePipelineTests(TestCase):
             self.create_blank_png_bytes()
         )
 
-        with self.assertRaises(
-            ECGImagePipelineError
-        ):
+        with self.assertRaises(ECGImagePipelineError):
             run_ecg_image_pipeline(ecg_file)
 
     def test_pipeline_rejects_region_without_trace(self):
@@ -517,14 +425,16 @@ class ECGImagePipelineTests(TestCase):
             self.create_trace_png_bytes()
         )
 
-        with self.assertRaises(
-            ECGImagePipelineError
-        ):
+        with self.assertRaises(ECGImagePipelineError):
             run_ecg_image_pipeline(
                 ecg_file,
                 region_top=0,
                 region_bottom=3,
             )
+
+    # ---------------------------------------------------------
+    # Perspective correction tests
+    # ---------------------------------------------------------
 
     def test_pipeline_skips_perspective_when_corners_are_not_supplied(
         self,
@@ -535,31 +445,14 @@ class ECGImagePipelineTests(TestCase):
 
         result = run_ecg_image_pipeline(ecg_file)
 
-        self.assertFalse(
-            result.perspective_corrected
-        )
+        self.assertFalse(result.perspective_corrected)
+        self.assertIsNone(result.perspective_correction)
 
-        self.assertIsNone(
-            result.perspective_correction
-        )
+        self.assertFalse(result.paper_detected)
+        self.assertIsNone(result.paper_detection)
 
-        self.assertFalse(
-            result.paper_detected
-        )
-
-        self.assertIsNone(
-            result.paper_detection
-        )
-
-        self.assertEqual(
-            result.width,
-            20,
-        )
-
-        self.assertEqual(
-            result.height,
-            12,
-        )
+        self.assertEqual(result.width, 20)
+        self.assertEqual(result.height, 12)
 
     def test_pipeline_applies_perspective_when_corners_are_supplied(
         self,
@@ -580,31 +473,14 @@ class ECGImagePipelineTests(TestCase):
             perspective_corners=corners,
         )
 
-        self.assertTrue(
-            result.perspective_corrected
-        )
+        self.assertTrue(result.perspective_corrected)
+        self.assertIsNotNone(result.perspective_correction)
 
-        self.assertIsNotNone(
-            result.perspective_correction
-        )
+        self.assertFalse(result.paper_detected)
+        self.assertIsNone(result.paper_detection)
 
-        self.assertFalse(
-            result.paper_detected
-        )
-
-        self.assertIsNone(
-            result.paper_detection
-        )
-
-        self.assertEqual(
-            result.width,
-            20,
-        )
-
-        self.assertEqual(
-            result.height,
-            12,
-        )
+        self.assertEqual(result.width, 20)
+        self.assertEqual(result.height, 12)
 
         self.assertEqual(
             result.reconstructed_signal.sample_count,
@@ -644,32 +520,18 @@ class ECGImagePipelineTests(TestCase):
 
         detect_mock.assert_called_once()
 
-        self.assertTrue(
-            result.paper_detected
-        )
+        self.assertTrue(result.paper_detected)
 
         self.assertIs(
             result.paper_detection,
             detection_result,
         )
 
-        self.assertTrue(
-            result.perspective_corrected
-        )
+        self.assertTrue(result.perspective_corrected)
+        self.assertIsNotNone(result.perspective_correction)
 
-        self.assertIsNotNone(
-            result.perspective_correction
-        )
-
-        self.assertEqual(
-            result.width,
-            20,
-        )
-
-        self.assertEqual(
-            result.height,
-            12,
-        )
+        self.assertEqual(result.width, 20)
+        self.assertEqual(result.height, 12)
 
         self.assertEqual(
             result.reconstructed_signal.sample_count,
@@ -689,9 +551,7 @@ class ECGImagePipelineTests(TestCase):
                 "No reliable paper boundary."
             ),
         ):
-            with self.assertRaises(
-                ECGImagePipelineError
-            ):
+            with self.assertRaises(ECGImagePipelineError):
                 run_ecg_image_pipeline(
                     ecg_file,
                     auto_detect_paper=True,
@@ -722,27 +582,16 @@ class ECGImagePipelineTests(TestCase):
 
         detect_mock.assert_not_called()
 
-        self.assertTrue(
-            result.perspective_corrected
-        )
+        self.assertTrue(result.perspective_corrected)
+        self.assertFalse(result.paper_detected)
+        self.assertIsNone(result.paper_detection)
 
-        self.assertFalse(
-            result.paper_detected
-        )
+        self.assertEqual(result.width, 20)
+        self.assertEqual(result.height, 12)
 
-        self.assertIsNone(
-            result.paper_detection
-        )
-
-        self.assertEqual(
-            result.width,
-            20,
-        )
-
-        self.assertEqual(
-            result.height,
-            12,
-        )
+    # ---------------------------------------------------------
+    # 2D lead layout tests
+    # ---------------------------------------------------------
 
     def test_pipeline_skips_2d_layout_detection_by_default(
         self,
@@ -754,29 +603,15 @@ class ECGImagePipelineTests(TestCase):
         with patch(
             "ecg.services.image_pipeline.segment_ecg_lead_layout"
         ) as layout_mock:
-            result = run_ecg_image_pipeline(
-                ecg_file
-            )
+            result = run_ecg_image_pipeline(ecg_file)
 
         layout_mock.assert_not_called()
 
-        self.assertIsNone(
-            result.lead_layout
-        )
+        self.assertIsNone(result.lead_layout)
+        self.assertFalse(result.layout_detected)
 
-        self.assertFalse(
-            result.layout_detected
-        )
-
-        self.assertEqual(
-            result.layout_row_count,
-            0,
-        )
-
-        self.assertEqual(
-            result.layout_cell_count,
-            0,
-        )
+        self.assertEqual(result.layout_row_count, 0)
+        self.assertEqual(result.layout_cell_count, 0)
 
         self.assertEqual(
             result.layout_columns_per_row,
@@ -790,9 +625,7 @@ class ECGImagePipelineTests(TestCase):
             self.create_trace_png_bytes()
         )
 
-        lead_layout = (
-            self.create_lead_layout_result()
-        )
+        lead_layout = self.create_lead_layout_result()
 
         with patch(
             "ecg.services.image_pipeline.segment_ecg_lead_layout",
@@ -812,27 +645,13 @@ class ECGImagePipelineTests(TestCase):
             lead_layout,
         )
 
-        self.assertTrue(
-            result.layout_detected
-        )
-
-        self.assertEqual(
-            result.layout_row_count,
-            3,
-        )
-
-        self.assertEqual(
-            result.layout_cell_count,
-            12,
-        )
+        self.assertTrue(result.layout_detected)
+        self.assertEqual(result.layout_row_count, 3)
+        self.assertEqual(result.layout_cell_count, 12)
 
         self.assertEqual(
             result.layout_columns_per_row,
-            (
-                4,
-                4,
-                4,
-            ),
+            (4, 4, 4),
         )
 
     def test_pipeline_wraps_2d_layout_failure_safely(
@@ -864,6 +683,10 @@ class ECGImagePipelineTests(TestCase):
             ),
         )
 
+    # ---------------------------------------------------------
+    # Grid detection and calibration tests
+    # ---------------------------------------------------------
+
     def test_pipeline_skips_grid_detection_and_calibration_by_default(
         self,
     ):
@@ -879,33 +702,18 @@ class ECGImagePipelineTests(TestCase):
                 "ecg.services.image_pipeline.calibrate_reconstructed_signal"
             ) as calibration_mock,
         ):
-            result = run_ecg_image_pipeline(
-                ecg_file
-            )
+            result = run_ecg_image_pipeline(ecg_file)
 
         grid_mock.assert_not_called()
         calibration_mock.assert_not_called()
 
-        self.assertIsNone(
-            result.grid_detection
-        )
-
-        self.assertIsNone(
-            result.calibrated_signal
-        )
-
-        self.assertFalse(
-            result.calibrated
-        )
+        self.assertIsNone(result.grid_detection)
+        self.assertIsNone(result.calibrated_signal)
+        self.assertFalse(result.calibrated)
 
         for lead_signal in result.lead_signals:
-            self.assertIsNone(
-                lead_signal.calibrated_signal
-            )
-
-            self.assertFalse(
-                lead_signal.calibrated
-            )
+            self.assertIsNone(lead_signal.calibrated_signal)
+            self.assertFalse(lead_signal.calibrated)
 
     def test_pipeline_automatically_detects_grid_and_calibrates_signal(
         self,
@@ -914,17 +722,10 @@ class ECGImagePipelineTests(TestCase):
             self.create_trace_png_bytes()
         )
 
-        grid_detection = (
-            self.create_grid_detection_result()
-        )
+        grid_detection = self.create_grid_detection_result()
 
-        overall_calibrated_signal = (
-            self.create_calibrated_signal()
-        )
-
-        lead_calibrated_signal = (
-            self.create_calibrated_signal()
-        )
+        overall_calibrated_signal = self.create_calibrated_signal()
+        lead_calibrated_signal = self.create_calibrated_signal()
 
         with (
             patch(
@@ -948,10 +749,7 @@ class ECGImagePipelineTests(TestCase):
             result.processed_image
         )
 
-        self.assertEqual(
-            calibration_mock.call_count,
-            2,
-        )
+        self.assertEqual(calibration_mock.call_count, 2)
 
         self.assertEqual(
             calibration_mock.call_args_list,
@@ -967,29 +765,16 @@ class ECGImagePipelineTests(TestCase):
             ],
         )
 
-        self.assertIs(
-            result.grid_detection,
-            grid_detection,
-        )
+        self.assertIs(result.grid_detection, grid_detection)
 
         self.assertIs(
             result.calibrated_signal,
             overall_calibrated_signal,
         )
 
-        self.assertTrue(
-            result.calibrated
-        )
-
-        self.assertEqual(
-            result.pixels_per_mm,
-            5.0,
-        )
-
-        self.assertEqual(
-            len(result.lead_signals),
-            1,
-        )
+        self.assertTrue(result.calibrated)
+        self.assertEqual(result.pixels_per_mm, 5.0)
+        self.assertEqual(len(result.lead_signals), 1)
 
         self.assertTrue(
             result.lead_signals[0].calibrated
@@ -1012,21 +797,11 @@ class ECGImagePipelineTests(TestCase):
             filename="two-regions-calibrated.png",
         )
 
-        grid_detection = (
-            self.create_grid_detection_result()
-        )
+        grid_detection = self.create_grid_detection_result()
 
-        overall_calibrated_signal = (
-            self.create_calibrated_signal()
-        )
-
-        first_lead_calibrated_signal = (
-            self.create_calibrated_signal()
-        )
-
-        second_lead_calibrated_signal = (
-            self.create_calibrated_signal()
-        )
+        overall_calibrated_signal = self.create_calibrated_signal()
+        first_lead_calibrated_signal = self.create_calibrated_signal()
+        second_lead_calibrated_signal = self.create_calibrated_signal()
 
         with (
             patch(
@@ -1051,15 +826,8 @@ class ECGImagePipelineTests(TestCase):
             result.processed_image
         )
 
-        self.assertEqual(
-            result.region_count,
-            2,
-        )
-
-        self.assertEqual(
-            calibration_mock.call_count,
-            3,
-        )
+        self.assertEqual(result.region_count, 2)
+        self.assertEqual(calibration_mock.call_count, 3)
 
         self.assertEqual(
             calibration_mock.call_args_list,
@@ -1094,13 +862,8 @@ class ECGImagePipelineTests(TestCase):
             second_lead_calibrated_signal,
         )
 
-        self.assertTrue(
-            result.lead_signals[0].calibrated
-        )
-
-        self.assertTrue(
-            result.lead_signals[1].calibrated
-        )
+        self.assertTrue(result.lead_signals[0].calibrated)
+        self.assertTrue(result.lead_signals[1].calibrated)
 
     def test_pipeline_wraps_grid_detection_failure_during_auto_calibration(
         self,
@@ -1135,9 +898,7 @@ class ECGImagePipelineTests(TestCase):
             self.create_trace_png_bytes()
         )
 
-        grid_detection = (
-            self.create_grid_detection_result()
-        )
+        grid_detection = self.create_grid_detection_result()
 
         with (
             patch(
@@ -1161,7 +922,10 @@ class ECGImagePipelineTests(TestCase):
 
         self.assertEqual(
             str(context.exception),
-            "The reconstructed ECG signal could not be calibrated safely.",
+            (
+                "The reconstructed ECG signal could not "
+                "be calibrated safely."
+            ),
         )
 
     def test_pipeline_wraps_lead_calibration_failure_safely(
@@ -1171,13 +935,8 @@ class ECGImagePipelineTests(TestCase):
             self.create_trace_png_bytes()
         )
 
-        grid_detection = (
-            self.create_grid_detection_result()
-        )
-
-        overall_calibrated_signal = (
-            self.create_calibrated_signal()
-        )
+        grid_detection = self.create_grid_detection_result()
+        overall_calibrated_signal = self.create_calibrated_signal()
 
         with (
             patch(
@@ -1208,4 +967,358 @@ class ECGImagePipelineTests(TestCase):
                 "The reconstructed ECG signal for detected "
                 "region 1 could not be calibrated safely."
             ),
+        )
+
+    # =========================================================
+    # NEW: ECG Quality Assessment Integration Tests
+    # =========================================================
+
+    def test_pipeline_skips_quality_assessment_by_default(self):
+        ecg_file = self.create_image_file(
+            self.create_trace_png_bytes()
+        )
+
+        with patch(
+            "ecg.services.image_pipeline.assess_ecg_processing_quality"
+        ) as quality_mock:
+            result = run_ecg_image_pipeline(ecg_file)
+
+        quality_mock.assert_not_called()
+
+        self.assertIsNone(result.quality_assessment)
+        self.assertFalse(result.quality_assessed)
+        self.assertIsNone(result.processing_usable)
+        self.assertIsNone(result.processing_quality_level)
+
+    def test_pipeline_assesses_reconstructed_signal_when_enabled(self):
+        ecg_file = self.create_image_file(
+            self.create_trace_png_bytes()
+        )
+
+        result = run_ecg_image_pipeline(
+            ecg_file,
+            auto_assess_quality=True,
+        )
+
+        self.assertTrue(result.quality_assessed)
+        self.assertTrue(result.processing_usable)
+
+        self.assertEqual(
+            result.processing_quality_level,
+            "high",
+        )
+
+        self.assertEqual(
+            result.quality_assessment.sample_count,
+            20,
+        )
+
+        self.assertEqual(
+            result.quality_assessment.missing_count,
+            0,
+        )
+
+        self.assertEqual(
+            result.quality_assessment.coverage_ratio,
+            1.0,
+        )
+
+        self.assertEqual(
+            result.quality_assessment.reasons,
+            (),
+        )
+
+    def test_pipeline_quality_does_not_enable_layout_or_grid_implicitly(
+        self,
+    ):
+        ecg_file = self.create_image_file(
+            self.create_trace_png_bytes()
+        )
+
+        with (
+            patch(
+                "ecg.services.image_pipeline.segment_ecg_lead_layout"
+            ) as layout_mock,
+            patch(
+                "ecg.services.image_pipeline.detect_ecg_grid_scale"
+            ) as grid_mock,
+        ):
+            result = run_ecg_image_pipeline(
+                ecg_file,
+                auto_assess_quality=True,
+            )
+
+        layout_mock.assert_not_called()
+        grid_mock.assert_not_called()
+
+        self.assertTrue(result.processing_usable)
+
+        self.assertFalse(
+            result.quality_assessment.layout_detected
+        )
+
+        self.assertFalse(
+            result.quality_assessment.grid_detected
+        )
+
+        self.assertFalse(
+            result.quality_assessment.calibrated
+        )
+
+    def test_pipeline_quality_includes_optional_detected_layout(self):
+        ecg_file = self.create_image_file(
+            self.create_trace_png_bytes()
+        )
+
+        lead_layout = self.create_lead_layout_result()
+
+        with patch(
+            "ecg.services.image_pipeline.segment_ecg_lead_layout",
+            return_value=lead_layout,
+        ) as layout_mock:
+            result = run_ecg_image_pipeline(
+                ecg_file,
+                auto_detect_layout=True,
+                auto_assess_quality=True,
+            )
+
+        layout_mock.assert_called_once_with(
+            result.trace_candidates
+        )
+
+        self.assertIs(
+            result.lead_layout,
+            lead_layout,
+        )
+
+        self.assertTrue(
+            result.quality_assessment.layout_detected
+        )
+
+        self.assertEqual(
+            result.quality_assessment.layout_row_count,
+            3,
+        )
+
+        self.assertEqual(
+            result.quality_assessment.layout_cell_count,
+            12,
+        )
+
+        self.assertTrue(result.processing_usable)
+
+    def test_pipeline_quality_includes_calibration_after_it_completes(
+        self,
+    ):
+        ecg_file = self.create_image_file(
+            self.create_trace_png_bytes()
+        )
+
+        grid_detection = self.create_grid_detection_result()
+
+        overall_calibrated = self.create_calibrated_signal()
+        lead_calibrated = self.create_calibrated_signal()
+
+        with (
+            patch(
+                "ecg.services.image_pipeline.detect_ecg_grid_scale",
+                return_value=grid_detection,
+            ) as grid_mock,
+            patch(
+                "ecg.services.image_pipeline.calibrate_reconstructed_signal",
+                side_effect=(
+                    overall_calibrated,
+                    lead_calibrated,
+                ),
+            ) as calibration_mock,
+        ):
+            result = run_ecg_image_pipeline(
+                ecg_file,
+                auto_calibrate=True,
+                auto_assess_quality=True,
+            )
+
+        grid_mock.assert_called_once_with(
+            result.processed_image
+        )
+
+        self.assertEqual(
+            calibration_mock.call_count,
+            2,
+        )
+
+        self.assertIs(
+            result.calibrated_signal,
+            overall_calibrated,
+        )
+
+        self.assertTrue(
+            result.quality_assessment.grid_detected
+        )
+
+        self.assertTrue(
+            result.quality_assessment.calibrated
+        )
+
+        self.assertTrue(result.processing_usable)
+
+    def test_pipeline_passes_required_options_to_quality_assessment(
+        self,
+    ):
+        ecg_file = self.create_image_file(
+            self.create_trace_png_bytes()
+        )
+
+        lead_layout = self.create_lead_layout_result()
+        grid_detection = self.create_grid_detection_result()
+
+        overall_calibrated = self.create_calibrated_signal()
+        lead_calibrated = self.create_calibrated_signal()
+
+        quality_result = ECGQualityAssessmentResult(
+            usable=True,
+            quality_level="high",
+            coverage_ratio=1.0,
+            sample_count=20,
+            missing_count=0,
+            layout_detected=True,
+            layout_row_count=3,
+            layout_cell_count=12,
+            grid_detected=True,
+            calibrated=True,
+            reasons=(),
+            warnings=(),
+        )
+
+        with (
+            patch(
+                "ecg.services.image_pipeline.segment_ecg_lead_layout",
+                return_value=lead_layout,
+            ),
+            patch(
+                "ecg.services.image_pipeline.detect_ecg_grid_scale",
+                return_value=grid_detection,
+            ),
+            patch(
+                "ecg.services.image_pipeline.calibrate_reconstructed_signal",
+                side_effect=(
+                    overall_calibrated,
+                    lead_calibrated,
+                ),
+            ),
+            patch(
+                "ecg.services.image_pipeline.assess_ecg_processing_quality",
+                return_value=quality_result,
+            ) as quality_mock,
+        ):
+            result = run_ecg_image_pipeline(
+                ecg_file,
+                auto_detect_layout=True,
+                auto_calibrate=True,
+                auto_assess_quality=True,
+            )
+
+        quality_mock.assert_called_once_with(
+            result.reconstructed_signal,
+            lead_layout=lead_layout,
+            grid_detection=grid_detection,
+            calibrated_signal=overall_calibrated,
+            require_layout=True,
+            require_grid=True,
+            require_calibration=True,
+        )
+
+        self.assertIs(
+            result.quality_assessment,
+            quality_result,
+        )
+
+        self.assertTrue(result.quality_assessed)
+
+    def test_pipeline_exposes_insufficient_quality_without_misreporting_success(
+        self,
+    ):
+        ecg_file = self.create_image_file(
+            self.create_trace_png_bytes()
+        )
+
+        quality_result = ECGQualityAssessmentResult(
+            usable=False,
+            quality_level="insufficient",
+            coverage_ratio=0.8,
+            sample_count=20,
+            missing_count=4,
+            layout_detected=False,
+            layout_row_count=0,
+            layout_cell_count=0,
+            grid_detected=False,
+            calibrated=False,
+            reasons=(
+                "Coverage is below the configured threshold.",
+            ),
+            warnings=(
+                "Some reconstructed samples are missing.",
+            ),
+        )
+
+        with patch(
+            "ecg.services.image_pipeline.assess_ecg_processing_quality",
+            return_value=quality_result,
+        ) as quality_mock:
+            result = run_ecg_image_pipeline(
+                ecg_file,
+                auto_assess_quality=True,
+            )
+
+        quality_mock.assert_called_once()
+
+        self.assertIs(
+            result.quality_assessment,
+            quality_result,
+        )
+
+        self.assertTrue(result.quality_assessed)
+        self.assertFalse(result.processing_usable)
+
+        self.assertEqual(
+            result.processing_quality_level,
+            "insufficient",
+        )
+
+        self.assertTrue(
+            result.quality_assessment.reasons
+        )
+
+    def test_pipeline_wraps_quality_assessment_failure_safely(
+        self,
+    ):
+        ecg_file = self.create_image_file(
+            self.create_trace_png_bytes()
+        )
+
+        with patch(
+            "ecg.services.image_pipeline.assess_ecg_processing_quality",
+            side_effect=ECGQualityAssessmentError(
+                "Invalid quality metrics."
+            ),
+        ):
+            with self.assertRaises(
+                ECGImagePipelineError
+            ) as context:
+                run_ecg_image_pipeline(
+                    ecg_file,
+                    auto_assess_quality=True,
+                )
+
+        self.assertEqual(
+            str(context.exception),
+            (
+                "The ECG processing quality could not "
+                "be assessed safely."
+            ),
+        )
+
+        self.assertIsInstance(
+            context.exception.__cause__,
+            ECGQualityAssessmentError,
         )

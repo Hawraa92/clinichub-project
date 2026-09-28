@@ -1,3 +1,4 @@
+
 from dataclasses import dataclass, replace
 
 from ecg.services.calibration import (
@@ -33,6 +34,11 @@ from ecg.services.perspective import (
     ECGPerspectiveCorrectionError,
     RectifiedECGImage,
     correct_ecg_perspective,
+)
+from ecg.services.quality_assessment import (
+    ECGQualityAssessmentError,
+    ECGQualityAssessmentResult,
+    assess_ecg_processing_quality,
 )
 from ecg.services.signal_reconstruction import (
     ECGSignalReconstructionError,
@@ -84,11 +90,14 @@ class ECGImagePipelineResult:
     lead_segmentation: ECGLeadSegmentationResult
     lead_signals: tuple[ECGImageLeadSignal, ...]
     reconstructed_signal: ReconstructedECGSignal
+
     lead_layout: ECGLeadLayoutResult | None = None
     perspective_correction: RectifiedECGImage | None = None
     paper_detection: ECGPaperDetectionResult | None = None
     grid_detection: ECGGridDetectionResult | None = None
     calibrated_signal: CalibratedECGSignal | None = None
+
+    quality_assessment: ECGQualityAssessmentResult | None = None
 
     @property
     def width(self):
@@ -164,6 +173,24 @@ class ECGImagePipelineResult:
             return ()
 
         return self.lead_layout.columns_per_row
+
+    @property
+    def quality_assessed(self):
+        return self.quality_assessment is not None
+
+    @property
+    def processing_usable(self):
+        if self.quality_assessment is None:
+            return None
+
+        return self.quality_assessment.usable
+
+    @property
+    def processing_quality_level(self):
+        if self.quality_assessment is None:
+            return None
+
+        return self.quality_assessment.quality_level
 
 
 def _prepare_pipeline_image(
@@ -327,6 +354,36 @@ def _automatically_calibrate_signals(
     )
 
 
+def _assess_pipeline_quality(
+    reconstructed_signal,
+    *,
+    lead_layout,
+    grid_detection,
+    calibrated_signal,
+    require_layout,
+    require_grid,
+    require_calibration,
+):
+    """
+    Assess ECG processing quality without making a clinical diagnosis.
+    """
+
+    try:
+        return assess_ecg_processing_quality(
+            reconstructed_signal,
+            lead_layout=lead_layout,
+            grid_detection=grid_detection,
+            calibrated_signal=calibrated_signal,
+            require_layout=require_layout,
+            require_grid=require_grid,
+            require_calibration=require_calibration,
+        )
+    except ECGQualityAssessmentError as exc:
+        raise ECGImagePipelineError(
+            "The ECG processing quality could not be assessed safely."
+        ) from exc
+
+
 def run_ecg_image_pipeline(
     ecg_file,
     region_top=0,
@@ -335,7 +392,20 @@ def run_ecg_image_pipeline(
     auto_detect_paper=False,
     auto_calibrate=False,
     auto_detect_layout=False,
+    auto_assess_quality=False,
 ):
+    """
+    Run the ECG image-processing pipeline.
+
+    The optional quality assessment evaluates processing completeness
+    and availability of requested processing outputs. It does not
+    establish diagnostic accuracy or clinical confidence.
+    """
+
+    # ---------------------------------------------------------
+    # 1. Prepare the ECG image
+    # ---------------------------------------------------------
+
     try:
         processed_image = process_ecg_image(
             ecg_file
@@ -344,6 +414,10 @@ def run_ecg_image_pipeline(
         raise ECGImagePipelineError(
             "The ECG image could not be prepared for analysis."
         ) from exc
+
+    # ---------------------------------------------------------
+    # 2. Optional paper detection and perspective correction
+    # ---------------------------------------------------------
 
     (
         processed_image,
@@ -355,6 +429,10 @@ def run_ecg_image_pipeline(
         auto_detect_paper=auto_detect_paper,
     )
 
+    # ---------------------------------------------------------
+    # 3. Extract ECG trace candidates
+    # ---------------------------------------------------------
+
     try:
         trace_candidates = extract_trace_candidates(
             processed_image
@@ -364,6 +442,10 @@ def run_ecg_image_pipeline(
             "ECG trace candidates could not be extracted "
             "from the image."
         ) from exc
+
+    # ---------------------------------------------------------
+    # 4. Detect vertical lead regions
+    # ---------------------------------------------------------
 
     try:
         lead_segmentation = segment_ecg_lead_regions(
@@ -375,12 +457,20 @@ def run_ecg_image_pipeline(
             "from the image."
         ) from exc
 
+    # ---------------------------------------------------------
+    # 5. Optional 2D lead layout detection
+    # ---------------------------------------------------------
+
     lead_layout = None
 
     if auto_detect_layout:
         lead_layout = _detect_lead_layout(
             trace_candidates
         )
+
+    # ---------------------------------------------------------
+    # 6. Reconstruct the overall ECG signal
+    # ---------------------------------------------------------
 
     try:
         reconstructed_signal = reconstruct_ecg_signal(
@@ -394,10 +484,18 @@ def run_ecg_image_pipeline(
             "from the requested image region."
         ) from exc
 
+    # ---------------------------------------------------------
+    # 7. Reconstruct individual detected lead-region signals
+    # ---------------------------------------------------------
+
     lead_signals = _reconstruct_lead_signals(
         trace_candidates,
         lead_segmentation,
     )
+
+    # ---------------------------------------------------------
+    # 8. Optional grid detection and signal calibration
+    # ---------------------------------------------------------
 
     grid_detection = None
     calibrated_signal = None
@@ -413,6 +511,27 @@ def run_ecg_image_pipeline(
             lead_signals,
         )
 
+    # ---------------------------------------------------------
+    # 9. Optional ECG processing quality assessment
+    # ---------------------------------------------------------
+
+    quality_assessment = None
+
+    if auto_assess_quality:
+        quality_assessment = _assess_pipeline_quality(
+            reconstructed_signal,
+            lead_layout=lead_layout,
+            grid_detection=grid_detection,
+            calibrated_signal=calibrated_signal,
+            require_layout=auto_detect_layout,
+            require_grid=auto_calibrate,
+            require_calibration=auto_calibrate,
+        )
+
+    # ---------------------------------------------------------
+    # 10. Return the complete pipeline result
+    # ---------------------------------------------------------
+
     return ECGImagePipelineResult(
         processed_image=processed_image,
         trace_candidates=trace_candidates,
@@ -424,4 +543,5 @@ def run_ecg_image_pipeline(
         paper_detection=paper_detection,
         grid_detection=grid_detection,
         calibrated_signal=calibrated_signal,
+        quality_assessment=quality_assessment,
     )
