@@ -16,9 +16,11 @@ from ecg.services.image_processing import (
     process_ecg_image,
 )
 from ecg.services.lead_segmentation import (
+    ECGLeadLayoutResult,
     ECGLeadRegion,
     ECGLeadSegmentationError,
     ECGLeadSegmentationResult,
+    segment_ecg_lead_layout,
     segment_ecg_lead_regions,
 )
 from ecg.services.paper_detection import (
@@ -82,6 +84,7 @@ class ECGImagePipelineResult:
     lead_segmentation: ECGLeadSegmentationResult
     lead_signals: tuple[ECGImageLeadSignal, ...]
     reconstructed_signal: ReconstructedECGSignal
+    lead_layout: ECGLeadLayoutResult | None = None
     perspective_correction: RectifiedECGImage | None = None
     paper_detection: ECGPaperDetectionResult | None = None
     grid_detection: ECGGridDetectionResult | None = None
@@ -136,6 +139,31 @@ class ECGImagePipelineResult:
             return None
 
         return self.grid_detection.pixels_per_mm
+
+    @property
+    def layout_detected(self):
+        return self.lead_layout is not None
+
+    @property
+    def layout_row_count(self):
+        if self.lead_layout is None:
+            return 0
+
+        return self.lead_layout.row_count
+
+    @property
+    def layout_cell_count(self):
+        if self.lead_layout is None:
+            return 0
+
+        return self.lead_layout.cell_count
+
+    @property
+    def layout_columns_per_row(self):
+        if self.lead_layout is None:
+            return ()
+
+        return self.lead_layout.columns_per_row
 
 
 def _prepare_pipeline_image(
@@ -224,7 +252,23 @@ def _reconstruct_lead_signals(
             "No ECG lead-region signals were reconstructed."
         )
 
-    return tuple(lead_signals)
+    return tuple(
+        lead_signals
+    )
+
+
+def _detect_lead_layout(
+    trace_candidates,
+):
+    try:
+        return segment_ecg_lead_layout(
+            trace_candidates
+        )
+    except ECGLeadSegmentationError as exc:
+        raise ECGImagePipelineError(
+            "The ECG 2D lead layout could not be "
+            "segmented safely from the image."
+        ) from exc
 
 
 def _automatically_calibrate_signals(
@@ -290,6 +334,7 @@ def run_ecg_image_pipeline(
     perspective_corners: ECGImageQuadrilateral | None = None,
     auto_detect_paper=False,
     auto_calibrate=False,
+    auto_detect_layout=False,
 ):
     try:
         processed_image = process_ecg_image(
@@ -330,6 +375,13 @@ def run_ecg_image_pipeline(
             "from the image."
         ) from exc
 
+    lead_layout = None
+
+    if auto_detect_layout:
+        lead_layout = _detect_lead_layout(
+            trace_candidates
+        )
+
     try:
         reconstructed_signal = reconstruct_ecg_signal(
             trace_candidates,
@@ -367,6 +419,7 @@ def run_ecg_image_pipeline(
         lead_segmentation=lead_segmentation,
         lead_signals=lead_signals,
         reconstructed_signal=reconstructed_signal,
+        lead_layout=lead_layout,
         perspective_correction=perspective_correction,
         paper_detection=paper_detection,
         grid_detection=grid_detection,

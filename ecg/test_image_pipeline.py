@@ -18,6 +18,12 @@ from ecg.services.grid_detection import (
     ECGGridDetectionError,
     ECGGridDetectionResult,
 )
+from ecg.services.lead_segmentation import (
+    ECGLeadLayoutCell,
+    ECGLeadLayoutResult,
+    ECGLeadRegion,
+    ECGLeadSegmentationError,
+)
 from ecg.services.image_pipeline import (
     ECGImagePipelineError,
     run_ecg_image_pipeline,
@@ -26,9 +32,7 @@ from ecg.services.paper_detection import (
     ECGPaperDetectionError,
     ECGPaperDetectionResult,
 )
-from ecg.services.perspective import (
-    ECGImageQuadrilateral,
-)
+from ecg.services.perspective import ECGImageQuadrilateral
 
 
 class ECGImagePipelineTests(TestCase):
@@ -36,7 +40,7 @@ class ECGImagePipelineTests(TestCase):
         self.private_media = tempfile.TemporaryDirectory()
 
         self.settings_override = override_settings(
-            PRIVATE_MEDIA_ROOT=self.private_media.name,
+            PRIVATE_MEDIA_ROOT=self.private_media.name
         )
         self.settings_override.enable()
 
@@ -62,11 +66,7 @@ class ECGImagePipelineTests(TestCase):
         image = Image.new(
             "RGB",
             (width, height),
-            color=(
-                255,
-                255,
-                255,
-            ),
+            color=(255, 255, 255),
         )
 
         trace_rows = [
@@ -92,27 +92,14 @@ class ECGImagePipelineTests(TestCase):
             5,
         ]
 
-        for x_position, y_position in enumerate(
-            trace_rows
-        ):
+        for x_position, y_position in enumerate(trace_rows):
             image.putpixel(
-                (
-                    x_position,
-                    y_position,
-                ),
-                (
-                    0,
-                    0,
-                    0,
-                ),
+                (x_position, y_position),
+                (0, 0, 0),
             )
 
         buffer = io.BytesIO()
-
-        image.save(
-            buffer,
-            format="PNG",
-        )
+        image.save(buffer, format="PNG")
 
         return buffer.getvalue()
 
@@ -123,11 +110,7 @@ class ECGImagePipelineTests(TestCase):
         image = Image.new(
             "RGB",
             (width, height),
-            color=(
-                255,
-                255,
-                255,
-            ),
+            color=(255, 255, 255),
         )
 
         first_trace_rows = [
@@ -176,65 +159,32 @@ class ECGImagePipelineTests(TestCase):
             17,
         ]
 
-        for x_position, y_position in enumerate(
-            first_trace_rows
-        ):
+        for x_position, y_position in enumerate(first_trace_rows):
             image.putpixel(
-                (
-                    x_position,
-                    y_position,
-                ),
-                (
-                    0,
-                    0,
-                    0,
-                ),
+                (x_position, y_position),
+                (0, 0, 0),
             )
 
-        for x_position, y_position in enumerate(
-            second_trace_rows
-        ):
+        for x_position, y_position in enumerate(second_trace_rows):
             image.putpixel(
-                (
-                    x_position,
-                    y_position,
-                ),
-                (
-                    0,
-                    0,
-                    0,
-                ),
+                (x_position, y_position),
+                (0, 0, 0),
             )
 
         buffer = io.BytesIO()
-
-        image.save(
-            buffer,
-            format="PNG",
-        )
+        image.save(buffer, format="PNG")
 
         return buffer.getvalue()
 
     def create_blank_png_bytes(self):
         image = Image.new(
             "RGB",
-            (
-                20,
-                12,
-            ),
-            color=(
-                255,
-                255,
-                255,
-            ),
+            (20, 12),
+            color=(255, 255, 255),
         )
 
         buffer = io.BytesIO()
-
-        image.save(
-            buffer,
-            format="PNG",
-        )
+        image.save(buffer, format="PNG")
 
         return buffer.getvalue()
 
@@ -292,14 +242,74 @@ class ECGImagePipelineTests(TestCase):
             parameters=parameters,
         )
 
+    def create_lead_layout_result(self):
+        rows = (
+            ECGLeadRegion(
+                index=1,
+                top=0,
+                bottom=4,
+                active_top=1,
+                active_bottom=3,
+                candidate_pixel_count=20,
+            ),
+            ECGLeadRegion(
+                index=2,
+                top=4,
+                bottom=8,
+                active_top=5,
+                active_bottom=7,
+                candidate_pixel_count=20,
+            ),
+            ECGLeadRegion(
+                index=3,
+                top=8,
+                bottom=12,
+                active_top=9,
+                active_bottom=11,
+                candidate_pixel_count=20,
+            ),
+        )
+
+        cells = []
+        cell_index = 1
+
+        for row in rows:
+            for column_index in range(1, 5):
+                left = (column_index - 1) * 5
+                right = column_index * 5
+
+                cells.append(
+                    ECGLeadLayoutCell(
+                        index=cell_index,
+                        row_index=row.index,
+                        column_index=column_index,
+                        left=left,
+                        right=right,
+                        top=row.top,
+                        bottom=row.bottom,
+                        active_left=left,
+                        active_right=right,
+                        active_top=row.active_top,
+                        active_bottom=row.active_bottom,
+                        candidate_pixel_count=5,
+                    )
+                )
+
+                cell_index += 1
+
+        return ECGLeadLayoutResult(
+            width=20,
+            height=12,
+            rows=rows,
+            cells=tuple(cells),
+        )
+
     def test_pipeline_reconstructs_signal_from_ecg_image(self):
         ecg_file = self.create_image_file(
             self.create_trace_png_bytes()
         )
 
-        result = run_ecg_image_pipeline(
-            ecg_file
-        )
+        result = run_ecg_image_pipeline(ecg_file)
 
         self.assertEqual(
             result.width,
@@ -327,17 +337,13 @@ class ECGImagePipelineTests(TestCase):
         )
 
         self.assertEqual(
-            len(
-                result.signal_values
-            ),
+            len(result.signal_values),
             20,
         )
 
         self.assertEqual(
             result.x_positions,
-            tuple(
-                range(20)
-            ),
+            tuple(range(20)),
         )
 
     def test_pipeline_exposes_each_processing_stage(self):
@@ -345,9 +351,7 @@ class ECGImagePipelineTests(TestCase):
             self.create_trace_png_bytes()
         )
 
-        result = run_ecg_image_pipeline(
-            ecg_file
-        )
+        result = run_ecg_image_pipeline(ecg_file)
 
         self.assertEqual(
             result.processed_image.width,
@@ -380,9 +384,7 @@ class ECGImagePipelineTests(TestCase):
         )
 
         self.assertGreater(
-            len(
-                result.lead_signals
-            ),
+            len(result.lead_signals),
             0,
         )
 
@@ -396,9 +398,7 @@ class ECGImagePipelineTests(TestCase):
             self.create_trace_png_bytes()
         )
 
-        result = run_ecg_image_pipeline(
-            ecg_file
-        )
+        result = run_ecg_image_pipeline(ecg_file)
 
         self.assertEqual(
             result.region_count,
@@ -406,9 +406,7 @@ class ECGImagePipelineTests(TestCase):
         )
 
         self.assertEqual(
-            len(
-                result.lead_signals
-            ),
+            len(result.lead_signals),
             1,
         )
 
@@ -444,9 +442,7 @@ class ECGImagePipelineTests(TestCase):
             filename="two-regions.png",
         )
 
-        result = run_ecg_image_pipeline(
-            ecg_file
-        )
+        result = run_ecg_image_pipeline(ecg_file)
 
         self.assertEqual(
             result.region_count,
@@ -454,9 +450,7 @@ class ECGImagePipelineTests(TestCase):
         )
 
         self.assertEqual(
-            len(
-                result.lead_signals
-            ),
+            len(result.lead_signals),
             2,
         )
 
@@ -506,9 +500,7 @@ class ECGImagePipelineTests(TestCase):
         with self.assertRaises(
             ECGImagePipelineError
         ):
-            run_ecg_image_pipeline(
-                ecg_file
-            )
+            run_ecg_image_pipeline(ecg_file)
 
     def test_blank_image_is_wrapped_as_pipeline_error(self):
         ecg_file = self.create_image_file(
@@ -518,9 +510,7 @@ class ECGImagePipelineTests(TestCase):
         with self.assertRaises(
             ECGImagePipelineError
         ):
-            run_ecg_image_pipeline(
-                ecg_file
-            )
+            run_ecg_image_pipeline(ecg_file)
 
     def test_pipeline_rejects_region_without_trace(self):
         ecg_file = self.create_image_file(
@@ -543,9 +533,7 @@ class ECGImagePipelineTests(TestCase):
             self.create_trace_png_bytes()
         )
 
-        result = run_ecg_image_pipeline(
-            ecg_file
-        )
+        result = run_ecg_image_pipeline(ecg_file)
 
         self.assertFalse(
             result.perspective_corrected
@@ -581,22 +569,10 @@ class ECGImagePipelineTests(TestCase):
         )
 
         corners = ECGImageQuadrilateral(
-            top_left=(
-                0,
-                0,
-            ),
-            top_right=(
-                19,
-                0,
-            ),
-            bottom_right=(
-                19,
-                11,
-            ),
-            bottom_left=(
-                0,
-                11,
-            ),
+            top_left=(0, 0),
+            top_right=(19, 0),
+            bottom_right=(19, 11),
+            bottom_left=(0, 11),
         )
 
         result = run_ecg_image_pipeline(
@@ -643,22 +619,10 @@ class ECGImagePipelineTests(TestCase):
         )
 
         corners = ECGImageQuadrilateral(
-            top_left=(
-                0,
-                0,
-            ),
-            top_right=(
-                19,
-                0,
-            ),
-            bottom_right=(
-                19,
-                11,
-            ),
-            bottom_left=(
-                0,
-                11,
-            ),
+            top_left=(0, 0),
+            top_right=(19, 0),
+            bottom_right=(19, 11),
+            bottom_left=(0, 11),
         )
 
         detection_result = ECGPaperDetectionResult(
@@ -741,22 +705,10 @@ class ECGImagePipelineTests(TestCase):
         )
 
         corners = ECGImageQuadrilateral(
-            top_left=(
-                0,
-                0,
-            ),
-            top_right=(
-                19,
-                0,
-            ),
-            bottom_right=(
-                19,
-                11,
-            ),
-            bottom_left=(
-                0,
-                11,
-            ),
+            top_left=(0, 0),
+            top_right=(19, 0),
+            bottom_right=(19, 11),
+            bottom_left=(0, 11),
         )
 
         with patch(
@@ -790,6 +742,126 @@ class ECGImagePipelineTests(TestCase):
         self.assertEqual(
             result.height,
             12,
+        )
+
+    def test_pipeline_skips_2d_layout_detection_by_default(
+        self,
+    ):
+        ecg_file = self.create_image_file(
+            self.create_trace_png_bytes()
+        )
+
+        with patch(
+            "ecg.services.image_pipeline.segment_ecg_lead_layout"
+        ) as layout_mock:
+            result = run_ecg_image_pipeline(
+                ecg_file
+            )
+
+        layout_mock.assert_not_called()
+
+        self.assertIsNone(
+            result.lead_layout
+        )
+
+        self.assertFalse(
+            result.layout_detected
+        )
+
+        self.assertEqual(
+            result.layout_row_count,
+            0,
+        )
+
+        self.assertEqual(
+            result.layout_cell_count,
+            0,
+        )
+
+        self.assertEqual(
+            result.layout_columns_per_row,
+            (),
+        )
+
+    def test_pipeline_detects_2d_layout_when_enabled(
+        self,
+    ):
+        ecg_file = self.create_image_file(
+            self.create_trace_png_bytes()
+        )
+
+        lead_layout = (
+            self.create_lead_layout_result()
+        )
+
+        with patch(
+            "ecg.services.image_pipeline.segment_ecg_lead_layout",
+            return_value=lead_layout,
+        ) as layout_mock:
+            result = run_ecg_image_pipeline(
+                ecg_file,
+                auto_detect_layout=True,
+            )
+
+        layout_mock.assert_called_once_with(
+            result.trace_candidates
+        )
+
+        self.assertIs(
+            result.lead_layout,
+            lead_layout,
+        )
+
+        self.assertTrue(
+            result.layout_detected
+        )
+
+        self.assertEqual(
+            result.layout_row_count,
+            3,
+        )
+
+        self.assertEqual(
+            result.layout_cell_count,
+            12,
+        )
+
+        self.assertEqual(
+            result.layout_columns_per_row,
+            (
+                4,
+                4,
+                4,
+            ),
+        )
+
+    def test_pipeline_wraps_2d_layout_failure_safely(
+        self,
+    ):
+        ecg_file = self.create_image_file(
+            self.create_trace_png_bytes()
+        )
+
+        with patch(
+            "ecg.services.image_pipeline.segment_ecg_lead_layout",
+            side_effect=ECGLeadSegmentationError(
+                "Layout segmentation failed."
+            ),
+        ):
+            with self.assertRaises(
+                ECGImagePipelineError
+            ) as context:
+                run_ecg_image_pipeline(
+                    ecg_file,
+                    auto_detect_layout=True,
+                )
+
+        self.assertEqual(
+            str(context.exception),
+            (
+                "The ECG 2D lead layout could not be "
+                "segmented safely from the image."
+            ),
         )
 
     def test_pipeline_skips_grid_detection_and_calibration_by_default(
@@ -915,9 +987,7 @@ class ECGImagePipelineTests(TestCase):
         )
 
         self.assertEqual(
-            len(
-                result.lead_signals
-            ),
+            len(result.lead_signals),
             1,
         )
 
@@ -1054,9 +1124,7 @@ class ECGImagePipelineTests(TestCase):
                 )
 
         self.assertEqual(
-            str(
-                context.exception
-            ),
+            str(context.exception),
             "The ECG grid scale could not be detected safely.",
         )
 
@@ -1092,9 +1160,7 @@ class ECGImagePipelineTests(TestCase):
                 )
 
         self.assertEqual(
-            str(
-                context.exception
-            ),
+            str(context.exception),
             "The reconstructed ECG signal could not be calibrated safely.",
         )
 
@@ -1137,9 +1203,7 @@ class ECGImagePipelineTests(TestCase):
                 )
 
         self.assertEqual(
-            str(
-                context.exception
-            ),
+            str(context.exception),
             (
                 "The reconstructed ECG signal for detected "
                 "region 1 could not be calibrated safely."
