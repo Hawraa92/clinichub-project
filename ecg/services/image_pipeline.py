@@ -16,6 +16,11 @@ from ecg.services.image_processing import (
     ProcessedECGImage,
     process_ecg_image,
 )
+from ecg.services.lead_identification import (
+    ECGLeadIdentificationError,
+    ECGLeadIdentificationResult,
+    identify_ecg_leads,
+)
 from ecg.services.lead_segmentation import (
     ECGLeadLayoutResult,
     ECGLeadRegion,
@@ -98,6 +103,7 @@ class ECGImagePipelineResult:
     calibrated_signal: CalibratedECGSignal | None = None
 
     quality_assessment: ECGQualityAssessmentResult | None = None
+    lead_identification: ECGLeadIdentificationResult | None = None
 
     @property
     def width(self):
@@ -192,6 +198,27 @@ class ECGImagePipelineResult:
 
         return self.quality_assessment.quality_level
 
+    @property
+    def leads_identified(self):
+        return self.lead_identification is not None
+
+    @property
+    def identified_lead_count(self):
+        if self.lead_identification is None:
+            return 0
+
+        return self.lead_identification.lead_count
+
+    @property
+    def identified_lead_names(self):
+        if self.lead_identification is None:
+            return ()
+
+        return self.lead_identification.lead_names
+
+
+# These are cell labels, not independently reconstructed cell signals.
+# Existing lead_signals continues to represent detected vertical regions.
 
 def _prepare_pipeline_image(
     processed_image,
@@ -298,6 +325,23 @@ def _detect_lead_layout(
         ) from exc
 
 
+def _identify_leads_from_layout(
+    lead_layout,
+    *,
+    layout_format,
+):
+    """Assign names only using an explicitly selected layout template."""
+    try:
+        return identify_ecg_leads(
+            lead_layout,
+            layout_format=layout_format,
+        )
+    except ECGLeadIdentificationError as exc:
+        raise ECGImagePipelineError(
+            "The ECG lead names could not be assigned safely."
+        ) from exc
+
+
 def _automatically_calibrate_signals(
     processed_image,
     reconstructed_signal,
@@ -393,6 +437,7 @@ def run_ecg_image_pipeline(
     auto_calibrate=False,
     auto_detect_layout=False,
     auto_assess_quality=False,
+    lead_layout_format: str | None = None,
 ):
     """
     Run the ECG image-processing pipeline.
@@ -400,7 +445,18 @@ def run_ecg_image_pipeline(
     The optional quality assessment evaluates processing completeness
     and availability of requested processing outputs. It does not
     establish diagnostic accuracy or clinical confidence.
+
+    To name ECG layout cells, pass BOTH auto_detect_layout=True and an
+    explicit lead_layout_format such as "standard_3x4". This template
+    must be confirmed by the caller for the source ECG printout. Cell
+    labels do not constitute independent per-cell signal extraction or
+    a clinical verification of the printed lead labels.
     """
+
+    if lead_layout_format is not None and not auto_detect_layout:
+        raise ECGImagePipelineError(
+            "ECG lead identification requires auto_detect_layout=True."
+        )
 
     # ---------------------------------------------------------
     # 1. Prepare the ECG image
@@ -466,6 +522,18 @@ def run_ecg_image_pipeline(
     if auto_detect_layout:
         lead_layout = _detect_lead_layout(
             trace_candidates
+        )
+
+    # ---------------------------------------------------------
+    # 5A. Optional explicit lead-cell naming
+    # ---------------------------------------------------------
+
+    lead_identification = None
+
+    if lead_layout_format is not None:
+        lead_identification = _identify_leads_from_layout(
+            lead_layout,
+            layout_format=lead_layout_format,
         )
 
     # ---------------------------------------------------------
@@ -544,4 +612,5 @@ def run_ecg_image_pipeline(
         grid_detection=grid_detection,
         calibrated_signal=calibrated_signal,
         quality_assessment=quality_assessment,
+        lead_identification=lead_identification,
     )
