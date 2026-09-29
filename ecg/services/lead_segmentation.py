@@ -1,3 +1,19 @@
+
+"""
+ECG Lead Segmentation Foundation.
+
+Supports:
+    - Vertical ECG lead-region segmentation.
+    - Generic 2D ECG lead-layout segmentation.
+    - Optional standard_3x4 real-image layout profile.
+
+The optional standard_3x4 profile is intended for explicitly
+confirmed three-row, four-column ECG printouts.
+
+This module performs engineering-level image segmentation only.
+It does not establish waveform accuracy or clinical validity.
+"""
+
 from dataclasses import dataclass
 
 import numpy as np
@@ -5,6 +21,10 @@ from django.conf import settings
 
 from ecg.services.trace_extraction import ECGTraceCandidates
 
+
+# =========================================================
+# Default Configuration
+# =========================================================
 
 DEFAULT_ECG_LEAD_SEGMENTATION_MIN_ACTIVE_PIXELS = 1
 DEFAULT_ECG_LEAD_SEGMENTATION_MAX_GAP_ROWS = 2
@@ -18,9 +38,17 @@ DEFAULT_ECG_LEAD_LAYOUT_MAX_COLUMNS_PER_ROW = 8
 DEFAULT_ECG_LEAD_LAYOUT_MAX_CELLS = 24
 
 
-class ECGLeadSegmentationError(ValueError):
-    """Raised when ECG lead-region segmentation cannot be completed safely."""
+# =========================================================
+# Exception
+# =========================================================
 
+class ECGLeadSegmentationError(ValueError):
+    """Raised when ECG lead segmentation cannot complete safely."""
+
+
+# =========================================================
+# Vertical Lead Region
+# =========================================================
 
 @dataclass(frozen=True)
 class ECGLeadRegion:
@@ -51,19 +79,26 @@ class ECGLeadSegmentationResult:
         return len(self.regions)
 
 
+# =========================================================
+# 2D Lead Layout Cell
+# =========================================================
+
 @dataclass(frozen=True)
 class ECGLeadLayoutCell:
     index: int
     row_index: int
     column_index: int
+
     left: int
     right: int
     top: int
     bottom: int
+
     active_left: int
     active_right: int
     active_top: int
     active_bottom: int
+
     candidate_pixel_count: int
 
     @property
@@ -83,10 +118,15 @@ class ECGLeadLayoutCell:
         return self.active_bottom - self.active_top
 
 
+# =========================================================
+# 2D Lead Layout Result
+# =========================================================
+
 @dataclass(frozen=True)
 class ECGLeadLayoutResult:
     width: int
     height: int
+
     rows: tuple[ECGLeadRegion, ...]
     cells: tuple[ECGLeadLayoutCell, ...]
 
@@ -109,13 +149,9 @@ class ECGLeadLayoutResult:
                 if cell.row_index == row.index
             )
 
-            counts.append(
-                count
-            )
+            counts.append(count)
 
-        return tuple(
-            counts
-        )
+        return tuple(counts)
 
     @property
     def max_column_count(self):
@@ -128,7 +164,12 @@ class ECGLeadLayoutResult:
         )
 
 
+# =========================================================
+# Candidate Validation
+# =========================================================
+
 def _validate_candidates(candidates):
+
     if not isinstance(
         candidates,
         ECGTraceCandidates,
@@ -173,7 +214,12 @@ def _validate_candidates(candidates):
     )
 
 
+# =========================================================
+# Configuration Validation
+# =========================================================
+
 def _get_min_active_pixels():
+
     value = getattr(
         settings,
         "ECG_LEAD_SEGMENTATION_MIN_ACTIVE_PIXELS",
@@ -193,6 +239,7 @@ def _get_min_active_pixels():
 
 
 def _get_max_gap_rows():
+
     value = getattr(
         settings,
         "ECG_LEAD_SEGMENTATION_MAX_GAP_ROWS",
@@ -212,6 +259,7 @@ def _get_max_gap_rows():
 
 
 def _get_padding_rows():
+
     value = getattr(
         settings,
         "ECG_LEAD_SEGMENTATION_PADDING_ROWS",
@@ -231,6 +279,7 @@ def _get_padding_rows():
 
 
 def _get_max_regions():
+
     value = getattr(
         settings,
         "ECG_LEAD_SEGMENTATION_MAX_REGIONS",
@@ -250,6 +299,7 @@ def _get_max_regions():
 
 
 def _get_layout_min_active_pixels_per_column():
+
     value = getattr(
         settings,
         "ECG_LEAD_LAYOUT_MIN_ACTIVE_PIXELS_PER_COLUMN",
@@ -270,6 +320,7 @@ def _get_layout_min_active_pixels_per_column():
 
 
 def _get_layout_max_gap_columns():
+
     value = getattr(
         settings,
         "ECG_LEAD_LAYOUT_MAX_GAP_COLUMNS",
@@ -290,6 +341,7 @@ def _get_layout_max_gap_columns():
 
 
 def _get_layout_padding_columns():
+
     value = getattr(
         settings,
         "ECG_LEAD_LAYOUT_PADDING_COLUMNS",
@@ -310,6 +362,7 @@ def _get_layout_padding_columns():
 
 
 def _get_layout_max_columns_per_row():
+
     value = getattr(
         settings,
         "ECG_LEAD_LAYOUT_MAX_COLUMNS_PER_ROW",
@@ -330,6 +383,7 @@ def _get_layout_max_columns_per_row():
 
 
 def _get_layout_max_cells():
+
     value = getattr(
         settings,
         "ECG_LEAD_LAYOUT_MAX_CELLS",
@@ -349,6 +403,10 @@ def _get_layout_max_cells():
     return value
 
 
+# =========================================================
+# Grouping Helpers
+# =========================================================
+
 def _group_active_positions(
     active_positions,
     max_gap,
@@ -362,9 +420,8 @@ def _group_active_positions(
     previous = start
 
     for position in active_positions[1:]:
-        position = int(
-            position
-        )
+
+        position = int(position)
 
         gap = (
             position
@@ -377,20 +434,14 @@ def _group_active_positions(
             continue
 
         groups.append(
-            (
-                start,
-                previous,
-            )
+            (start, previous)
         )
 
         start = position
         previous = position
 
     groups.append(
-        (
-            start,
-            previous,
-        )
+        (start, previous)
     )
 
     return groups
@@ -416,6 +467,10 @@ def _group_active_columns(
     )
 
 
+# =========================================================
+# Boundary Helpers
+# =========================================================
+
 def _build_boundaries(
     groups,
     dimension_size,
@@ -424,6 +479,7 @@ def _build_boundaries(
     boundaries = []
 
     for start, end in groups:
+
         lower = max(
             0,
             start - padding,
@@ -435,15 +491,13 @@ def _build_boundaries(
         )
 
         boundaries.append(
-            [
-                lower,
-                upper,
-            ]
+            [lower, upper]
         )
 
     for index in range(
         len(boundaries) - 1
     ):
+
         current = boundaries[index]
         following = boundaries[index + 1]
 
@@ -489,28 +543,18 @@ def _build_column_boundaries(
     )
 
 
-def segment_ecg_lead_regions(
-    candidates,
-):
-    mask = _validate_candidates(
-        candidates
-    )
+# =========================================================
+# Vertical Lead Region Segmentation
+# =========================================================
 
-    min_active_pixels = (
-        _get_min_active_pixels()
-    )
+def segment_ecg_lead_regions(candidates):
 
-    max_gap_rows = (
-        _get_max_gap_rows()
-    )
+    mask = _validate_candidates(candidates)
 
-    padding_rows = (
-        _get_padding_rows()
-    )
-
-    max_regions = (
-        _get_max_regions()
-    )
+    min_active_pixels = _get_min_active_pixels()
+    max_gap_rows = _get_max_gap_rows()
+    padding_rows = _get_padding_rows()
+    max_regions = _get_max_regions()
 
     row_counts = np.count_nonzero(
         mask,
@@ -518,8 +562,7 @@ def segment_ecg_lead_regions(
     )
 
     active_rows = np.flatnonzero(
-        row_counts
-        >= min_active_pixels
+        row_counts >= min_active_pixels
     )
 
     if active_rows.size == 0:
@@ -545,16 +588,11 @@ def segment_ecg_lead_regions(
 
     regions = []
 
-    for index, (
-        group,
-        boundary,
-    ) in enumerate(
-        zip(
-            groups,
-            boundaries,
-        ),
+    for index, (group, boundary) in enumerate(
+        zip(groups, boundaries),
         start=1,
     ):
+
         active_start, active_end = group
         top, bottom = boundary
 
@@ -591,11 +629,13 @@ def segment_ecg_lead_regions(
     return ECGLeadSegmentationResult(
         width=candidates.width,
         height=candidates.height,
-        regions=tuple(
-            regions
-        ),
+        regions=tuple(regions),
     )
 
+
+# =========================================================
+# Generic 2D Row Segmentation
+# =========================================================
 
 def _segment_layout_row(
     mask,
@@ -608,6 +648,7 @@ def _segment_layout_row(
     max_columns_per_row,
     starting_cell_index,
 ):
+
     row_mask = mask[
         row.active_top:row.active_bottom,
         :
@@ -619,8 +660,7 @@ def _segment_layout_row(
     )
 
     active_columns = np.flatnonzero(
-        column_counts
-        >= min_active_pixels_per_column
+        column_counts >= min_active_pixels_per_column
     )
 
     if active_columns.size == 0:
@@ -634,9 +674,7 @@ def _segment_layout_row(
         max_gap_columns,
     )
 
-    if len(
-        column_groups
-    ) > max_columns_per_row:
+    if len(column_groups) > max_columns_per_row:
         raise ECGLeadSegmentationError(
             f"Too many possible ECG lead columns were "
             f"detected for row {row.index}."
@@ -650,21 +688,12 @@ def _segment_layout_row(
 
     cells = []
 
-    for column_index, (
-        group,
-        boundary,
-    ) in enumerate(
-        zip(
-            column_groups,
-            column_boundaries,
-        ),
+    for column_index, (group, boundary) in enumerate(
+        zip(column_groups, column_boundaries),
         start=1,
     ):
-        (
-            active_left,
-            active_right_inclusive,
-        ) = group
 
+        active_left, active_right_inclusive = group
         left, right = boundary
 
         if right <= left:
@@ -672,10 +701,7 @@ def _segment_layout_row(
                 "An invalid ECG lead-layout cell was produced."
             )
 
-        active_right = (
-            active_right_inclusive
-            + 1
-        )
+        active_right = active_right_inclusive + 1
 
         candidate_pixel_count = int(
             np.count_nonzero(
@@ -714,47 +740,76 @@ def _segment_layout_row(
             )
         )
 
-    return tuple(
-        cells
-    )
+    return tuple(cells)
 
+
+# =========================================================
+# Public 2D Layout Segmentation
+# =========================================================
 
 def segment_ecg_lead_layout(
     candidates,
+    *,
+    layout_profile=None,
 ):
-    mask = _validate_candidates(
-        candidates
-    )
+    """
+    Segment ECG candidates into a two-dimensional layout.
 
-    row_segmentation = (
-        segment_ecg_lead_regions(
-            candidates
+    Without layout_profile:
+        Preserve the existing generic behavior.
+
+    With layout_profile="standard_3x4":
+        Use the optional three-row, four-column detection method.
+
+    An explicit profile must only be selected when the source
+    ECG printout has a confirmed compatible layout.
+    """
+
+    mask = _validate_candidates(candidates)
+
+    # -----------------------------------------------------
+    # Optional Explicit Layout Profile
+    # -----------------------------------------------------
+
+    if layout_profile is not None:
+
+        if layout_profile == "standard_3x4":
+
+            return _segment_explicit_standard_3x4(
+                candidates,
+                mask,
+            )
+
+        raise ECGLeadSegmentationError(
+            "Unsupported ECG lead layout profile."
         )
+
+    # -----------------------------------------------------
+    # Existing Generic Segmentation
+    # -----------------------------------------------------
+
+    row_segmentation = segment_ecg_lead_regions(
+        candidates
     )
 
     min_active_pixels_per_column = (
         _get_layout_min_active_pixels_per_column()
     )
 
-    max_gap_columns = (
-        _get_layout_max_gap_columns()
-    )
+    max_gap_columns = _get_layout_max_gap_columns()
 
-    padding_columns = (
-        _get_layout_padding_columns()
-    )
+    padding_columns = _get_layout_padding_columns()
 
     max_columns_per_row = (
         _get_layout_max_columns_per_row()
     )
 
-    max_cells = (
-        _get_layout_max_cells()
-    )
+    max_cells = _get_layout_max_cells()
 
     cells = []
 
     for row in row_segmentation.regions:
+
         row_cells = _segment_layout_row(
             mask,
             row,
@@ -767,15 +822,10 @@ def segment_ecg_lead_layout(
             max_columns_per_row=(
                 max_columns_per_row
             ),
-            starting_cell_index=(
-                len(cells)
-                + 1
-            ),
+            starting_cell_index=len(cells) + 1,
         )
 
-        cells.extend(
-            row_cells
-        )
+        cells.extend(row_cells)
 
         if len(cells) > max_cells:
             raise ECGLeadSegmentationError(
@@ -792,7 +842,376 @@ def segment_ecg_lead_layout(
         width=candidates.width,
         height=candidates.height,
         rows=row_segmentation.regions,
-        cells=tuple(
-            cells
+        cells=tuple(cells),
+    )
+
+
+# =========================================================
+# NEW: Opt-In Standard 3x4 Layout Profile
+# =========================================================
+
+def _segment_explicit_standard_3x4(candidates, mask):
+    """
+    Locate a 3-by-4 ECG grid using image evidence.
+
+    Compared with the existing generic detector, this profile:
+
+        1. Identifies three dominant signal bands.
+        2. Excludes disconnected, small text-like regions.
+        3. Searches for three shared vertical gutters.
+        4. Produces twelve independent cell boundaries.
+
+    The algorithm uses relative geometry and observed image gaps.
+    It does not use the provisional validation annotations.
+
+    Ambiguous layouts raise ECGLeadSegmentationError instead
+    of silently forcing a 3x4 result.
+
+    This is engineering segmentation, not clinical interpretation.
+    """
+
+    # -----------------------------------------------------
+    # 1. Detect Existing Vertical Regions
+    # -----------------------------------------------------
+
+    generic_rows = segment_ecg_lead_regions(
+        candidates
+    ).regions
+
+    if len(generic_rows) < 3:
+        raise ECGLeadSegmentationError(
+            "The standard_3x4 profile requires three signal rows."
+        )
+
+    largest_count = max(
+        row.candidate_pixel_count
+        for row in generic_rows
+    )
+
+    largest_height = max(
+        row.active_height
+        for row in generic_rows
+    )
+
+    # -----------------------------------------------------
+    # 2. Select Three Dominant Signal Bands
+    # -----------------------------------------------------
+
+    main_rows = tuple(
+        row
+        for row in generic_rows
+        if (
+            row.candidate_pixel_count >= 0.20 * largest_count
+            and row.active_height >= 0.40 * largest_height
+        )
+    )
+
+    if len(main_rows) != 3:
+        raise ECGLeadSegmentationError(
+            "The standard_3x4 profile could not establish "
+            "exactly three dominant signal rows safely."
+        )
+
+    # -----------------------------------------------------
+    # 3. Measure Combined Horizontal Signal Support
+    # -----------------------------------------------------
+
+    combined_column_counts = np.zeros(
+        candidates.width,
+        dtype=np.int64,
+    )
+
+    for row in main_rows:
+
+        combined_column_counts += np.count_nonzero(
+            mask[
+                row.active_top:row.active_bottom,
+                :
+            ],
+            axis=0,
+        )
+
+    nonempty_columns = np.flatnonzero(
+        combined_column_counts > 0
+    )
+
+    if nonempty_columns.size == 0:
+        raise ECGLeadSegmentationError(
+            "No common horizontal ECG signal extent was found."
+        )
+
+    left_edge = int(
+        nonempty_columns[0]
+    )
+
+    right_edge = (
+        int(nonempty_columns[-1]) + 1
+    )
+
+    nominal_width = (
+        right_edge - left_edge
+    ) / 4.0
+
+    if nominal_width < 4:
+        raise ECGLeadSegmentationError(
+            "The image is too narrow for the standard_3x4 profile."
+        )
+
+    # -----------------------------------------------------
+    # 4. Detect Shared Blank Vertical Gutters
+    # -----------------------------------------------------
+
+    blank_positions = np.flatnonzero(
+        combined_column_counts == 0
+    )
+
+    if blank_positions.size:
+
+        blank_groups = _group_active_positions(
+            blank_positions,
+            0,
+        )
+
+    else:
+        blank_groups = []
+
+    interior_gutters = tuple(
+        (
+            int(start),
+            int(end),
+        )
+        for start, end in blank_groups
+        if (
+            start > left_edge
+            and end < right_edge - 1
+            and end - start + 1 >= 2
+        )
+    )
+
+    separator_positions = []
+
+    used_gutters = set()
+
+    # -----------------------------------------------------
+    # 5. Identify the Three Column Separators
+    # -----------------------------------------------------
+
+    for separator_index in (1, 2, 3):
+
+        approximate_position = (
+            left_edge
+            + separator_index * nominal_width
+        )
+
+        alternatives = []
+
+        for gutter_index, (start, end) in enumerate(
+            interior_gutters
+        ):
+
+            if gutter_index in used_gutters:
+                continue
+
+            center = (
+                start + end + 1
+            ) / 2.0
+
+            distance = abs(
+                center - approximate_position
+            )
+
+            if distance <= 0.30 * nominal_width:
+
+                alternatives.append(
+                    (
+                        distance,
+                        -(end - start + 1),
+                        gutter_index,
+                        int((start + end + 1) // 2),
+                    )
+                )
+
+        if not alternatives:
+            raise ECGLeadSegmentationError(
+                "The standard_3x4 profile could not verify "
+                "three shared vertical gutters safely."
+            )
+
+        (
+            _,
+            _,
+            chosen_index,
+            separator,
+        ) = min(alternatives)
+
+        used_gutters.add(
+            chosen_index
+        )
+
+        separator_positions.append(
+            separator
+        )
+
+    # -----------------------------------------------------
+    # 6. Validate Four Column Boundaries
+    # -----------------------------------------------------
+
+    column_boundaries = (
+        left_edge,
+        *separator_positions,
+        right_edge,
+    )
+
+    if any(
+        right - left < 0.50 * nominal_width
+        for left, right in zip(
+            column_boundaries,
+            column_boundaries[1:],
+        )
+    ):
+        raise ECGLeadSegmentationError(
+            "The standard_3x4 profile produced implausible "
+            "cell widths."
+        )
+
+    # -----------------------------------------------------
+    # 7. Establish Three Row Boundaries
+    # -----------------------------------------------------
+
+    row_separators = tuple(
+        (
+            current.active_bottom
+            + following.active_top
+        ) // 2
+        for current, following in zip(
+            main_rows,
+            main_rows[1:],
+        )
+    )
+
+    row_boundaries = (
+        0,
+        *row_separators,
+        candidates.height,
+    )
+
+    rows = []
+    cells = []
+
+    # -----------------------------------------------------
+    # 8. Construct Twelve Independent Layout Cells
+    # -----------------------------------------------------
+
+    for row_index, (
+        original_row,
+        top,
+        bottom,
+    ) in enumerate(
+        zip(
+            main_rows,
+            row_boundaries,
+            row_boundaries[1:],
         ),
+        start=1,
+    ):
+
+        if not (
+            top <= original_row.active_top
+            < original_row.active_bottom <= bottom
+        ):
+            raise ECGLeadSegmentationError(
+                "The standard_3x4 profile produced overlapping rows."
+            )
+
+        row = ECGLeadRegion(
+            index=row_index,
+            top=int(top),
+            bottom=int(bottom),
+            active_top=original_row.active_top,
+            active_bottom=original_row.active_bottom,
+            candidate_pixel_count=original_row.candidate_pixel_count,
+        )
+
+        rows.append(row)
+
+        # -------------------------------------------------
+        # Create Four Cells Inside the Current Row
+        # -------------------------------------------------
+
+        for column_index, (
+            left,
+            right,
+        ) in enumerate(
+            zip(
+                column_boundaries,
+                column_boundaries[1:],
+            ),
+            start=1,
+        ):
+
+            cell_mask = mask[
+                row.active_top:row.active_bottom,
+                left:right,
+            ]
+
+            count = int(
+                np.count_nonzero(cell_mask)
+            )
+
+            if count <= 0:
+                raise ECGLeadSegmentationError(
+                    "The standard_3x4 profile contains an empty "
+                    "signal cell."
+                )
+
+            active_local_columns = np.flatnonzero(
+                np.any(
+                    cell_mask,
+                    axis=0,
+                )
+            )
+
+            active_left = (
+                int(left)
+                + int(active_local_columns[0])
+            )
+
+            active_right = (
+                int(left)
+                + int(active_local_columns[-1])
+                + 1
+            )
+
+            cells.append(
+                ECGLeadLayoutCell(
+                    index=len(cells) + 1,
+                    row_index=row_index,
+                    column_index=column_index,
+                    left=int(left),
+                    right=int(right),
+                    top=row.top,
+                    bottom=row.bottom,
+                    active_left=active_left,
+                    active_right=active_right,
+                    active_top=row.active_top,
+                    active_bottom=row.active_bottom,
+                    candidate_pixel_count=count,
+                )
+            )
+
+    # -----------------------------------------------------
+    # 9. Final Structural Validation
+    # -----------------------------------------------------
+
+    if len(rows) != 3 or len(cells) != 12:
+        raise ECGLeadSegmentationError(
+            "The standard_3x4 profile could not produce "
+            "twelve independent cell boundaries."
+        )
+
+    return ECGLeadLayoutResult(
+        width=candidates.width,
+        height=candidates.height,
+        rows=tuple(rows),
+        cells=tuple(cells),
     )
