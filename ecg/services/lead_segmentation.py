@@ -37,6 +37,15 @@ DEFAULT_ECG_LEAD_LAYOUT_PADDING_COLUMNS = 2
 DEFAULT_ECG_LEAD_LAYOUT_MAX_COLUMNS_PER_ROW = 8
 DEFAULT_ECG_LEAD_LAYOUT_MAX_CELLS = 24
 
+# The following constants apply ONLY to the explicit standard_3x4 profile.
+# A minimum of three agreeing horizontal probes allows one contaminated
+# probe without deleting any source column from the final layout.
+_STANDARD_3X4_PROBE_COUNT = 4
+_STANDARD_3X4_MIN_VALID_PROBES = 3
+_STANDARD_3X4_MIN_DOMINANT_COUNT_RATIO = 0.20
+_STANDARD_3X4_MIN_DOMINANT_HEIGHT_RATIO = 0.40
+_STANDARD_3X4_MAX_SEPARATOR_SPREAD_RATIO = 0.15
+
 
 # =========================================================
 # Exception
@@ -847,6 +856,299 @@ def segment_ecg_lead_layout(
 
 
 # =========================================================
+# Standard 3x4: Dominant Region Selection
+# =========================================================
+
+def _select_standard_3x4_dominant_regions(regions):
+    """Apply the existing signal-size filter without forcing three rows."""
+
+    if not regions:
+        return ()
+
+    largest_count = max(
+        row.candidate_pixel_count
+        for row in regions
+    )
+
+    largest_height = max(
+        row.active_height
+        for row in regions
+    )
+
+    if largest_count <= 0 or largest_height <= 0:
+        return ()
+
+    return tuple(
+        row
+        for row in regions
+        if (
+            row.candidate_pixel_count >= (
+                _STANDARD_3X4_MIN_DOMINANT_COUNT_RATIO
+                * largest_count
+            )
+            and row.active_height >= (
+                _STANDARD_3X4_MIN_DOMINANT_HEIGHT_RATIO
+                * largest_height
+            )
+        )
+    )
+
+
+# =========================================================
+# Standard 3x4: Conservative Horizontal-Probe Fallback
+# =========================================================
+
+def _detect_standard_3x4_rows_from_probes(mask):
+    """
+    Estimate nominal row separators when full-width signals overlap.
+
+    Divide the observed signal width into four horizontal probes.
+    Each probe independently identifies its three dominant vertical bands.
+    Require at least three successful probes and reasonably consistent
+    separators. This tolerates one vertically contaminated probe.
+
+    Only the row separators are inferred from the probes. The final
+    cell detection still uses the original complete mask and all four
+    columns; no source columns are deleted or muted.
+
+    Returns three provisional full-width rows and four row boundaries.
+    If consensus is unavailable, fail rather than force a 3x4 layout.
+    """
+
+    height, _ = mask.shape
+
+    occupied_columns = np.flatnonzero(
+        np.any(mask, axis=0)
+    )
+
+    if occupied_columns.size < 16:
+        raise ECGLeadSegmentationError(
+            "The standard_3x4 profile has insufficient horizontal "
+            "signal extent for robust row detection."
+        )
+
+    left_edge = int(
+        occupied_columns[0]
+    )
+
+    right_edge = (
+        int(occupied_columns[-1]) + 1
+    )
+
+    signal_width = right_edge - left_edge
+
+    if signal_width < 4 * 4:
+        raise ECGLeadSegmentationError(
+            "The standard_3x4 profile is too narrow for four row probes."
+        )
+
+    probe_edges = tuple(
+        left_edge
+        + (signal_width * index) // _STANDARD_3X4_PROBE_COUNT
+        for index in range(_STANDARD_3X4_PROBE_COUNT + 1)
+    )
+
+    min_active_pixels = _get_min_active_pixels()
+    max_gap_rows = _get_max_gap_rows()
+
+    successful_separator_pairs = []
+
+    for probe_left, probe_right in zip(
+        probe_edges,
+        probe_edges[1:],
+    ):
+
+        probe_mask = mask[
+            :,
+            probe_left:probe_right,
+        ]
+
+        if probe_mask.shape[1] < 4:
+            continue
+
+        row_counts = np.count_nonzero(
+            probe_mask,
+            axis=1,
+        )
+
+        active_rows = np.flatnonzero(
+            row_counts >= min_active_pixels
+        )
+
+        if active_rows.size == 0:
+            continue
+
+        groups = _group_active_rows(
+            active_rows,
+            max_gap_rows,
+        )
+
+        probe_regions = tuple(
+            ECGLeadRegion(
+                index=index,
+                top=int(start),
+                bottom=int(end) + 1,
+                active_top=int(start),
+                active_bottom=int(end) + 1,
+                candidate_pixel_count=int(
+                    np.count_nonzero(
+                        probe_mask[
+                            start:end + 1,
+                            :
+                        ]
+                    )
+                ),
+            )
+            for index, (start, end) in enumerate(
+                groups,
+                start=1,
+            )
+        )
+
+        dominant = _select_standard_3x4_dominant_regions(
+            probe_regions
+        )
+
+        if len(dominant) != 3:
+            continue
+
+        first_separator = (
+            dominant[0].active_bottom
+            + dominant[1].active_top
+        ) // 2
+
+        second_separator = (
+            dominant[1].active_bottom
+            + dominant[2].active_top
+        ) // 2
+
+        if not (
+            0
+            < first_separator
+            < second_separator
+            < height
+        ):
+            continue
+
+        successful_separator_pairs.append(
+            (
+                first_separator,
+                second_separator,
+            )
+        )
+
+    if (
+        len(successful_separator_pairs)
+        < _STANDARD_3X4_MIN_VALID_PROBES
+    ):
+        raise ECGLeadSegmentationError(
+            "The standard_3x4 profile could not establish three "
+            "signal rows from at least three horizontal probes."
+        )
+
+    separators = np.asarray(
+        successful_separator_pairs,
+        dtype=np.int64,
+    )
+
+    spread = np.ptp(
+        separators,
+        axis=0,
+    )
+
+    if np.any(
+        spread
+        > _STANDARD_3X4_MAX_SEPARATOR_SPREAD_RATIO * height
+    ):
+        raise ECGLeadSegmentationError(
+            "The standard_3x4 profile found inconsistent row "
+            "separators across horizontal probes."
+        )
+
+    # Median consensus resists one outlying, otherwise valid probe.
+    first_separator, second_separator = (
+        int(value)
+        for value in np.rint(
+            np.median(
+                separators,
+                axis=0,
+            )
+        )
+    )
+
+    row_boundaries = (
+        0,
+        first_separator,
+        second_separator,
+        height,
+    )
+
+    if any(
+        bottom - top < max(
+            2,
+            int(0.10 * height),
+        )
+        for top, bottom in zip(
+            row_boundaries,
+            row_boundaries[1:],
+        )
+    ):
+        raise ECGLeadSegmentationError(
+            "The standard_3x4 profile produced implausible "
+            "row heights from horizontal probes."
+        )
+
+    full_width_rows = []
+
+    for index, (top, bottom) in enumerate(
+        zip(
+            row_boundaries,
+            row_boundaries[1:],
+        ),
+        start=1,
+    ):
+
+        region_mask = mask[
+            top:bottom,
+            :
+        ]
+
+        active_local_rows = np.flatnonzero(
+            np.any(
+                region_mask,
+                axis=1,
+            )
+        )
+
+        if active_local_rows.size == 0:
+            raise ECGLeadSegmentationError(
+                "A consensus ECG row contains no trace candidates."
+            )
+
+        full_width_rows.append(
+            ECGLeadRegion(
+                index=index,
+                top=int(top),
+                bottom=int(bottom),
+                active_top=int(
+                    top + active_local_rows[0]
+                ),
+                active_bottom=int(
+                    top + active_local_rows[-1] + 1
+                ),
+                candidate_pixel_count=int(
+                    np.count_nonzero(region_mask)
+                ),
+            )
+        )
+
+    return (
+        tuple(full_width_rows),
+        row_boundaries,
+    )
+
+
+# =========================================================
 # NEW: Opt-In Standard 3x4 Layout Profile
 # =========================================================
 
@@ -878,39 +1180,39 @@ def _segment_explicit_standard_3x4(candidates, mask):
         candidates
     ).regions
 
-    if len(generic_rows) < 3:
-        raise ECGLeadSegmentationError(
-            "The standard_3x4 profile requires three signal rows."
-        )
-
-    largest_count = max(
-        row.candidate_pixel_count
-        for row in generic_rows
-    )
-
-    largest_height = max(
-        row.active_height
-        for row in generic_rows
-    )
-
     # -----------------------------------------------------
     # 2. Select Three Dominant Signal Bands
     # -----------------------------------------------------
 
-    main_rows = tuple(
-        row
-        for row in generic_rows
-        if (
-            row.candidate_pixel_count >= 0.20 * largest_count
-            and row.active_height >= 0.40 * largest_height
-        )
+    main_rows = _select_standard_3x4_dominant_regions(
+        generic_rows
     )
 
+    row_boundaries = None
+
     if len(main_rows) != 3:
-        raise ECGLeadSegmentationError(
-            "The standard_3x4 profile could not establish "
-            "exactly three dominant signal rows safely."
-        )
+
+        if len(generic_rows) < 3:
+            rejection_message = (
+                "The standard_3x4 profile requires three signal rows."
+            )
+        else:
+            rejection_message = (
+                "The standard_3x4 profile could not establish "
+                "exactly three dominant signal rows safely."
+            )
+
+        try:
+            (
+                main_rows,
+                row_boundaries,
+            ) = _detect_standard_3x4_rows_from_probes(
+                mask
+            )
+        except ECGLeadSegmentationError as exc:
+            raise ECGLeadSegmentationError(
+                rejection_message
+            ) from exc
 
     # -----------------------------------------------------
     # 3. Measure Combined Horizontal Signal Support
@@ -1078,22 +1380,24 @@ def _segment_explicit_standard_3x4(candidates, mask):
     # 7. Establish Three Row Boundaries
     # -----------------------------------------------------
 
-    row_separators = tuple(
-        (
-            current.active_bottom
-            + following.active_top
-        ) // 2
-        for current, following in zip(
-            main_rows,
-            main_rows[1:],
-        )
-    )
+    if row_boundaries is None:
 
-    row_boundaries = (
-        0,
-        *row_separators,
-        candidates.height,
-    )
+        row_separators = tuple(
+            (
+                current.active_bottom
+                + following.active_top
+            ) // 2
+            for current, following in zip(
+                main_rows,
+                main_rows[1:],
+            )
+        )
+
+        row_boundaries = (
+            0,
+            *row_separators,
+            candidates.height,
+        )
 
     rows = []
     cells = []
