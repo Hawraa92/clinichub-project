@@ -73,7 +73,8 @@ def create_patient_profile_and_group(sender, instance, created, **kwargs):
 
     Patient.objects.create(
         user=instance,
-        full_name=instance.get_full_name() or instance.username
+        full_name=instance.get_full_name() or instance.username,
+        email=instance.email,
     )
 
     group, _ = Group.objects.get_or_create(name="Patients")

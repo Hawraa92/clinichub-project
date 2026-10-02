@@ -175,7 +175,8 @@ class ExtendedRegisterViewTest(AccountsBaseCase):
         resp = self.client.post(self.url_register, self.payload)
         self.assertRedirects(resp, self.url_login)
         user = User.objects.get(email="viewpatient@example.com")
-        self.assertTrue(Patient.objects.filter(user=user).exists())
+        patient = Patient.objects.get(user=user)
+        self.assertEqual(patient.email, user.email)
 
     def test_register_duplicate_email_stays(self):
         User.objects.create_user(email="dup3@example.com", password="x")
