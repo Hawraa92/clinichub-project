@@ -1496,7 +1496,8 @@ def book_patient(request: HttpRequest, doctor_id: int):
 @require_GET
 def my_appointments(request: HttpRequest):
     """
-    Show actual Appointments + (if enabled) PENDING/REQUESTED PatientBookingRequests
+    Show upcoming actual Appointments + (if enabled)
+    upcoming PENDING/REQUESTED PatientBookingRequests
     that belong to the logged-in patient.
     """
     if not is_patient(request.user):
@@ -1506,8 +1507,13 @@ def my_appointments(request: HttpRequest):
     if not patient:
         return HttpResponseForbidden("Patient profile not found.")
 
+    now = timezone.now()
+
     appointments = (
-        Appointment.objects.filter(patient=patient)
+        Appointment.objects.filter(
+            patient=patient,
+            scheduled_time__gte=now,
+        )
         .select_related(
             "doctor",
             "doctor__user",
@@ -1520,7 +1526,9 @@ def my_appointments(request: HttpRequest):
 
     booking_requests: list[PatientBookingRequest] = []
     if BookingRequestStatus:
-        q = PatientBookingRequest.objects.all()
+        q = PatientBookingRequest.objects.filter(
+            scheduled_time__gte=now,
+        )
 
         if _model_has_field(PatientBookingRequest, "status"):
             if hasattr(BookingRequestStatus, "PENDING"):

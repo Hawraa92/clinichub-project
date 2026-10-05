@@ -8,6 +8,7 @@ from django.utils import timezone
 from appointments.models import (
     Appointment,
     AppointmentStatus,
+    BookingRequestStatus,
     PatientBookingRequest,
 )
 from patient.models import Patient
@@ -249,4 +250,90 @@ class PublicBookingTests(TestCase):
         self.assertTrue(
             created_request or created_appointment,
             "Expected a booking request or pending appointment to be created.",
+        )
+
+    def test_my_appointments_only_shows_future_items(self):
+        self.client.force_login(self.patient_user)
+
+        now = timezone.now()
+        past_time = now - timedelta(hours=1)
+
+        past_appointment = Appointment.objects.create(
+            doctor=self.doctor,
+            patient=self.patient,
+            scheduled_time=now + timedelta(days=2),
+            status=AppointmentStatus.PENDING,
+        )
+
+        Appointment.objects.filter(
+            pk=past_appointment.pk
+        ).update(
+            scheduled_time=past_time
+        )
+        past_appointment.refresh_from_db()
+
+        future_appointment = Appointment.objects.create(
+            doctor=self.doctor,
+            patient=self.patient,
+            scheduled_time=now + timedelta(days=3),
+            status=AppointmentStatus.PENDING,
+        )
+
+        past_request = PatientBookingRequest.objects.create(
+            full_name=self.patient.full_name,
+            contact_info="past@example.com",
+            doctor=self.doctor,
+            patient=self.patient,
+            user=self.patient_user,
+            scheduled_time=now + timedelta(days=4),
+            status=BookingRequestStatus.PENDING,
+        )
+
+        PatientBookingRequest.objects.filter(
+            pk=past_request.pk
+        ).update(
+            scheduled_time=past_time
+        )
+        past_request.refresh_from_db()
+
+        future_request = PatientBookingRequest.objects.create(
+            full_name=self.patient.full_name,
+            contact_info="future@example.com",
+            doctor=self.doctor,
+            patient=self.patient,
+            user=self.patient_user,
+            scheduled_time=now + timedelta(days=5),
+            status=BookingRequestStatus.PENDING,
+        )
+
+        response = self.client.get(
+            reverse("appointments:my_appointments")
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        appointment_ids = {
+            appointment.pk
+            for appointment in response.context["appointments"]
+        }
+        request_ids = {
+            booking_request.pk
+            for booking_request in response.context["booking_requests"]
+        }
+
+        self.assertIn(
+            future_appointment.pk,
+            appointment_ids,
+        )
+        self.assertNotIn(
+            past_appointment.pk,
+            appointment_ids,
+        )
+        self.assertIn(
+            future_request.pk,
+            request_ids,
+        )
+        self.assertNotIn(
+            past_request.pk,
+            request_ids,
         )
