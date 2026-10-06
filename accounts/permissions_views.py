@@ -136,7 +136,10 @@ VALID_PERMISSION_ACTIONS = {
 #
 # Medical archive policy:
 # - Doctors: view, add and change their own archives; no archive deletion.
-# - Secretaries, pharmacists, lab staff and patients: no archive access.
+# - Secretaries: add-only access for clinical handoff (archive + attachment);
+#   no general archive view, change or delete permission.
+# - Pharmacists and lab staff: no archive access.
+# - Patients: view-only access to their own archives.
 # - Platform superusers bypass model permissions as usual.
 #
 ROLE_PERMISSION_PRESETS: dict[str, dict[str, Any]] = {
@@ -243,7 +246,8 @@ ROLE_PERMISSION_PRESETS: dict[str, dict[str, Any]] = {
         "label": "Secretary",
         "description": (
             "Front-desk access for patients, bookings, appointments and "
-            "queue operations. Medical archives are excluded."
+            "queue operations, with limited permission to create a medical "
+            "archive and attach a clinical file for doctor handoff."
         ),
         "all_managed_permissions": False,
         "rules": (
@@ -275,6 +279,20 @@ ROLE_PERMISSION_PRESETS: dict[str, dict[str, Any]] = {
                 "appointments",
                 ("notification",),
                 ("view",),
+            ),
+            # Limited clinical handoff:
+            # The secretary may create an archive record and upload
+            # an attachment for a doctor, but cannot browse, edit,
+            # or delete medical archives through model permissions.
+            (
+                "medical_archive",
+                ("patientarchive",),
+                ("add",),
+            ),
+            (
+                "medical_archive",
+                ("archiveattachment",),
+                ("add",),
             ),
         ),
     },

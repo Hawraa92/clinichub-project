@@ -579,6 +579,223 @@ def archive_list(request: HttpRequest) -> HttpResponse:
 
 
 # =========================
+# Quick clinical handoff
+# Secretary/Admin -> Patient -> Doctor -> Attachment
+# =========================
+@login_required
+@permission_required(PERM_ADD_ARCHIVE, raise_exception=True)
+@require_http_methods(["POST"])
+def quick_send_to_doctor(request: HttpRequest) -> JsonResponse:
+    """
+    Create a single clinical handoff from the secretary/admin dashboard.
+    Security guarantees:
+    - Only admin/secretary accounts (or a superuser) can use this endpoint.
+    - The caller must have add permissions for both archive and attachment.
+    - Patient and doctor IDs are resolved only from the caller's scoped
+      querysets, so out-of-scope objects are never accepted.
+    - The attachment is validated by the existing ArchiveAttachmentForm.
+    - Archive and attachment are saved in one atomic transaction.
+    - No general archive view/change/delete permission is granted here.
+    """
+    user = request.user
+    role = _get_role(user)
+    if not (
+        getattr(user, "is_superuser", False)
+        or role in ROLE_PRIVILEGED
+    ):
+        raise Http404("Not found.")
+    if not user.has_perm(PERM_ADD_ATTACHMENT):
+        return _json_error(
+            "You do not have permission to add archive attachments.",
+            status=403,
+        )
+    patient_raw = (
+        request.POST.get("patient_id")
+        or request.POST.get("patient")
+        or ""
+    )
+    doctor_raw = (
+        request.POST.get("doctor_id")
+        or request.POST.get("doctor")
+        or ""
+    )
+    try:
+        patient_id = int(str(patient_raw).strip())
+        doctor_id = int(str(doctor_raw).strip())
+    except (TypeError, ValueError, OverflowError):
+        return _json_error(
+            "Please select a valid patient and doctor.",
+            status=400,
+        )
+    if patient_id <= 0 or doctor_id <= 0:
+        return _json_error(
+            "Please select a valid patient and doctor.",
+            status=400,
+        )
+    scoped_patients = filter_patients_for_user(
+        Patient.objects.all(),
+        user,
+    )
+    scoped_doctors = filter_doctors_for_user(
+        Doctor.objects.select_related("user").all(),
+        user,
+    )
+    # Use 404 for out-of-scope IDs so the endpoint does not reveal whether
+    # another tenant's patient or doctor exists.
+    patient = get_object_or_404(scoped_patients, pk=patient_id)
+    doctor = get_object_or_404(scoped_doctors, pk=doctor_id)
+    clinical_type = (
+        request.POST.get("clinical_type")
+        or "file"
+    ).strip().lower()
+    type_config = {
+        "photo": {
+            "title": "Clinical Photo",
+            "archive_type": "scan",
+            "description": "Clinical photo",
+        },
+        "ecg": {
+            "title": "ECG Recording",
+            "archive_type": "scan",
+            "description": "ECG recording",
+        },
+        "file": {
+            "title": "Clinical File",
+            "archive_type": "other",
+            "description": "Clinical file",
+        },
+    }
+    config = type_config.get(clinical_type)
+    if config is None:
+        return _json_error(
+            "Invalid clinical file type.",
+            status=400,
+        )
+    extracted_files = _extract_attachment_files(request)
+    if not extracted_files:
+        return _json_error(
+            "Please select a file to send.",
+            status=400,
+        )
+    if len(extracted_files) != 1:
+        return _json_error(
+            "Please send one file at a time.",
+            status=400,
+        )
+    patched_files = _patch_files_for_attachment_form(
+        request,
+        extracted_files,
+    )
+    attachment_post = request.POST.copy()
+    if not (attachment_post.get("description") or "").strip():
+        attachment_post["description"] = config["description"]
+    attachment_form = ArchiveAttachmentForm(
+        attachment_post,
+        patched_files,
+    )
+    if not attachment_form.is_valid():
+        return _json_error(
+            "Attachment validation failed.",
+            status=400,
+            extra={
+                "attachment_errors": _form_errors_json(
+                    attachment_form
+                ),
+            },
+        )
+    note = (
+        request.POST.get("note")
+        or request.POST.get("notes")
+        or ""
+    ).strip()
+    archive_data = request.POST.copy()
+    archive_data["patient"] = str(patient.pk)
+    archive_data["title"] = config["title"]
+    archive_data["archive_type"] = config["archive_type"]
+    archive_data["notes"] = note
+    archive_data["is_critical"] = ""
+    # Reuse the existing form so patient scoping and archive validation stay
+    # centralized in one place.
+    archive_form = PatientArchiveForm(
+        archive_data,
+        user=user,
+    )
+    if not archive_form.is_valid():
+        return _json_error(
+            "Archive validation failed.",
+            status=400,
+            extra={
+                "archive_errors": _form_errors_json(
+                    archive_form
+                ),
+            },
+        )
+    try:
+        with transaction.atomic():
+            archive = archive_form.save(commit=False)
+            archive.patient = patient
+            archive.doctor = doctor
+            if _model_has_field(PatientArchive, "status"):
+                archive.status = "final"
+            if (
+                _model_has_field(PatientArchive, "created_by")
+                and not getattr(archive, "created_by_id", None)
+            ):
+                archive.created_by = user
+            if _model_has_field(PatientArchive, "updated_by"):
+                archive.updated_by = user
+            archive.save()
+            try:
+                archive_form.save_m2m()
+            except Exception:
+                pass
+            files_to_save = (
+                attachment_form.cleaned_data.get("files")
+                or []
+            )
+            description = (
+                attachment_form.cleaned_data.get("description")
+                or config["description"]
+            ).strip()
+            for uploaded_file in files_to_save:
+                create_kwargs: Dict[str, Any] = {
+                    "archive": archive,
+                    "file": uploaded_file,
+                    "description": description,
+                }
+                if _model_has_field(
+                    ArchiveAttachment,
+                    "uploaded_by",
+                ):
+                    create_kwargs["uploaded_by"] = user
+                ArchiveAttachment.objects.create(**create_kwargs)
+    except ValidationError as exc:
+        message = (
+            str(getattr(exc, "message", ""))
+            or str(exc)
+            or "Validation error."
+        )
+        return _json_error(message, status=400)
+    except Exception as exc:
+        logger.exception(
+            "Unexpected error during quick clinical handoff: %s",
+            exc,
+        )
+        return _json_error(
+            "Unexpected error while sending the clinical file.",
+            status=500,
+        )
+    return _json_success(
+        "Clinical file sent to the doctor successfully.",
+        extra={
+            "archive_id": archive.pk,
+            "patient_id": patient.pk,
+            "doctor_id": doctor.pk,
+            "clinical_type": clinical_type,
+        },
+    )
+
+# =========================
 # Create
 # =========================
 class _VoiceFormInvalid(Exception):

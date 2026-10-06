@@ -35,6 +35,10 @@ from doctor.models import Doctor
 from hospital.models import Branch, Department, Hospital, StaffAssignment
 from patient.forms import SecretaryPatientForm
 from patient.models import Patient
+from medical_archive.access import (
+    filter_doctors_for_user as filter_archive_doctors_for_user,
+    filter_patients_for_user as filter_archive_patients_for_user,
+)
 
 # ✅ FIX: import datetime-local parsing tools used by booking form
 from .forms import AppointmentForm, DATETIME_INPUT_FORMATS, DateTimeLocalInput
@@ -868,6 +872,24 @@ def secretary_dashboard(request: HttpRequest):
         request.user,
     )
 
+    clinical_handoff_patients = filter_archive_patients_for_user(
+        Patient.objects.all(),
+        request.user,
+    ).order_by("full_name", "pk")
+
+    clinical_handoff_doctors = filter_archive_doctors_for_user(
+        Doctor.objects.select_related("user").all(),
+        request.user,
+    ).order_by(
+        "user__first_name",
+        "user__last_name",
+        "pk",
+    )
+
+    clinical_handoff_url = reverse(
+        "medical_archive:quick_send_to_doctor"
+    )
+
     context = {
         "appointment_form": appointment_form,
         "patient_form": SecretaryPatientForm(),
@@ -881,6 +903,9 @@ def secretary_dashboard(request: HttpRequest):
         "assigned_doctor": assigned_doctor,
         "assigned_doctor_id": assigned_doctor_id,
         "call_next_url": call_next_url,
+        "clinical_handoff_patients": clinical_handoff_patients,
+        "clinical_handoff_doctors": clinical_handoff_doctors,
+        "clinical_handoff_url": clinical_handoff_url,
         "queue_api_url": reverse(
             "appointments:queue_number_api"
         ),

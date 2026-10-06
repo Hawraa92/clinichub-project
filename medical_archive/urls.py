@@ -12,6 +12,13 @@ urlpatterns = [
     path("", views.archive_list, name="archive_list"),
     path("create/", views.create_archive, name="create_archive"),
 
+    # Secretary/Admin quick clinical handoff
+    path(
+        "quick-send/",
+        views.quick_send_to_doctor,
+        name="quick_send_to_doctor",
+    ),
+
     path("archive/<int:archive_id>/", views.archive_detail, name="archive_detail"),
     path("archive/<int:archive_id>/edit/", views.edit_archive, name="edit_archive"),
     path("archive/<int:archive_id>/delete/", views.delete_archive, name="delete_archive"),

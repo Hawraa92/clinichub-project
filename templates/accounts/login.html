@@ -9,11 +9,15 @@
 {% block content %}
 <div class="login-container">
   <div class="login-card">
-    <!-- Left Panel: Branding -->
+
+    <!-- Left Panel: ClinicHub Branding -->
     <div class="left-panel">
-      <img src="{% static 'images/image4.png' %}"
-           alt="Login Illustration"
-           class="illustration">
+      <img
+        src="{% static 'images/image4.png' %}"
+        alt="ClinicHub secure healthcare access"
+        class="illustration"
+      >
+
       <div class="brand-container">
         <h1 class="brand-name">ClinicHub</h1>
         <p class="brand-tagline">Your health, our priority</p>
@@ -22,19 +26,24 @@
 
     <!-- Right Panel: Login Form -->
     <div class="right-panel">
+
       <div class="form-header">
         <h2 class="greeting">Welcome Back</h2>
-        <p class="subheading">Access your healthcare dashboard</p>
+        <p class="subheading">Access your ClinicHub workspace</p>
       </div>
 
+      <!-- Django Messages -->
       {% if messages %}
         <div class="messages-container">
           {% for message in messages %}
-            <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+            <div class="alert alert-{{ message.tags }}">
+              {{ message }}
+            </div>
           {% endfor %}
         </div>
       {% endif %}
 
+      <!-- Non-field Form Errors -->
       {% if form.non_field_errors %}
         <div class="alert alert-error">
           {% for error in form.non_field_errors %}
@@ -43,45 +52,184 @@
         </div>
       {% endif %}
 
+      <!-- Login Form -->
       <form method="post" class="auth-form" novalidate>
         {% csrf_token %}
+
         {% for field in form %}
           <div class="form-group">
+
             {{ field.label_tag }}
-            {{ field }}
-            {% if field.help_text %}
-              <small class="help-text">{{ field.help_text }}</small>
+
+            {% if field.field.widget.input_type == "password" %}
+
+              <div class="password-input-wrapper">
+
+                {{ field }}
+
+                <button
+                  type="button"
+                  class="password-toggle"
+                  aria-label="Show password"
+                  title="Show password"
+                >
+
+                  <!-- Eye Open -->
+                  <svg
+                    class="password-eye password-eye-open"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M12 5C7 5 3.1 8.1 1.5 12C3.1 15.9 7 19 12 19C17 19 20.9 15.9 22.5 12C20.9 8.1 17 5 12 5ZM12 16C9.8 16 8 14.2 8 12C8 9.8 9.8 8 12 8C14.2 8 16 9.8 16 12C16 14.2 14.2 16 12 16ZM12 10C10.9 10 10 10.9 10 12C10 13.1 10.9 14 12 14C13.1 14 14 13.1 14 12C14 10.9 13.1 10 12 10Z"
+                    />
+                  </svg>
+
+                  <!-- Eye Closed -->
+                  <svg
+                    class="password-eye password-eye-closed"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    hidden
+                  >
+                    <path
+                      d="M2.1 3.5L3.5 2.1L21.9 20.5L20.5 21.9L17.4 18.8C15.8 19.6 14 20 12 20C7 20 3.1 16.9 1.5 13C2.2 11.4 3.2 10 4.4 8.8L2.1 6.5V3.5ZM7.2 11.6C7.1 12 7 12.5 7 13C7 15.8 9.2 18 12 18C12.5 18 13 17.9 13.4 17.8L11.7 16.1C10.2 15.9 9.1 14.8 8.9 13.3L7.2 11.6ZM12 6C17 6 20.9 9.1 22.5 13C21.8 14.7 20.8 16.1 19.5 17.3L16.9 14.7C17 14.2 17 13.6 16.9 13.1C16.5 10.8 14.6 9 12.2 9L9.6 6.4C10.4 6.1 11.2 6 12 6Z"
+                    />
+                  </svg>
+
+                </button>
+              </div>
+
+            {% else %}
+
+              {{ field }}
+
             {% endif %}
+
+            {% if field.help_text %}
+              <small class="help-text">
+                {{ field.help_text }}
+              </small>
+            {% endif %}
+
             {% for error in field.errors %}
               <div class="field-error">
-                <span class="error-icon">!</span> {{ error }}
+                <span class="error-icon">!</span>
+                {{ error }}
               </div>
             {% endfor %}
+
           </div>
         {% endfor %}
 
+        <!-- Forgot Password -->
         <div class="forgot-password">
-          <a href="{% url 'accounts:password_reset' %}">Forgot your password?</a>
+          <a href="{% url 'accounts:password_reset' %}">
+            Forgot your password?
+          </a>
         </div>
 
+        <!-- Sign In -->
         <button type="submit" class="btn-submit">
           <span>Sign In</span>
-          <svg class="arrow-icon" viewBox="0 0 24 24">
-            <path d="M4,11V13H16L10.5,18.5L11.9,19.9L19.8,12L11.9,4.1L10.5,5.5L16,11H4Z"/>
+
+          <svg
+            class="arrow-icon"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path
+              d="M4,11V13H16L10.5,18.5L11.9,19.9L19.8,12L11.9,4.1L10.5,5.5L16,11H4Z"
+            />
           </svg>
         </button>
+
       </form>
 
-      {# Display the sign-up link only if show_signup is True #}
+      <!-- Patient Registration -->
       {% if show_signup %}
         <div class="auth-footer">
           <p>New here?</p>
-          <a href="{% url 'accounts:register' %}" class="auth-link">
+
+          <a
+            href="{% url 'accounts:register' %}"
+            class="auth-link"
+          >
             Create Patient Account
           </a>
         </div>
       {% endif %}
+
     </div>
   </div>
 </div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const passwordToggles =
+      document.querySelectorAll(".password-toggle");
+
+    passwordToggles.forEach(function (toggle) {
+      toggle.addEventListener("click", function () {
+
+        const wrapper =
+          toggle.closest(".password-input-wrapper");
+
+        const input =
+          wrapper.querySelector("input");
+
+        const openEye =
+          toggle.querySelector(".password-eye-open");
+
+        const closedEye =
+          toggle.querySelector(".password-eye-closed");
+
+        if (!input) {
+          return;
+        }
+
+        const passwordIsVisible =
+          input.type === "text";
+
+        if (passwordIsVisible) {
+
+          input.type = "password";
+
+          openEye.hidden = false;
+          closedEye.hidden = true;
+
+          toggle.setAttribute(
+            "aria-label",
+            "Show password"
+          );
+
+          toggle.setAttribute(
+            "title",
+            "Show password"
+          );
+
+        } else {
+
+          input.type = "text";
+
+          openEye.hidden = true;
+          closedEye.hidden = false;
+
+          toggle.setAttribute(
+            "aria-label",
+            "Hide password"
+          );
+
+          toggle.setAttribute(
+            "title",
+            "Hide password"
+          );
+        }
+
+        input.focus();
+      });
+    });
+  });
+</script>
+
 {% endblock %}
