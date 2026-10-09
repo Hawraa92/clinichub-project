@@ -43,6 +43,23 @@
           <i class="fas fa-print" aria-hidden="true"></i>
         </button>
       {% endif %}
+      {% if request.user.role == "doctor" and archive.doctor and archive.doctor.user_id == request.user.id and archive.title == "ECG Recording" %}
+        {% if perms.medical_archive.view_patientarchive and perms.medical_archive.view_archiveattachment %}
+          {% if perms.ecg.view_ecgrecord and perms.ecg.add_ecgrecord and perms.ecg.view_ecgfile and perms.ecg.add_ecgfile %}
+            <form method="post"
+                  action="{% url 'ecg:analyze_archive_ecg' archive.id %}"
+                  style="display: inline;">
+              {% csrf_token %}
+              <button class="action-btn edit-btn"
+                      type="submit"
+                      aria-label="Analyze ECG"
+                      title="Analyze ECG">
+                <i class="fas fa-heartbeat" aria-hidden="true"></i>
+              </button>
+            </form>
+          {% endif %}
+        {% endif %}
+      {% endif %}
 
       {% if perms.medical_archive.change_patientarchive %}
         {% if request.user.is_superuser or request.user.role == "admin" or request.user.role == "secretary" %}

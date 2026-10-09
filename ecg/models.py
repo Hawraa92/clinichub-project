@@ -239,6 +239,14 @@ class ECGFile(models.Model):
         related_name="files",
     )
 
+    source_archive_attachment = models.OneToOneField(
+        "medical_archive.ArchiveAttachment",
+        on_delete=models.SET_NULL,
+        related_name="imported_ecg_file",
+        null=True,
+        blank=True,
+    )
+
     file = models.FileField(
         storage=private_clinical_storage,
         upload_to=ecg_file_upload_to,

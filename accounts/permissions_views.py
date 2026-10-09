@@ -66,6 +66,12 @@ MANAGED_MODULES = (
         "icon": "bi-archive",
     },
     {
+        "app_label": "ecg",
+        "label": "ECG",
+        "description": "ECG records, clinical files and analysis workflow.",
+        "icon": "bi-activity",
+    },
+    {
         "app_label": "hospital",
         "label": "المؤسسات والفروع",
         "description": "المؤسسات والفروع والأقسام وتكليفات الموظفين.",
@@ -238,6 +244,14 @@ ROLE_PERMISSION_PRESETS: dict[str, dict[str, Any]] = {
             (
                 "medical_archive",
                 ("archivevoicenote",),
+                ("view", "add"),
+            ),
+            (
+                "ecg",
+                (
+                    "ecgrecord",
+                    "ecgfile",
+                ),
                 ("view", "add"),
             ),
         ),

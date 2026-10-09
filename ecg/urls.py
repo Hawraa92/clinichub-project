@@ -2,9 +2,7 @@ from django.urls import path
 
 from . import views
 
-
 app_name = "ecg"
-
 
 urlpatterns = [
     path(
@@ -16,6 +14,11 @@ urlpatterns = [
         "create/",
         views.create_record,
         name="create_record",
+    ),
+    path(
+        "archive/<int:archive_id>/analyze/",
+        views.analyze_archive_ecg,
+        name="analyze_archive_ecg",
     ),
     path(
         "record/<int:record_id>/",
